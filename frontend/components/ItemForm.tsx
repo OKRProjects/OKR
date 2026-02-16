@@ -34,7 +34,14 @@ export default function ItemForm({ item, onSuccess }: ItemFormProps) {
         router.push('/dashboard');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save item');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save item';
+      setError(errorMessage);
+      
+      // If it's an authentication error, the fetchWithAuth will handle redirect
+      // But we can also show a helpful message
+      if (errorMessage.includes('Authentication') || errorMessage.includes('session')) {
+        console.error('Authentication error:', errorMessage);
+      }
     } finally {
       setLoading(false);
     }

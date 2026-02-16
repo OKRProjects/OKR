@@ -21,25 +21,49 @@ export interface Profile {
 
 async function getAccessToken(): Promise<string | null> {
   try {
-    const response = await fetch('/api/auth/token');
+    const response = await fetch(`${API_URL}/api/auth/token`, {
+      credentials: 'include', // Include cookies for session
+    });
     if (response.ok) {
       const data = await response.json();
       return data.accessToken || null;
     } else {
+      // 401 is expected when not logged in - return null silently
+      // Don't log or throw errors for 401
+      if (response.status === 401) {
+        return null;
+      }
+      
+      // Only log non-401 errors
       const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-      console.error('Error getting access token:', response.status, errorData);
+      if (response.status === 500) {
+        console.error('Token endpoint configuration error:', errorData);
+      }
+      // Don't log other errors either - just return null
     }
   } catch (error) {
-    console.error('Error getting access token:', error);
+    // Network errors - return null silently
+    return null;
   }
   return null;
 }
 
 async function fetchWithAuth(url: string, options: RequestInit = {}) {
-  const token = await getAccessToken();
+  let token = await getAccessToken();
+  
+  // If token fetch failed, try once more after a short delay
+  if (!token) {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    token = await getAccessToken();
+  }
+  
+  if (!token) {
+    throw new Error('Unable to get access token. Please check your authentication configuration.');
+  }
+  
   const isFormData = options.body instanceof FormData;
   const headers: HeadersInit = {
-    ...(token && { Authorization: `Bearer ${token}` }),
+    Authorization: `Bearer ${token}`,
     ...(!isFormData && { 'Content-Type': 'application/json' }),
     ...options.headers,
   };
@@ -47,17 +71,54 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
   const response = await fetch(`${API_URL}${url}`, {
     ...options,
     headers,
+    credentials: 'include', // Include cookies
   });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: 'An error occurred' }));
-    throw new Error(error.message || `HTTP error! status: ${response.status}`);
+    const errorMessage = error.message || error.error || `HTTP error! status: ${response.status}`;
+    
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
+}
+
+async function fetchPublic(url: string, options: RequestInit = {}) {
+  const isFormData = options.body instanceof FormData;
+  const headers: HeadersInit = {
+    ...(!isFormData && { 'Content-Type': 'application/json' }),
+    ...options.headers,
+  };
+
+  const response = await fetch(`${API_URL}${url}`, {
+    ...options,
+    headers,
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: 'An error occurred' }));
+    throw new Error(error.message || error.error || `HTTP error! status: ${response.status}`);
   }
 
   return response.json();
 }
 
 export const api = {
+  // Auth API
+  async login(): Promise<{ auth_url: string }> {
+    return fetchPublic('/api/auth/login');
+  },
+
+  async logout(): Promise<{ logout_url?: string; message?: string }> {
+    return fetchPublic('/api/auth/logout', { method: 'POST' });
+  },
+
+  async getCurrentUser(): Promise<any> {
+    return fetchWithAuth('/api/auth/me');
+  },
+
   async getItems(): Promise<Item[]> {
     return fetchWithAuth('/api/items');
   },
@@ -123,6 +184,14 @@ export const api = {
     return fetchWithAuth('/api/profiles/image', {
       method: 'POST',
       body: formData,
+    });
+  },
+
+  // Chat API (public endpoint, no auth required)
+  async sendChatMessage(messages: Array<{ role: string; content: string }>, model?: string): Promise<{ message: string; usage?: any }> {
+    return fetchPublic('/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ messages, model: model || 'openai/gpt-3.5-turbo' }),
     });
   },
 };

@@ -1,10 +1,51 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { getCurrentUser, login, User } from '@/lib/auth';
 import Link from 'next/link';
-import { useUser } from '@auth0/nextjs-auth0/client';
 
 export default function Home() {
-  const { user, isLoading } = useUser();
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadUser();
+    
+    // Check for error in URL params
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const errorParam = params.get('error');
+      if (errorParam) {
+        setError(errorParam);
+        // Clear error from URL
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
+  }, []);
+
+  const loadUser = async () => {
+    try {
+      const currentUser = await getCurrentUser();
+      setUser(currentUser);
+    } catch (error) {
+      // User not logged in is not an error
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLogin = async () => {
+    try {
+      setError(null);
+      await login();
+    } catch (error: any) {
+      const errorMessage = error?.message || 'Login failed';
+      setError(errorMessage);
+      console.error('Login error:', error);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -15,6 +56,14 @@ export default function Home() {
         <p className="text-lg text-gray-600 mb-8">
           Full-stack template with Next.js, Flask, Auth0, and MongoDB Atlas
         </p>
+        
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded text-sm">
+            {error === 'auth0_not_configured' || error.includes('Auth0 not configured')
+              ? 'Auth0 is not configured. Please set AUTH0_DOMAIN, AUTH0_CLIENT_ID, and AUTH0_CLIENT_SECRET in backend .env file.'
+              : `Error: ${error}`}
+          </div>
+        )}
         
         {isLoading ? (
           <div className="text-gray-500">Loading...</div>
@@ -39,12 +88,12 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          <a
-            href="/api/auth/login"
+          <button
+            onClick={handleLogin}
             className="inline-block bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
           >
             Login with Google
-          </a>
+          </button>
         )}
       </div>
     </div>
