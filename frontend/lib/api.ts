@@ -113,6 +113,26 @@ export const api = {
     return fetchPublic('/api/auth/login');
   },
 
+  async loginEmailPassword(email: string, password: string): Promise<{ user: any; message: string }> {
+    return fetchPublic('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    });
+  },
+
+  async register(email: string, password: string, name?: string): Promise<{ user: any; message: string }> {
+    return fetchPublic('/api/auth/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password, name }),
+    });
+  },
+
   async logout(): Promise<{ logout_url?: string; message?: string }> {
     return fetchPublic('/api/auth/logout', { method: 'POST' });
   },

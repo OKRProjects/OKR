@@ -26,6 +26,32 @@ export async function login(): Promise<void> {
   }
 }
 
+export async function loginEmailPassword(email: string, password: string): Promise<User> {
+  try {
+    const response = await api.loginEmailPassword(email, password);
+    // Clear cache and set new user
+    currentUser = response.user;
+    userPromise = null;
+    return response.user;
+  } catch (error) {
+    console.error('Email/password login error:', error);
+    throw error;
+  }
+}
+
+export async function register(email: string, password: string, name?: string): Promise<User> {
+  try {
+    const response = await api.register(email, password, name);
+    // Clear cache and set new user
+    currentUser = response.user;
+    userPromise = null;
+    return response.user;
+  } catch (error) {
+    console.error('Registration error:', error);
+    throw error;
+  }
+}
+
 export async function logout(): Promise<void> {
   try {
     const response = await api.logout();

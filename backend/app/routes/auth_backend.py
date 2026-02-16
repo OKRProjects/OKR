@@ -154,7 +154,7 @@ def require_auth(f):
 
 @bp.route('/auth/login', methods=['GET'])
 def login():
-    """Redirect to Auth0 login"""
+    """Redirect to Auth0 login (OAuth flow)"""
     if not AUTH0_DOMAIN or not AUTH0_CLIENT_ID:
         error_msg = 'Auth0 not configured. Please set AUTH0_DOMAIN and AUTH0_CLIENT_ID in backend .env file.'
         print(f"ERROR: {error_msg}")
@@ -172,6 +172,184 @@ def login():
     )
     
     return jsonify({'auth_url': auth_url}), 200
+
+@bp.route('/auth/login', methods=['POST'])
+def login_email_password():
+    """Email/password login using Auth0"""
+    if not AUTH0_DOMAIN or not AUTH0_CLIENT_ID or not AUTH0_CLIENT_SECRET:
+        return jsonify({'error': 'Auth0 not configured'}), 500
+    
+    data = request.get_json()
+    email = data.get('email')
+    password = data.get('password')
+    
+    if not email or not password:
+        return jsonify({'error': 'Email and password are required'}), 400
+    
+    try:
+        # Use Auth0's password grant (requires enabling it in Auth0 dashboard)
+        token_url = f'https://{AUTH0_DOMAIN}/oauth/token'
+        token_data = {
+            'grant_type': 'password',
+            'client_id': AUTH0_CLIENT_ID,
+            'client_secret': AUTH0_CLIENT_SECRET,
+            'username': email,
+            'password': password,
+            'scope': 'openid profile email',
+            'audience': AUTH0_AUDIENCE,
+            'connection': 'Username-Password-Authentication'  # Specify the database connection
+        }
+        
+        response = requests.post(token_url, json=token_data, timeout=10)
+        
+        if not response.ok:
+            error_data = response.json() if response.content else {}
+            error_msg = error_data.get('error_description', 'Invalid email or password')
+            return jsonify({'error': error_msg}), 401
+        
+        token_response = response.json()
+        access_token = token_response.get('access_token')
+        id_token = token_response.get('id_token')
+        
+        if not access_token or not id_token:
+            return jsonify({'error': 'Failed to get tokens'}), 500
+        
+        # Decode ID token to get user info
+        try:
+            decoded = verify_token(id_token, is_id_token=True)
+            user_info = {
+                'sub': decoded.get('sub'),
+                'name': decoded.get('name') or decoded.get('nickname') or '',
+                'email': decoded.get('email') or '',
+                'picture': decoded.get('picture') or '',
+                'nickname': decoded.get('nickname') or decoded.get('name') or '',
+            }
+            
+            # Store in session
+            session['user'] = user_info
+            session['access_token'] = access_token
+            session.permanent = True
+            
+            return jsonify({
+                'user': user_info,
+                'message': 'Login successful'
+            }), 200
+        except Exception as e:
+            print(f"Token decode error: {str(e)}")
+            return jsonify({'error': 'Failed to decode token'}), 500
+            
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': f'Authentication failed: {str(e)}'}), 500
+    except Exception as e:
+        return jsonify({'error': f'Login failed: {str(e)}'}), 500
+
+@bp.route('/auth/register', methods=['POST'])
+def register():
+    """Register new user with email/password"""
+    if not AUTH0_DOMAIN or not AUTH0_CLIENT_ID or not AUTH0_CLIENT_SECRET:
+        return jsonify({'error': 'Auth0 not configured'}), 500
+    
+    data = request.get_json()
+    email = data.get('email')
+    password = data.get('password')
+    name = data.get('name', '')
+    
+    if not email or not password:
+        return jsonify({'error': 'Email and password are required'}), 400
+    
+    if len(password) < 8:
+        return jsonify({'error': 'Password must be at least 8 characters'}), 400
+    
+    try:
+        # Use Auth0's signup API (requires enabling it in Auth0 dashboard)
+        signup_url = f'https://{AUTH0_DOMAIN}/dbconnections/signup'
+        signup_data = {
+            'client_id': AUTH0_CLIENT_ID,
+            'email': email,
+            'password': password,
+            'connection': 'Username-Password-Authentication',  # Default Auth0 database connection
+        }
+        
+        if name:
+            signup_data['name'] = name
+        
+        response = requests.post(signup_url, json=signup_data, timeout=10)
+        
+        if not response.ok:
+            error_data = response.json() if response.content else {}
+            error_msg = error_data.get('description', error_data.get('error', 'Registration failed'))
+            return jsonify({'error': error_msg}), 400
+        
+        # After successful signup, automatically log them in using the same credentials
+        # Call the login function directly with the credentials
+        token_url = f'https://{AUTH0_DOMAIN}/oauth/token'
+        token_data = {
+            'grant_type': 'password',
+            'client_id': AUTH0_CLIENT_ID,
+            'client_secret': AUTH0_CLIENT_SECRET,
+            'username': email,
+            'password': password,
+            'scope': 'openid profile email',
+            'audience': AUTH0_AUDIENCE,
+            'connection': 'Username-Password-Authentication'
+        }
+        
+        login_response = requests.post(token_url, json=token_data, timeout=10)
+        
+        if not login_response.ok:
+            # Registration succeeded but auto-login failed
+            return jsonify({
+                'message': 'Registration successful. Please log in.',
+                'email': email
+            }), 201
+        
+        token_response = login_response.json()
+        access_token = token_response.get('access_token')
+        id_token = token_response.get('id_token')
+        
+        if access_token and id_token:
+            try:
+                decoded = verify_token(id_token, is_id_token=True)
+                user_info = {
+                    'sub': decoded.get('sub'),
+                    'name': decoded.get('name') or decoded.get('nickname') or name or '',
+                    'email': decoded.get('email') or email,
+                    'picture': decoded.get('picture') or '',
+                    'nickname': decoded.get('nickname') or decoded.get('name') or name or '',
+                }
+                
+                # Store in session
+                session['user'] = user_info
+                session['access_token'] = access_token
+                session.permanent = True
+                
+                return jsonify({
+                    'user': user_info,
+                    'message': 'Registration and login successful'
+                }), 201
+            except Exception as e:
+                print(f"Token decode error after registration: {str(e)}")
+                return jsonify({
+                    'message': 'Registration successful. Please log in.',
+                    'email': email
+                }), 201
+        
+        return jsonify({
+            'message': 'Registration successful. Please log in.',
+            'email': email
+        }), 201
+        
+    except requests.exceptions.RequestException as e:
+        error_data = {}
+        try:
+            if hasattr(e, 'response') and e.response:
+                error_data = e.response.json() if e.response.content else {}
+        except:
+            pass
+        error_msg = error_data.get('description', error_data.get('error', f'Registration failed: {str(e)}'))
+        return jsonify({'error': error_msg}), 500
+    except Exception as e:
+        return jsonify({'error': f'Registration failed: {str(e)}'}), 500
 
 @bp.route('/auth/callback', methods=['GET'])
 def callback():
