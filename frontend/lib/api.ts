@@ -5,6 +5,8 @@ export interface Item {
   userId?: string;
   title: string;
   description: string;
+  imageUrls?: string[];
+  videoUrls?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -127,17 +129,65 @@ export const api = {
     return fetchWithAuth(`/api/items/${id}`);
   },
 
-  async createItem(item: Omit<Item, '_id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<Item> {
+  async createItem(item: { title: string; description: string; images?: File[]; videos?: File[] }): Promise<Item> {
+    const formData = new FormData();
+    formData.append('title', item.title);
+    formData.append('description', item.description);
+    
+    if (item.images) {
+      item.images.forEach((file) => {
+        formData.append('images', file);
+      });
+    }
+    
+    if (item.videos) {
+      item.videos.forEach((file) => {
+        formData.append('videos', file);
+      });
+    }
+    
     return fetchWithAuth('/api/items', {
       method: 'POST',
-      body: JSON.stringify(item),
+      body: formData,
     });
   },
 
-  async updateItem(id: string, item: Partial<Item>): Promise<Item> {
+  async updateItem(id: string, item: { title?: string; description?: string; images?: File[]; videos?: File[]; imageUrls?: string[]; videoUrls?: string[] }): Promise<Item> {
+    const formData = new FormData();
+    if (item.title) formData.append('title', item.title);
+    if (item.description) formData.append('description', item.description);
+    
+    if (item.images) {
+      item.images.forEach((file) => {
+        formData.append('images', file);
+      });
+    }
+    
+    if (item.videos) {
+      item.videos.forEach((file) => {
+        formData.append('videos', file);
+      });
+    }
+    
+    // If no files but URLs provided, use JSON
+    if (!item.images?.length && !item.videos?.length && (item.imageUrls || item.videoUrls)) {
+      return fetchWithAuth(`/api/items/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: item.title,
+          description: item.description,
+          imageUrls: item.imageUrls,
+          videoUrls: item.videoUrls,
+        }),
+      });
+    }
+    
     return fetchWithAuth(`/api/items/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(item),
+      body: formData,
     });
   },
 
