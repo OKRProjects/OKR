@@ -13,7 +13,7 @@ AUTH0_CLIENT_ID = os.getenv('AUTH0_CLIENT_ID')
 AUTH0_CLIENT_SECRET = os.getenv('AUTH0_CLIENT_SECRET')
 AUTH0_AUDIENCE = os.getenv('AUTH0_AUDIENCE')
 AUTH0_BASE_URL = os.getenv('AUTH0_BASE_URL', 'http://localhost:3000')
-BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:5000')
+BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:5001')
 
 if not AUTH0_AUDIENCE and AUTH0_DOMAIN:
     AUTH0_AUDIENCE = f'https://{AUTH0_DOMAIN}/api/v2/'
