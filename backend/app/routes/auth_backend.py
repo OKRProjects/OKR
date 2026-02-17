@@ -2,6 +2,8 @@ from flask import Blueprint, request, jsonify, redirect, session, url_for
 from functools import wraps
 import requests
 import os
+import ssl
+import certifi
 import jwt
 from jwt import PyJWKClient
 from datetime import datetime, timedelta
@@ -19,11 +21,13 @@ if not AUTH0_AUDIENCE and AUTH0_DOMAIN:
     AUTH0_AUDIENCE = f'https://{AUTH0_DOMAIN}/api/v2/'
 
 def get_jwks_client():
-    """Get JWKS client for Auth0"""
+    """Get JWKS client for Auth0 (uses certifi for SSL on macOS)"""
     if not AUTH0_DOMAIN:
         return None
     jwks_url = f'https://{AUTH0_DOMAIN}/.well-known/jwks.json'
-    return PyJWKClient(jwks_url)
+    ctx = ssl.create_default_context()
+    ctx.load_verify_locations(cafile=certifi.where())
+    return PyJWKClient(jwks_url, ssl_context=ctx)
 
 def verify_token(token: str, is_id_token: bool = False) -> dict:
     """Verify Auth0 JWT token and return decoded payload
