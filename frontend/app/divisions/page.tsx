@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react';
 import { getCurrentUser, login, User } from '@/lib/auth';
 import { AppLayout } from '@/components/AppLayout';
-import { ObjectivesView } from '@/components/ObjectivesView';
+import { DivisionsView } from '@/components/DivisionsView';
 
-export default function OKRsPage() {
+export default function DivisionsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -31,15 +31,15 @@ export default function OKRsPage() {
 
   if (isLoading || !user) {
     return (
-      <AppLayout title="Objectives" description="Manage strategic, functional, and tactical objectives" showNewObjective>
+      <AppLayout title="Divisions" description="Performance by organizational division">
         <div className="text-center text-muted-foreground">Loading...</div>
       </AppLayout>
     );
   }
 
   return (
-    <AppLayout title="Objectives" description="Manage strategic, functional, and tactical objectives" showNewObjective>
-      <ObjectivesView />
+    <AppLayout title="Divisions" description="Performance by organizational division">
+      <DivisionsView />
     </AppLayout>
   );
 }

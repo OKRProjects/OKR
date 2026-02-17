@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react';
 import { getCurrentUser, login, User } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
-import Navbar from '@/components/Navbar';
+import { AppLayout } from '@/components/AppLayout';
 import ProfileForm from '@/components/ProfileForm';
 import { api, Profile } from '@/lib/api';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -88,155 +90,133 @@ export default function ProfilePage() {
 
   if (isLoading || loading || !user) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center">Loading...</div>
-        </div>
-      </div>
+      <AppLayout title="Profile" description="Manage your profile information">
+        <div className="text-center text-muted-foreground">Loading...</div>
+      </AppLayout>
     );
   }
 
   if (!profile && !editing) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-6">Profile</h1>
-          <div className="bg-white rounded-lg shadow p-6 text-center">
-            <p className="text-gray-600 mb-4">You haven't created a profile yet.</p>
-            <button
-              onClick={() => setEditing(true)}
-              className="bg-indigo-600 text-white px-6 py-2 rounded-md font-medium hover:bg-indigo-700"
-            >
+      <AppLayout title="Profile" description="Manage your profile information">
+        <Card>
+          <CardContent className="py-8 text-center">
+            <p className="text-muted-foreground mb-4">You haven't created a profile yet.</p>
+            <Button onClick={() => setEditing(true)}>
               Create Profile
-            </button>
-          </div>
-        </div>
-      </div>
+            </Button>
+          </CardContent>
+        </Card>
+      </AppLayout>
     );
   }
 
   if (editing) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="mb-6 flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-gray-900">
-              {profile ? 'Edit Profile' : 'Create Profile'}
-            </h1>
-            {profile && (
-              <button
-                onClick={() => setEditing(false)}
-                className="text-gray-600 hover:text-gray-900"
-              >
-                Cancel
-              </button>
-            )}
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
+      <AppLayout title={profile ? 'Edit Profile' : 'Create Profile'} description="Update your profile information">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="mb-6 flex items-center justify-between">
+              {profile && (
+                <Button variant="ghost" onClick={() => setEditing(false)}>
+                  Cancel
+                </Button>
+              )}
+            </div>
             <ProfileForm profile={profile || undefined} onSuccess={handleProfileUpdate} />
-          </div>
-        </div>
-      </div>
+          </CardContent>
+        </Card>
+      </AppLayout>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          {/* Profile Header */}
-          <div className="bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-12">
-            <div className="flex items-center space-x-6">
-              {profile.profileImageUrl ? (
-                <div className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-lg flex-shrink-0">
-                  <Image
-                    src={profile.profileImageUrl}
-                    alt={profile.displayName}
-                    fill
-                    className="object-cover"
-                  />
-                </div>
-              ) : (
-                <div className="w-32 h-32 rounded-full bg-white bg-opacity-20 flex items-center justify-center flex-shrink-0">
-                  <span className="text-5xl text-white font-bold">
-                    {profile.displayName.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-              )}
-              <div className="flex-1 text-white">
-                <h1 className="text-4xl font-bold mb-2">{profile.displayName}</h1>
-                {user?.email && (
-                  <p className="text-indigo-100 text-lg">{user.email}</p>
-                )}
-              </div>
-              <button
-                onClick={() => setEditing(true)}
-                className="bg-white text-indigo-600 px-6 py-2 rounded-md font-medium hover:bg-indigo-50 transition-colors"
-              >
-                Edit Profile
-              </button>
-            </div>
-          </div>
+  if (!profile) return null;
 
-          {/* Profile Content */}
-          <div className="px-6 py-8">
-            {profile.bio && (
-              <div className="mb-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">About</h2>
-                <p className="text-gray-700 leading-relaxed">{profile.bio}</p>
+  return (
+    <AppLayout title="Profile" description="Manage your profile information">
+      <Card className="overflow-hidden">
+        {/* Profile Header */}
+        <div className="bg-gradient-to-r from-primary to-purple-600 px-6 py-12">
+          <div className="flex items-center space-x-6">
+            {profile.profileImageUrl ? (
+              <div className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-lg flex-shrink-0">
+                <Image
+                  src={profile.profileImageUrl}
+                  alt={profile.displayName}
+                  fill
+                  className="object-cover"
+                />
+              </div>
+            ) : (
+              <div className="w-32 h-32 rounded-full bg-white bg-opacity-20 flex items-center justify-center flex-shrink-0">
+                <span className="text-5xl text-white font-bold">
+                  {profile.displayName.charAt(0).toUpperCase()}
+                </span>
               </div>
             )}
-
-            <div className="border-t border-gray-200 pt-6 mt-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-500">Member since</span>
-                  <p className="text-gray-900 font-medium">
-                    {profile.createdAt
-                      ? new Date(profile.createdAt).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })
-                      : 'N/A'}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-gray-500">Last updated</span>
-                  <p className="text-gray-900 font-medium">
-                    {profile.updatedAt
-                      ? new Date(profile.updatedAt).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })
-                      : 'N/A'}
-                  </p>
-                </div>
-              </div>
+            <div className="flex-1 text-white">
+              <h1 className="text-4xl font-bold mb-2">{profile.displayName}</h1>
+              {user?.email && (
+                <p className="text-white/80 text-lg">{user.email}</p>
+              )}
             </div>
-
-            <div className="mt-8 flex space-x-4">
-              <Link
-                href="/dashboard"
-                className="bg-indigo-600 text-white px-6 py-2 rounded-md font-medium hover:bg-indigo-700"
-              >
-                Go to Dashboard
-              </Link>
-              <button
-                onClick={() => setEditing(true)}
-                className="border border-gray-300 text-gray-700 px-6 py-2 rounded-md font-medium hover:bg-gray-50"
-              >
-                Edit Profile
-              </button>
-            </div>
+            <Button
+              onClick={() => setEditing(true)}
+              variant="secondary"
+            >
+              Edit Profile
+            </Button>
           </div>
         </div>
-      </div>
-    </div>
+
+        {/* Profile Content */}
+        <CardContent className="px-6 py-8">
+          {profile.bio && (
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold mb-2">About</h2>
+              <p className="text-muted-foreground leading-relaxed">{profile.bio}</p>
+            </div>
+          )}
+
+          <div className="border-t pt-6 mt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">Member since</span>
+                <p className="font-medium">
+                  {profile.createdAt
+                    ? new Date(profile.createdAt).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      })
+                    : 'N/A'}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Last updated</span>
+                <p className="font-medium">
+                  {profile.updatedAt
+                    ? new Date(profile.updatedAt).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      })
+                    : 'N/A'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8 flex space-x-4">
+            <Button asChild>
+              <Link href="/dashboard">Go to Dashboard</Link>
+            </Button>
+            <Button variant="outline" onClick={() => setEditing(true)}>
+              Edit Profile
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </AppLayout>
   );
 }

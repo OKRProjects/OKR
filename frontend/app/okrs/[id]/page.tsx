@@ -3,11 +3,14 @@
 import { useEffect, useState } from 'react';
 import { getCurrentUser, login, User } from '@/lib/auth';
 import { useParams, useRouter } from 'next/navigation';
-import Navbar from '@/components/Navbar';
+import { AppLayout } from '@/components/AppLayout';
 import ObjectiveForm from '@/components/ObjectiveForm';
 import KeyResultForm from '@/components/KeyResultForm';
 import KeyResultProgress from '@/components/KeyResultProgress';
 import { api, Objective, KeyResult } from '@/lib/api';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 
 export default function ObjectiveDetailPage() {
@@ -104,12 +107,9 @@ export default function ObjectiveDetailPage() {
 
   if (isLoading || !user) {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <Navbar />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center text-slate-500">Loading...</div>
-        </div>
-      </div>
+      <AppLayout title="Objective" description="View and manage objective details">
+        <div className="text-center text-muted-foreground">Loading...</div>
+      </AppLayout>
     );
   }
 
@@ -119,115 +119,105 @@ export default function ObjectiveDetailPage() {
   const timelineLabel = objective.timeline === 'quarterly' ? `${objective.quarter} ` : '';
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Navbar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-4 flex items-center gap-2 text-sm text-slate-500">
-          <Link href="/okrs" className="text-slate-700 hover:underline font-medium">OKRs</Link>
-          <span>/</span>
-          <span>{objective.title}</span>
-        </div>
-
+    <AppLayout title={objective.title} description={`${levelLabel} objective for FY${objective.fiscalYear}`}>
+      <div className="space-y-6">
         {editing ? (
-          <div className="bg-white rounded-lg shadow p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Edit Objective</h2>
-            <ObjectiveForm
-              objective={objective}
-              parentOptions={parentOptions}
-              onSuccess={() => {
-                setEditing(false);
-                loadObjective();
-                loadParents();
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => setEditing(false)}
-              className="mt-4 text-sm text-slate-600 hover:text-slate-900"
-            >
-              Cancel edit
-            </button>
-          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Edit Objective</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ObjectiveForm
+                objective={objective}
+                parentOptions={parentOptions}
+                onSuccess={() => {
+                  setEditing(false);
+                  loadObjective();
+                  loadParents();
+                }}
+              />
+              <Button variant="ghost" onClick={() => setEditing(false)} className="mt-4">
+                Cancel edit
+              </Button>
+            </CardContent>
+          </Card>
         ) : (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 mb-6">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-bold text-slate-900">{objective.title}</h1>
-                <div className="mt-2 flex flex-wrap gap-2 text-sm">
-                  <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-700">{levelLabel}</span>
-                  <span className="text-slate-500">FY{objective.fiscalYear} {timelineLabel}</span>
-                  {objective.division && <span className="text-slate-500">{objective.division}</span>}
+          <Card>
+            <CardHeader>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    <Badge variant={objective.level === 'strategic' ? 'default' : objective.level === 'functional' ? 'secondary' : 'outline'}>
+                      {levelLabel}
+                    </Badge>
+                    <Badge variant="outline">FY{objective.fiscalYear} {timelineLabel}</Badge>
+                    {objective.division && <Badge variant="outline">{objective.division}</Badge>}
+                  </div>
+                  {objective.description && (
+                    <p className="text-muted-foreground mt-2">{objective.description}</p>
+                  )}
                 </div>
-                {objective.description && (
-                  <p className="mt-3 text-slate-600">{objective.description}</p>
-                )}
+                <div className="flex gap-2">
+                  {objective.level === 'strategic' && (
+                    <Button variant="outline" asChild>
+                      <Link href={`/okrs/tree/${objective._id}`}>Roll-up view</Link>
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={() => setEditing(true)}>
+                    Edit
+                  </Button>
+                  <Button variant="destructive" onClick={handleDelete}>
+                    Delete
+                  </Button>
+                </div>
               </div>
-              <div className="flex gap-2">
-                {objective.level === 'strategic' && (
-                  <Link
-                    href={`/okrs/tree/${objective._id}`}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    Roll-up view
-                  </Link>
-                )}
-                <button
-                  onClick={() => setEditing(true)}
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={handleDelete}
-                  className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
+            </CardHeader>
+          </Card>
         )}
 
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">Key results</h2>
-            <button
-              onClick={() => setAddingKr(!addingKr)}
-              className="rounded-lg bg-slate-800 px-3 py-2 text-sm font-medium text-white hover:bg-slate-900"
-            >
-              {addingKr ? 'Cancel' : '+ Add key result'}
-            </button>
-          </div>
-          {addingKr && (
-            <div className="mb-6">
-              <KeyResultForm
-                objectiveId={id}
-                onSuccess={() => {
-                  setAddingKr(false);
-                  loadKeyResults();
-                }}
-                onCancel={() => setAddingKr(false)}
-              />
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Key results</CardTitle>
+              <Button onClick={() => setAddingKr(!addingKr)}>
+                {addingKr ? 'Cancel' : '+ Add key result'}
+              </Button>
             </div>
-          )}
-          <div className="space-y-4">
-            {keyResults.length === 0 && !addingKr && (
-              <p className="text-slate-500">No key results yet. Add one to track progress.</p>
-            )}
-            {keyResults.map((kr) => (
-              <div key={kr._id} className="flex flex-col gap-2">
-                <KeyResultProgress keyResult={kr} onUpdate={loadKeyResults} />
-                <button
-                  onClick={() => handleDeleteKr(kr._id!)}
-                  className="self-start text-sm text-red-600 hover:underline"
-                >
-                  Delete key result
-                </button>
+          </CardHeader>
+          <CardContent>
+            {addingKr && (
+              <div className="mb-6">
+                <KeyResultForm
+                  objectiveId={id}
+                  onSuccess={() => {
+                    setAddingKr(false);
+                    loadKeyResults();
+                  }}
+                  onCancel={() => setAddingKr(false)}
+                />
               </div>
-            ))}
-          </div>
-        </div>
+            )}
+            <div className="space-y-4">
+              {keyResults.length === 0 && !addingKr && (
+                <p className="text-muted-foreground">No key results yet. Add one to track progress.</p>
+              )}
+              {keyResults.map((kr) => (
+                <div key={kr._id} className="flex flex-col gap-2">
+                  <KeyResultProgress keyResult={kr} onUpdate={loadKeyResults} />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDeleteKr(kr._id!)}
+                    className="self-start text-destructive hover:text-destructive"
+                  >
+                    Delete key result
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </AppLayout>
   );
 }

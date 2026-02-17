@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import { getCurrentUser, login, User } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
-import Navbar from '@/components/Navbar';
+import { AppLayout } from '@/components/AppLayout';
 import ItemForm from '@/components/ItemForm';
+import { Card, CardContent } from '@/components/ui/card';
 
 export default function NewItemPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -33,24 +34,19 @@ export default function NewItemPage() {
 
   if (isLoading || !user) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center">Loading...</div>
-        </div>
-      </div>
+      <AppLayout title="Create New Item" description="Create a new item">
+        <div className="text-center text-muted-foreground">Loading...</div>
+      </AppLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">Create New Item</h1>
-        <div className="bg-white rounded-lg shadow p-6">
+    <AppLayout title="Create New Item" description="Create a new item">
+      <Card>
+        <CardContent className="pt-6">
           <ItemForm />
-        </div>
-      </div>
-    </div>
+        </CardContent>
+      </Card>
+    </AppLayout>
   );
 }

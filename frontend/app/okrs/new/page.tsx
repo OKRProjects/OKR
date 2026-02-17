@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { getCurrentUser, login, User } from '@/lib/auth';
-import Navbar from '@/components/Navbar';
+import { AppLayout } from '@/components/AppLayout';
 import ObjectiveForm from '@/components/ObjectiveForm';
 import { api, Objective } from '@/lib/api';
+import { Card, CardContent } from '@/components/ui/card';
 
 export default function NewObjectivePage() {
   const [user, setUser] = useState<User | null>(null);
@@ -47,24 +48,19 @@ export default function NewObjectivePage() {
 
   if (isLoading || !user) {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <Navbar />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center text-slate-500">Loading...</div>
-        </div>
-      </div>
+      <AppLayout title="Create Objective" description="Create a new objective">
+        <div className="text-center text-muted-foreground">Loading...</div>
+      </AppLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Navbar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-bold text-slate-900 mb-6">Create objective</h1>
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 max-w-2xl">
+    <AppLayout title="Create Objective" description="Create a new objective">
+      <Card className="max-w-2xl">
+        <CardContent className="pt-6">
           <ObjectiveForm parentOptions={parentOptions} />
-        </div>
-      </div>
-    </div>
+        </CardContent>
+      </Card>
+    </AppLayout>
   );
 }

@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { getCurrentUser, login, User } from '@/lib/auth';
-import Navbar from '@/components/Navbar';
+import { AppLayout } from '@/components/AppLayout';
 import { api, Objective } from '@/lib/api';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Link from 'next/link';
 
 export default function RollUpPage() {
@@ -47,64 +50,58 @@ export default function RollUpPage() {
 
   if (isLoading || !user) {
     return (
-      <div className="min-h-screen bg-slate-50">
-        <Navbar />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center text-slate-500">Loading...</div>
-        </div>
-      </div>
+      <AppLayout title="Roll-up View" description="View how strategic objectives cascade">
+        <div className="text-center text-muted-foreground">Loading...</div>
+      </AppLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <Navbar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-3xl font-bold text-slate-900">Roll-up view</h1>
+    <AppLayout title="Roll-up View" description="View how strategic objectives cascade">
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <label className="text-sm text-gray-600">Fiscal Year</label>
-            <select
-              value={fiscalYear}
-              onChange={(e) => setFiscalYear(Number(e.target.value))}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            >
-              {[2024, 2025, 2026, 2027].map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-            <Link
-              href="/okrs"
-              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Back to OKRs
-            </Link>
+            <label className="text-sm text-muted-foreground">Fiscal Year</label>
+            <Select value={String(fiscalYear)} onValueChange={(v) => setFiscalYear(Number(v))}>
+              <SelectTrigger className="w-[120px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[2024, 2025, 2026, 2027].map((y) => (
+                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+          <Button variant="outline" asChild>
+            <Link href="/okrs">Back to OKRs</Link>
+          </Button>
         </div>
-        <p className="mb-6 text-slate-600">
+        <p className="text-muted-foreground">
           Choose a strategic objective to see how it cascades to divisional and tactical OKRs.
         </p>
         {strategic.length === 0 ? (
-          <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-500">
-            No strategic objectives for FY{fiscalYear}. Create one from the OKRs list.
-          </div>
+          <Card>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              No strategic objectives for FY{fiscalYear}. Create one from the OKRs list.
+            </CardContent>
+          </Card>
         ) : (
-          <ul className="space-y-3">
+          <div className="space-y-3">
             {strategic.map((o) => (
-              <li key={o._id}>
-                <Link
-                  href={`/okrs/tree/${o._id}`}
-                  className="block rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 hover:shadow"
-                >
-                  <span className="font-medium text-slate-900">{o.title}</span>
-                  {o.description && <p className="mt-1 text-sm text-slate-600">{o.description}</p>}
-                  <span className="mt-2 inline-block text-sm text-slate-700 font-medium">View roll-up →</span>
-                </Link>
-              </li>
+              <Card key={o._id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <Link href={`/okrs/tree/${o._id}`} className="block">
+                    <h3 className="font-medium mb-1">{o.title}</h3>
+                    {o.description && <p className="text-sm text-muted-foreground mt-1">{o.description}</p>}
+                    <span className="mt-2 inline-block text-sm text-primary font-medium">View roll-up →</span>
+                  </Link>
+                </CardContent>
+              </Card>
             ))}
-          </ul>
+          </div>
         )}
       </div>
-    </div>
+    </AppLayout>
   );
 }
