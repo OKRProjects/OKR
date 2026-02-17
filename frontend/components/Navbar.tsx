@@ -32,35 +32,51 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="bg-white shadow-md">
+    <nav className="border-b border-slate-200 bg-slate-50/80 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          <div className="flex items-center">
-            <Link href="/" className="text-xl font-bold text-indigo-600">
-              Hackathon Template
+        <div className="flex justify-between h-14">
+          <div className="flex items-center gap-8">
+            <Link href={user ? "/okrs" : "/"} className="text-xl font-bold text-slate-800 tracking-tight">
+              OKR Tracker
             </Link>
-          </div>
-          <div className="flex items-center space-x-4">
             {!isLoading && user && (
-              <>
+              <div className="hidden sm:flex items-center gap-1">
+                <Link
+                  href="/okrs"
+                  className="text-slate-700 hover:text-slate-900 hover:bg-slate-200/60 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Objectives
+                </Link>
+                <Link
+                  href="/okrs/roll-up"
+                  className="text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Roll-up
+                </Link>
                 <Link
                   href="/dashboard"
-                  className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
+                  className="text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 px-3 py-2 rounded-md text-sm font-medium"
                 >
                   Dashboard
                 </Link>
                 <Link
                   href="/profile"
-                  className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
+                  className="text-slate-500 hover:text-slate-700 hover:bg-slate-200/60 px-3 py-2 rounded-md text-sm font-medium"
                 >
                   Profile
                 </Link>
-                <span className="text-gray-700 text-sm">
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {!isLoading && user && (
+              <>
+                <span className="text-slate-600 text-sm truncate max-w-[140px]">
                   {user.name || user.email}
                 </span>
                 <button
                   onClick={handleLogout}
-                  className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700"
+                  className="text-slate-600 hover:text-slate-900 px-3 py-2 rounded-md text-sm font-medium border border-slate-200 hover:border-slate-300"
                 >
                   Logout
                 </button>
@@ -69,7 +85,7 @@ export default function Navbar() {
             {!isLoading && !user && (
               <Link
                 href="/"
-                className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700"
+                className="bg-slate-800 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-slate-900"
               >
                 Login
               </Link>

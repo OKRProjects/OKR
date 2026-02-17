@@ -61,9 +61,9 @@ export default function Home() {
     try {
       const loggedInUser = await loginEmailPassword(email, password);
       setUser(loggedInUser);
-      // Redirect to dashboard
+      // Redirect to OKRs (primary focus)
       if (typeof window !== 'undefined') {
-        window.location.href = '/dashboard';
+        window.location.href = '/okrs';
       }
     } catch (error: any) {
       const errorMessage = error?.message || 'Login failed';
@@ -81,9 +81,9 @@ export default function Home() {
     try {
       const newUser = await register(email, password, name);
       setUser(newUser);
-      // Redirect to dashboard
+      // Redirect to OKRs (primary focus)
       if (typeof window !== 'undefined') {
-        window.location.href = '/dashboard';
+        window.location.href = '/okrs';
       }
     } catch (error: any) {
       const errorMessage = error?.message || 'Registration failed';
@@ -94,13 +94,13 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full bg-white rounded-lg shadow-xl p-8 text-center">
-        <h1 className="text-4xl font-bold text-gray-900 mb-4">
-          Hackathon Template
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex items-center justify-center p-4">
+      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-lg border border-slate-200 p-8 sm:p-10 text-center">
+        <h1 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-3 tracking-tight">
+          OKR Tracker
         </h1>
-        <p className="text-lg text-gray-600 mb-8">
-          Full-stack template with Next.js, Flask, Auth0, and MongoDB Atlas
+        <p className="text-lg text-slate-600 mb-8">
+          Align strategy to execution. Track objectives and key results across your organization.
         </p>
         
         {error && (
@@ -112,24 +112,30 @@ export default function Home() {
         )}
         
         {isLoading ? (
-          <div className="text-gray-500">Loading...</div>
+          <div className="text-slate-500">Loading...</div>
         ) : user ? (
-          <div className="space-y-4">
-            <p className="text-gray-700">
-              Welcome, <span className="font-semibold">{user.name || user.email}</span>!
+          <div className="space-y-5">
+            <p className="text-slate-700">
+              Welcome, <span className="font-semibold">{user.name || user.email}</span>
             </p>
-            <div className="flex space-x-4 justify-center">
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Link
+                href="/okrs"
+                className="inline-block bg-slate-800 text-white px-6 py-3 rounded-lg font-semibold hover:bg-slate-900 transition-colors"
+              >
+                Go to OKRs
+              </Link>
               <Link
                 href="/dashboard"
-                className="inline-block bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
+                className="inline-block border border-slate-300 text-slate-700 px-6 py-3 rounded-lg font-semibold hover:bg-slate-50 transition-colors"
               >
-                Go to Dashboard
+                Dashboard
               </Link>
               <Link
                 href="/profile"
-                className="inline-block border-2 border-indigo-600 text-indigo-600 px-6 py-3 rounded-lg font-semibold hover:bg-indigo-50 transition-colors"
+                className="inline-block text-slate-600 px-6 py-3 rounded-lg font-medium hover:text-slate-900 transition-colors"
               >
-                View Profile
+                Profile
               </Link>
             </div>
           </div>
@@ -139,13 +145,13 @@ export default function Home() {
               <>
                 <button
                   onClick={handleLogin}
-                  className="w-full bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
+                  className="w-full bg-slate-800 text-white px-6 py-3 rounded-lg font-semibold hover:bg-slate-900 transition-colors"
                 >
                   Login with Google
                 </button>
                 <button
                   onClick={() => setShowEmailLogin(true)}
-                  className="w-full border-2 border-indigo-600 text-indigo-600 px-6 py-3 rounded-lg font-semibold hover:bg-indigo-50 transition-colors"
+                  className="w-full border-2 border-slate-300 text-slate-700 px-6 py-3 rounded-lg font-semibold hover:bg-slate-50 transition-colors"
                 >
                   Login with Email
                 </button>
@@ -199,7 +205,7 @@ export default function Home() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                  className="w-full bg-slate-800 text-white px-6 py-3 rounded-lg font-semibold hover:bg-slate-900 transition-colors disabled:opacity-50"
                 >
                   {loading ? 'Please wait...' : isRegistering ? 'Sign Up' : 'Login'}
                 </button>
@@ -210,7 +216,7 @@ export default function Home() {
                       setIsRegistering(!isRegistering);
                       setError(null);
                     }}
-                    className="text-indigo-600 hover:text-indigo-700"
+                    className="text-slate-600 hover:text-slate-900 font-medium"
                   >
                     {isRegistering ? 'Already have an account? Login' : "Don't have an account? Sign up"}
                   </button>

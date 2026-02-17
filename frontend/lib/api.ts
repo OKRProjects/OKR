@@ -21,6 +21,43 @@ export interface Profile {
   updatedAt?: string;
 }
 
+export type ObjectiveLevel = 'strategic' | 'functional' | 'tactical';
+export type ObjectiveTimeline = 'annual' | 'quarterly';
+
+export interface Objective {
+  _id?: string;
+  title: string;
+  description?: string;
+  ownerId?: string;
+  level: ObjectiveLevel;
+  timeline: ObjectiveTimeline;
+  fiscalYear: number;
+  quarter?: string;
+  parentObjectiveId?: string | null;
+  division?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ObjectiveTree extends Objective {
+  children: ObjectiveTree[];
+  keyResults: KeyResult[];
+  averageScore?: number | null;
+}
+
+export interface KeyResult {
+  _id?: string;
+  objectiveId: string;
+  title: string;
+  target?: string;
+  currentValue?: string;
+  unit?: string;
+  score?: number | null;
+  notes?: Array<{ text?: string; createdAt?: string }>;
+  createdAt?: string;
+  lastUpdatedAt?: string;
+}
+
 async function getAccessToken(): Promise<string | null> {
   try {
     const response = await fetch(`${API_URL}/api/auth/token`, {
@@ -263,5 +300,68 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ messages, model: model || 'openai/gpt-3.5-turbo' }),
     });
+  },
+
+  // OKRs API
+  async getObjectives(params?: { fiscalYear?: number; level?: string; division?: string; parentObjectiveId?: string | null }): Promise<Objective[]> {
+    const search = new URLSearchParams();
+    if (params?.fiscalYear != null) search.set('fiscalYear', String(params.fiscalYear));
+    if (params?.level) search.set('level', params.level);
+    if (params?.division) search.set('division', params.division);
+    if (params?.parentObjectiveId !== undefined) search.set('parentObjectiveId', params.parentObjectiveId ?? '');
+    const q = search.toString();
+    return fetchWithAuth(`/api/objectives${q ? `?${q}` : ''}`);
+  },
+
+  async getObjective(id: string): Promise<Objective> {
+    return fetchWithAuth(`/api/objectives/${id}`);
+  },
+
+  async getObjectiveTree(id: string): Promise<ObjectiveTree> {
+    return fetchWithAuth(`/api/objectives/${id}/tree`);
+  },
+
+  async createObjective(obj: Partial<Objective> & { title: string; fiscalYear: number }): Promise<Objective> {
+    return fetchWithAuth('/api/objectives', {
+      method: 'POST',
+      body: JSON.stringify(obj),
+    });
+  },
+
+  async updateObjective(id: string, obj: Partial<Objective>): Promise<Objective> {
+    return fetchWithAuth(`/api/objectives/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(obj),
+    });
+  },
+
+  async deleteObjective(id: string): Promise<void> {
+    return fetchWithAuth(`/api/objectives/${id}`, { method: 'DELETE' });
+  },
+
+  async getKeyResults(objectiveId: string): Promise<KeyResult[]> {
+    return fetchWithAuth(`/api/key-results?objectiveId=${encodeURIComponent(objectiveId)}`);
+  },
+
+  async getKeyResult(id: string): Promise<KeyResult> {
+    return fetchWithAuth(`/api/key-results/${id}`);
+  },
+
+  async createKeyResult(kr: { objectiveId: string; title: string; target?: string; currentValue?: string; unit?: string }): Promise<KeyResult> {
+    return fetchWithAuth('/api/key-results', {
+      method: 'POST',
+      body: JSON.stringify(kr),
+    });
+  },
+
+  async updateKeyResult(id: string, kr: Partial<KeyResult>): Promise<KeyResult> {
+    return fetchWithAuth(`/api/key-results/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(kr),
+    });
+  },
+
+  async deleteKeyResult(id: string): Promise<void> {
+    return fetchWithAuth(`/api/key-results/${id}`, { method: 'DELETE' });
   },
 };

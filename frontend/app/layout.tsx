@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Hackathon Template",
-  description: "Full-stack hackathon template with Next.js, Flask, and Auth0",
+  title: "OKR Tracker",
+  description: "Track organizational objectives and key results. Align strategic goals from leadership to execution.",
 };
 
 export default function RootLayout({
