@@ -290,7 +290,7 @@ export const api = {
     messages: Array<{ role: string; content: string }>,
     model?: string,
     imagesBase64?: string[],
-    mode?: 'assistant' | 'roast',
+    mode?: 'assistant' | 'roast' | 'support',
     videoBase64?: string,
     videoMime?: string
   ): Promise<{ message: string; usage?: any }> {
@@ -376,7 +376,7 @@ export const api = {
     messages?: Array<{ role: string; content: string }>;
     tts?: boolean;
     voice?: string;
-    mode?: 'assistant' | 'roast';
+    mode?: 'assistant' | 'roast' | 'support';
     model?: string;
   }): Promise<{ message: string; transcribed_text?: string; audio_base64?: string; audio_format?: 'mp3' | 'wav'; tts_error?: string; usage?: any }> {
     const formData = new FormData();
@@ -421,6 +421,37 @@ export const api = {
     }
 
     return response.blob();
+  },
+
+  async sendEmail(params: { to: string; subject: string; body: string; body_html?: string; reply_to?: string }): Promise<{ message: string }> {
+    return fetchPublic('/api/email/send', {
+      method: 'POST',
+      body: JSON.stringify({
+        to: params.to,
+        subject: params.subject,
+        body: params.body,
+        body_html: params.body_html,
+        reply_to: params.reply_to,
+      }),
+    });
+  },
+
+  async createTicket(params: {
+    title: string;
+    description: string;
+    user_email?: string;
+    conversation_summary?: string;
+    status?: string;
+  }): Promise<{ _id: string; title: string; description: string; status: string; createdAt: string }> {
+    return fetchPublic('/api/tickets', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  },
+
+  async listTickets(params?: { limit?: number }): Promise<{ tickets: Array<{ _id: string; title: string; description: string; status: string; user_email?: string; conversation_summary?: string; createdAt: string }> }> {
+    const q = params?.limit != null ? `?limit=${params.limit}` : '';
+    return fetchPublic(`/api/tickets${q}`);
   },
 };
 

@@ -3,11 +3,93 @@ import os
 import io
 import base64
 import json
+import re
 import requests
 from openai import OpenAI
 from app.prompts.roast import ROAST_CHAT_SYSTEM
+from app.prompts.support import SUPPORT_SYSTEM
 
 bp = Blueprint('chat', __name__)
+
+
+def _process_support_actions(message: str) -> str:
+    """
+    Find [SEND_EMAIL]...[/SEND_EMAIL] and [CREATE_TICKET]...[/CREATE_TICKET] in the assistant message.
+    Execute them (send email, create ticket), then remove the blocks and return the cleaned message.
+    Inner format: to=...|subject=...|body=... (body is last and may contain | and newlines; use \\n for newlines).
+    """
+    if not message or not isinstance(message, str):
+        return message
+
+    cleaned = message
+
+    # SEND_EMAIL: to=...|subject=...|body=... (body can contain | and newlines)
+    for m in re.finditer(r'\[SEND_EMAIL\](.*?)\[/SEND_EMAIL\]', message, re.DOTALL):
+        block = m.group(0)
+        inner = m.group(1).strip()
+        to_addr = subject = body = ''
+        if '|' in inner:
+            parts = inner.split('|')
+            for p in parts[:2]:
+                if '=' in p:
+                    k, _, v = p.partition('=')
+                    k, v = k.strip().lower(), v.strip()
+                    if k == 'to':
+                        to_addr = v
+                    elif k == 'subject':
+                        subject = v
+            if len(parts) >= 3:
+                rest = '|'.join(parts[2:]).strip()
+                if rest.lower().startswith('body='):
+                    body = rest[5:].strip()
+                body = body.replace('\\n', '\n')
+        if to_addr and subject:
+            try:
+                from app.services.mail import send_email, is_configured
+                if is_configured():
+                    send_email(to=to_addr, subject=subject, body_text=body or '')
+            except Exception:
+                pass
+        cleaned = cleaned.replace(block, '')
+
+    # CREATE_TICKET: title=...|description=... (description may contain | and newlines)
+    for m in re.finditer(r'\[CREATE_TICKET\](.*?)\[/CREATE_TICKET\]', message, re.DOTALL):
+        block = m.group(0)
+        inner = m.group(1).strip()
+        title = desc = ''
+        if '|' in inner:
+            parts = inner.split('|')
+            for p in parts[:1]:
+                if '=' in p:
+                    k, _, v = p.partition('=')
+                    k, v = k.strip().lower(), v.strip()
+                    if k == 'title':
+                        title = v
+            if len(parts) >= 2:
+                rest = '|'.join(parts[1:]).strip()
+                if rest.lower().startswith('description='):
+                    desc = rest[12:].strip()
+                desc = desc.replace('\\n', '\n')
+        if title and desc:
+            try:
+                from app.db.mongodb import get_db
+                from datetime import datetime
+                db = get_db()
+                col = db['tickets']
+                now = datetime.utcnow()
+                col.insert_one({
+                    'title': title,
+                    'description': desc,
+                    'status': 'open',
+                    'createdAt': now,
+                    'updatedAt': now,
+                })
+            except Exception:
+                pass
+        cleaned = cleaned.replace(block, '')
+
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip()
+    return cleaned
 
 def _build_messages_with_images(messages, images_b64):
     """Inject images into the last user message as OpenRouter multimodal content."""
@@ -106,7 +188,10 @@ def chat():
             model = os.getenv('OPENROUTER_CHAT_VISION_MODEL') or 'openai/gpt-4o-mini'
         else:
             model = data.get('model', 'openai/gpt-3.5-turbo')
-        
+
+        if mode == 'support':
+            messages = [{'role': 'system', 'content': SUPPORT_SYSTEM}] + messages
+
         api_key = os.getenv('OPENROUTER_API_KEY')
         if not api_key:
             return jsonify({
@@ -154,6 +239,8 @@ def chat():
         # Extract the assistant's message
         if 'choices' in result and len(result['choices']) > 0:
             assistant_message = result['choices'][0].get('message', {}).get('content', '')
+            if mode == 'support':
+                assistant_message = _process_support_actions(assistant_message)
             return jsonify({
                 'message': assistant_message,
                 'usage': result.get('usage', {})
@@ -298,6 +385,9 @@ def chat_pipeline():
         else:
             model = request.form.get('model') or os.getenv('OPENROUTER_CHAT_MODEL') or 'openai/gpt-3.5-turbo'
 
+        if mode == 'support':
+            messages = [{'role': 'system', 'content': SUPPORT_SYSTEM}] + messages
+
         api_key = os.getenv('OPENROUTER_API_KEY')
         if not api_key:
             return jsonify({'error': 'OPENROUTER_API_KEY not configured'}), 500
@@ -328,6 +418,8 @@ def chat_pipeline():
         assistant_message = ''
         if result.get('choices'):
             assistant_message = result['choices'][0].get('message', {}).get('content', '')
+        if mode == 'support':
+            assistant_message = _process_support_actions(assistant_message)
 
         out = {'message': assistant_message, 'usage': result.get('usage', {})}
         if transcribed_text is not None:
