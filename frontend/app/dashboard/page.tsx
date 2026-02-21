@@ -5,12 +5,11 @@ import { getCurrentUser, login, User } from '@/lib/auth';
 import Link from 'next/link';
 import DashboardShell from '@/components/DashboardShell';
 import { motion } from 'motion/react';
-import { Clock, User as UserIcon, MessageCircle, Headphones, Mic } from 'lucide-react';
+import { Clock, User as UserIcon, MessageCircle, Headphones, Mic, GraduationCap } from 'lucide-react';
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
   useEffect(() => {
     loadUser();
   }, []);
@@ -154,19 +153,19 @@ export default function Dashboard() {
           className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-6 hover:bg-white/8 hover:border-white/20 transition-all"
         >
           <div className="flex items-center gap-4 mb-4">
-            <div className="bg-gradient-to-br from-cyan-500/20 to-cyan-500/5 p-3 rounded-xl">
-              <Mic className="w-6 h-6 text-cyan-500" />
+            <div className="bg-gradient-to-br from-amber-500/20 to-amber-500/5 p-3 rounded-xl">
+              <Mic className="w-6 h-6 text-amber-500" />
             </div>
             <div>
-              <h3 className="text-xl font-semibold">Voice Assistant</h3>
-              <p className="text-sm text-gray-400">Always-on mic — speak and get spoken replies from the same AI pipeline</p>
+              <h3 className="text-xl font-semibold">AI Tutor (with Voice)</h3>
+              <p className="text-sm text-gray-400">Ask by text or voice — Weekend Energy Tutor: fun line + real help</p>
             </div>
           </div>
           <Link
-            href="/voice-assistant"
+            href="/tutor"
             className="inline-flex items-center text-[#4F8CFF] hover:text-[#6BA0FF] text-sm font-medium"
           >
-            Go to Voice Assistant →
+            Go to AI Tutor →
           </Link>
         </motion.div>
 

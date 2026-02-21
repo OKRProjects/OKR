@@ -89,7 +89,7 @@ interface Message {
 export default function ChatPage() {
   const [user, setUser] = useState<{ name?: string; email?: string } | null>(null);
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'Hello! I\'m your AI assistant. You can speak, type, or attach images. Enable "Speak response" to hear my replies.' },
+    { role: 'assistant', content: 'Hello! I\'m your AI assistant. You can speak, type, or attach image/video. Enable "Speak response" to hear my replies.' },
   ]);
   const [text, setText] = useState('');
   // Combined mode: roast when user attaches image/video, assistant for text-only (no toggle)
@@ -405,6 +405,7 @@ export default function ChatPage() {
           <p className="text-gray-400 text-sm">
             Voice, text, or attach image/video → AI responds (roasts media, chats otherwise) → optional speech
           </p>
+          <p className="text-xs text-gray-500 mt-1">Accepts images and video via OpenRouter (vision/video models). Roast for media, chat otherwise.</p>
         </div>
 
         {/* Messages */}
@@ -499,6 +500,19 @@ export default function ChatPage() {
               onChange={handleImageSelect}
             />
 
+            <select
+              value={ttsVoice}
+              onChange={(e) => setTtsVoice(e.target.value)}
+              className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-sm focus:outline-none focus:ring-2 focus:ring-[#4F8CFF] min-w-[140px]"
+              title="Voice (OpenAI or Magic Hour)"
+            >
+              {TTS_VOICES.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.label}
+                </option>
+              ))}
+            </select>
+
             <button
               type="button"
               onClick={() => setTtsEnabled((v) => !v)}
@@ -507,21 +521,6 @@ export default function ChatPage() {
             >
               <Volume2 className="w-5 h-5" />
             </button>
-
-            {ttsEnabled && (
-              <select
-                value={ttsVoice}
-                onChange={(e) => setTtsVoice(e.target.value)}
-                className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-sm focus:outline-none focus:ring-2 focus:ring-[#4F8CFF]"
-                title="TTS voice"
-              >
-                {TTS_VOICES.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.label}
-                  </option>
-                ))}
-              </select>
-            )}
 
             <input
               type="text"
@@ -541,9 +540,8 @@ export default function ChatPage() {
           </div>
 
           <p className="text-xs text-gray-500">
-            {getEffectiveMode({ images: attachedImages, video: attachedVideo }) === 'roast' && 'Roast mode: image or video (MOV, MP4, WebM; max 20s). '}
-            {ttsEnabled ? `✓ Voice: ${TTS_VOICES.find((v) => v.id === ttsVoice)?.label || ttsVoice}` : 'Enable speaker icon to hear responses'}
-            {' • '}Press mic to speak — auto-sends when you stop talking
+            Choose voice (OpenAI or Magic Hour) • {ttsEnabled ? '✓ Speak response on. ' : 'Click speaker to hear replies. '}
+            Press mic to speak — auto-sends when you stop talking
           </p>
         </form>
       </div>

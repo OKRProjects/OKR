@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'motion/react';
-import { LayoutDashboard, User, ArrowLeft, Brain, MessageCircle } from 'lucide-react';
+import { LayoutDashboard, User, ArrowLeft, Brain, MessageCircle, GraduationCap } from 'lucide-react';
 import { logout } from '@/lib/auth';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Overview', href: '/dashboard' },
+  { icon: GraduationCap, label: 'AI Tutor', href: '/tutor' },
   { icon: User, label: 'Profile', href: '/profile' },
   { icon: MessageCircle, label: 'Chat Pipeline', href: '/chat' },
 ];
