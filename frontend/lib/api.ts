@@ -107,6 +107,27 @@ async function fetchPublic(url: string, options: RequestInit = {}) {
   return response.json();
 }
 
+async function fetchPublicBlob(url: string, options: RequestInit = {}) {
+  const isFormData = options.body instanceof FormData;
+  const headers: HeadersInit = {
+    ...(!isFormData && { 'Content-Type': 'application/json' }),
+    ...options.headers,
+  };
+
+  const response = await fetch(`${API_URL}${url}`, {
+    ...options,
+    headers,
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'An error occurred' }));
+    throw new Error(error.message || error.error || `HTTP error! status: ${response.status}`);
+  }
+
+  return response.blob();
+}
+
 export const api = {
   // Auth API
   async login(): Promise<{ auth_url: string }> {
@@ -262,6 +283,34 @@ export const api = {
     return fetchPublic('/api/chat', {
       method: 'POST',
       body: JSON.stringify({ messages, model: model || 'openai/gpt-3.5-turbo' }),
+    });
+  },
+
+  // Voice API (public - text to speech: OpenAI TTS or Magic Hour)
+  async generateVoice(params: {
+    text: string;
+    provider: 'openai' | 'magic_hour';
+    voice?: string;
+    model?: string;
+    speed?: number;
+    voice_name?: string;
+    name?: string;
+  }): Promise<Blob> {
+    const body: Record<string, unknown> = {
+      text: params.text,
+      provider: params.provider,
+    };
+    if (params.provider === 'openai') {
+      if (params.voice) body.voice = params.voice;
+      if (params.model) body.model = params.model;
+      if (params.speed != null) body.speed = params.speed;
+    } else {
+      if (params.voice_name) body.voice_name = params.voice_name;
+      if (params.name) body.name = params.name;
+    }
+    return fetchPublicBlob('/api/voice/generate', {
+      method: 'POST',
+      body: JSON.stringify(body),
     });
   },
 };
