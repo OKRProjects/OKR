@@ -305,6 +305,34 @@ export const api = {
     });
   },
 
+  // Chat Pipeline: STT -> Chat (text+images) -> TTS
+  async chatPipeline(options: {
+    audio?: File;
+    text?: string;
+    images?: File[];
+    messages?: Array<{ role: string; content: string }>;
+    tts?: boolean;
+    voice?: string;
+    mode?: 'assistant' | 'roast';
+  }): Promise<{ message: string; audio_base64?: string; tts_error?: string; usage?: any }> {
+    const formData = new FormData();
+    if (options.text) formData.append('text', options.text);
+    if (options.messages?.length) {
+      formData.append('messages', JSON.stringify(options.messages));
+    }
+    formData.append('tts', String(options.tts ?? false));
+    if (options.voice) formData.append('voice', options.voice);
+    if (options.mode) formData.append('mode', options.mode);
+    if (options.audio) formData.append('audio', options.audio);
+    if (options.images?.length) {
+      options.images.forEach((f) => formData.append('images', f));
+    }
+    return fetchPublic('/api/chat/pipeline', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
   // Text-to-Speech API (OpenAI TTS - public endpoint)
   async textToSpeech(
     text: string,

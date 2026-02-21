@@ -5,7 +5,7 @@ import { getCurrentUser, login, User } from '@/lib/auth';
 import Link from 'next/link';
 import DashboardShell from '@/components/DashboardShell';
 import { motion } from 'motion/react';
-import { Clock, User as UserIcon, Mic, Volume2 } from 'lucide-react';
+import { Clock, User as UserIcon, Mic, Volume2, MessageCircle } from 'lucide-react';
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
@@ -101,7 +101,31 @@ export default function Dashboard() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.25 }}
+          transition={{ duration: 0.5, delay: 0.21 }}
+          whileHover={{ y: -4, scale: 1.02 }}
+          className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-6 hover:bg-white/8 hover:border-white/20 transition-all"
+        >
+          <div className="flex items-center gap-4 mb-4">
+            <div className="bg-gradient-to-br from-amber-500/20 to-amber-500/5 p-3 rounded-xl">
+              <MessageCircle className="w-6 h-6 text-amber-500" />
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold">Chat Pipeline</h3>
+              <p className="text-sm text-gray-400">Voice + text + images → AI → speech</p>
+            </div>
+          </div>
+          <Link
+            href="/chat"
+            className="inline-flex items-center text-[#4F8CFF] hover:text-[#6BA0FF] text-sm font-medium"
+          >
+            Go to Chat →
+          </Link>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.22 }}
           whileHover={{ y: -4, scale: 1.02 }}
           className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-6 hover:bg-white/8 hover:border-white/20 transition-all"
         >

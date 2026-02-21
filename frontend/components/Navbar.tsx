@@ -66,6 +66,12 @@ export default function Navbar() {
                   Profile
                 </Link>
                 <Link
+                  href="/chat"
+                  className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Chat Pipeline
+                </Link>
+                <Link
                   href="/voice-to-text"
                   className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
                 >
