@@ -5,7 +5,7 @@ import { getCurrentUser, login, User } from '@/lib/auth';
 import Link from 'next/link';
 import DashboardShell from '@/components/DashboardShell';
 import { motion } from 'motion/react';
-import { Clock, User as UserIcon, Mic, Volume2, MessageCircle } from 'lucide-react';
+import { Clock, User as UserIcon, MessageCircle } from 'lucide-react';
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
@@ -122,53 +122,6 @@ export default function Dashboard() {
           </Link>
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.22 }}
-          whileHover={{ y: -4, scale: 1.02 }}
-          className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-6 hover:bg-white/8 hover:border-white/20 transition-all"
-        >
-          <div className="flex items-center gap-4 mb-4">
-            <div className="bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 p-3 rounded-xl">
-              <Mic className="w-6 h-6 text-emerald-500" />
-            </div>
-            <div>
-              <h3 className="text-xl font-semibold">Voice-to-Text</h3>
-              <p className="text-sm text-gray-400">Transcribe audio to text</p>
-            </div>
-          </div>
-          <Link
-            href="/voice-to-text"
-            className="inline-flex items-center text-[#4F8CFF] hover:text-[#6BA0FF] text-sm font-medium"
-          >
-            Go to Voice-to-Text →
-          </Link>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          whileHover={{ y: -4, scale: 1.02 }}
-          className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-6 hover:bg-white/8 hover:border-white/20 transition-all"
-        >
-          <div className="flex items-center gap-4 mb-4">
-            <div className="bg-gradient-to-br from-violet-500/20 to-violet-500/5 p-3 rounded-xl">
-              <Volume2 className="w-6 h-6 text-violet-500" />
-            </div>
-            <div>
-              <h3 className="text-xl font-semibold">Text-to-Voice</h3>
-              <p className="text-sm text-gray-400">Convert text to speech</p>
-            </div>
-          </div>
-          <Link
-            href="/text-to-voice"
-            className="inline-flex items-center text-[#4F8CFF] hover:text-[#6BA0FF] text-sm font-medium"
-          >
-            Go to Text-to-Voice →
-          </Link>
-        </motion.div>
       </div>
     </DashboardShell>
   );
