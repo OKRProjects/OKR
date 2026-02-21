@@ -363,7 +363,7 @@ export const api = {
     tts?: boolean;
     voice?: string;
     mode?: 'assistant' | 'roast';
-  }): Promise<{ message: string; audio_base64?: string; tts_error?: string; usage?: any }> {
+  }): Promise<{ message: string; transcribed_text?: string; audio_base64?: string; audio_format?: 'mp3' | 'wav'; tts_error?: string; usage?: any }> {
     const formData = new FormData();
     if (options.text) formData.append('text', options.text);
     if (options.messages?.length) {

@@ -153,19 +153,40 @@ def _transcribe_audio(file_storage) -> str:
     return transcription if isinstance(transcription, str) else transcription.text
 
 
+OPENAI_VOICES = {'alloy', 'ash', 'ballad', 'cedar', 'coral', 'echo', 'fable', 'marin', 'nova', 'onyx', 'sage', 'shimmer', 'verse'}
+
+
 def _text_to_speech(text: str, voice: str = 'coral') -> bytes:
-    """Convert text to speech using OpenAI TTS."""
-    api_key = os.getenv('OPENAI_API_KEY')
+    """Convert text to speech. OpenAI TTS for standard voices, Magic Hour for celebrity voices."""
+    if voice in OPENAI_VOICES:
+        api_key = os.getenv('OPENAI_API_KEY')
+        if not api_key:
+            raise ValueError('OPENAI_API_KEY not configured')
+        client = OpenAI(api_key=api_key)
+        response = client.audio.speech.create(
+            model='tts-1-hd',
+            voice=voice,
+            input=text[:4096],
+            response_format='mp3',
+        )
+        return response.content
+
+    # Magic Hour (celebrity voices)
+    from app.routes.voice import _generate_magic_hour
+    api_key = os.getenv('MAGICHOUR_API_KEY')
     if not api_key:
-        raise ValueError('OPENAI_API_KEY not configured')
-    client = OpenAI(api_key=api_key)
-    response = client.audio.speech.create(
-        model='tts-1-hd',
-        voice=voice,
-        input=text[:4096],
-        response_format='mp3',
+        raise ValueError('MAGICHOUR_API_KEY not configured for Magic Hour voices')
+    body, code = _generate_magic_hour(
+        text[:4096],
+        voice_name=voice,
+        name='Chat Pipeline',
+        api_key=api_key,
     )
-    return response.content
+    if code != 200:
+        err = body.get_json() if hasattr(body, 'get_json') else {}
+        msg = err.get('error', 'Magic Hour TTS failed')
+        raise ValueError(str(msg))
+    return body.data
 
 
 @bp.route('/chat/pipeline', methods=['POST'])
@@ -184,8 +205,10 @@ def chat_pipeline():
 
         # Step 1: Transcribe audio if present
         audio_file = request.files.get('audio') or request.files.get('file')
+        transcribed_text = None
         if audio_file and audio_file.filename:
             transcribed = _transcribe_audio(audio_file)
+            transcribed_text = transcribed
             text = f'{text} {transcribed}'.strip() if text else transcribed
 
         # Step 2: Get images
@@ -251,12 +274,15 @@ def chat_pipeline():
             assistant_message = result['choices'][0].get('message', {}).get('content', '')
 
         out = {'message': assistant_message, 'usage': result.get('usage', {})}
+        if transcribed_text is not None:
+            out['transcribed_text'] = transcribed_text
 
         # Step 5: TTS if requested
         if tts and assistant_message:
             try:
                 audio_bytes = _text_to_speech(assistant_message, voice)
                 out['audio_base64'] = base64.b64encode(audio_bytes).decode('utf-8')
+                out['audio_format'] = 'wav' if voice not in OPENAI_VOICES else 'mp3'
             except Exception as e:
                 out['tts_error'] = str(e)
 

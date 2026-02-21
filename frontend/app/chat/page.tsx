@@ -7,23 +7,43 @@ import Navbar from '@/components/Navbar';
 import Link from 'next/link';
 import { Mic, MicOff, ImagePlus, Volume2, Send } from 'lucide-react';
 
+const TTS_VOICES = [
+  // OpenAI
+  { id: 'alloy', label: 'Alloy' },
+  { id: 'ash', label: 'Ash' },
+  { id: 'ballad', label: 'Ballad' },
+  { id: 'cedar', label: 'Cedar' },
+  { id: 'coral', label: 'Coral' },
+  { id: 'echo', label: 'Echo' },
+  { id: 'fable', label: 'Fable' },
+  { id: 'marin', label: 'Marin' },
+  { id: 'nova', label: 'Nova' },
+  { id: 'onyx', label: 'Onyx' },
+  { id: 'sage', label: 'Sage' },
+  { id: 'shimmer', label: 'Shimmer' },
+  { id: 'verse', label: 'Verse' },
+  // Magic Hour
+  { id: 'Elon Musk', label: 'Elon Musk' },
+  { id: 'Morgan Freeman', label: 'Morgan Freeman' },
+  { id: 'Joe Rogan', label: 'Joe Rogan' },
+  { id: 'Barack Obama', label: 'Barack Obama' },
+  { id: 'Donald Trump', label: 'Donald Trump' },
+  { id: 'Joe Biden', label: 'Joe Biden' },
+  { id: 'Taylor Swift', label: 'Taylor Swift' },
+  { id: 'Samuel L. Jackson', label: 'Samuel L. Jackson' },
+  { id: 'David Attenborough', label: 'David Attenborough' },
+  { id: 'Kanye West', label: 'Kanye West' },
+  { id: 'Kim Kardashian', label: 'Kim Kardashian' },
+  { id: 'James Earl Jones', label: 'James Earl Jones' },
+  { id: 'Jeff Goldblum', label: 'Jeff Goldblum' },
+  { id: 'Marilyn Monroe', label: 'Marilyn Monroe' },
+  { id: 'Albert Einstein', label: 'Albert Einstein' },
+] as const;
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   audioUrl?: string;
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      const base64 = result.includes(',') ? result.split(',')[1] : result;
-      resolve(base64 || '');
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 }
 
 export default function ChatPage() {
@@ -34,11 +54,14 @@ export default function ChatPage() {
   const [text, setText] = useState('');
   const [attachedImages, setAttachedImages] = useState<{ file: File; preview: string }[]>([]);
   const [ttsEnabled, setTtsEnabled] = useState(false);
+  const [ttsVoice, setTtsVoice] = useState('coral');
   const [isRecording, setIsRecording] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const vadIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -50,6 +73,11 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const SILENCE_THRESHOLD = 15;
+  const SILENCE_DURATION_MS = 1500;
+  const MIN_RECORDING_MS = 800;
+  const VAD_CHECK_INTERVAL_MS = 100;
+
   const startRecording = async () => {
     setError(null);
     try {
@@ -60,12 +88,44 @@ export default function ChatPage() {
       mr.ondataavailable = (e) => e.data.size > 0 && chunksRef.current.push(e.data);
       mr.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
+        if (audioContextRef.current) {
+          audioContextRef.current.close();
+          audioContextRef.current = null;
+        }
+        if (vadIntervalRef.current) {
+          clearInterval(vadIntervalRef.current);
+          vadIntervalRef.current = null;
+        }
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
         const file = new File([blob], 'recording.webm', { type: 'audio/webm' });
         await sendPipeline({ audio: file });
       };
       mr.start();
       setIsRecording(true);
+
+      // Voice Activity Detection: auto-stop when user stops talking
+      const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      audioContextRef.current = ctx;
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.8;
+      source.connect(analyser);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      let lastLoudTime = Date.now();
+      const startTime = Date.now();
+
+      vadIntervalRef.current = setInterval(() => {
+        if (!mediaRecorderRef.current || mediaRecorderRef.current.state !== 'recording') return;
+        analyser.getByteFrequencyData(data);
+        const avg = data.reduce((a, b) => a + b, 0) / data.length;
+        if (avg > SILENCE_THRESHOLD) lastLoudTime = Date.now();
+        const elapsed = Date.now() - startTime;
+        const silentFor = Date.now() - lastLoudTime;
+        if (elapsed >= MIN_RECORDING_MS && silentFor >= SILENCE_DURATION_MS) {
+          stopRecording();
+        }
+      }, VAD_CHECK_INTERVAL_MS);
     } catch {
       setError('Microphone permission denied');
     }
@@ -73,6 +133,10 @@ export default function ChatPage() {
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
+      if (vadIntervalRef.current) {
+        clearInterval(vadIntervalRef.current);
+        vadIntervalRef.current = null;
+      }
       mediaRecorderRef.current.stop();
       setIsRecording(false);
     }
@@ -123,7 +187,7 @@ export default function ChatPage() {
         images: images.length ? images : undefined,
         messages: apiMessages,
         tts: ttsEnabled,
-        voice: 'coral',
+        voice: ttsVoice,
       });
 
       const assistantMsg: Message = {
@@ -131,9 +195,17 @@ export default function ChatPage() {
         content: result.message || 'No response.',
       };
       if (result.audio_base64) {
-        assistantMsg.audioUrl = `data:audio/mpeg;base64,${result.audio_base64}`;
+        const format = result.audio_format === 'wav' ? 'wav' : 'mpeg';
+        assistantMsg.audioUrl = `data:audio/${format};base64,${result.audio_base64}`;
       }
-      setMessages((prev) => [...prev, assistantMsg]);
+      setMessages((prev) => {
+        const next = [...prev];
+        const lastIdx = next.length - 1;
+        if (lastIdx >= 0 && next[lastIdx].role === 'user' && result.transcribed_text) {
+          next[lastIdx] = { ...next[lastIdx], content: result.transcribed_text };
+        }
+        return [...next, assistantMsg];
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error';
       setError(msg);
@@ -260,6 +332,21 @@ export default function ChatPage() {
               <Volume2 className="w-5 h-5" />
             </button>
 
+            {ttsEnabled && (
+              <select
+                value={ttsVoice}
+                onChange={(e) => setTtsVoice(e.target.value)}
+                className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-sm focus:outline-none focus:ring-2 focus:ring-[#4F8CFF]"
+                title="TTS voice"
+              >
+                {TTS_VOICES.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.label}
+                  </option>
+                ))}
+              </select>
+            )}
+
             <input
               type="text"
               value={text}
@@ -278,7 +365,8 @@ export default function ChatPage() {
           </div>
 
           <p className="text-xs text-gray-500">
-            {ttsEnabled ? '✓ Responses will be spoken' : 'Enable speaker icon to hear responses'}
+            {ttsEnabled ? `✓ Voice: ${TTS_VOICES.find((v) => v.id === ttsVoice)?.label || ttsVoice}` : 'Enable speaker icon to hear responses'}
+            {' • '}Press mic to speak — auto-sends when you stop talking
           </p>
         </form>
       </div>
