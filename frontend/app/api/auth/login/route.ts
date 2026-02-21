@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 // Proxy to backend auth login endpoint
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
 
 export async function GET() {
   try {

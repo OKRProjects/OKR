@@ -41,6 +41,16 @@ export default function Navbar() {
             </Link>
           </div>
           <div className="flex items-center space-x-4">
+            {!isLoading && (
+              <>
+                <Link
+                  href="/multiverse"
+                  className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Roast AI
+                </Link>
+              </>
+            )}
             {!isLoading && user && (
               <>
                 <Link
@@ -55,6 +65,12 @@ export default function Navbar() {
                 >
                   Profile
                 </Link>
+                <Link
+                  href="/voice"
+                  className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Voice
+                </Link>
                 <span className="text-gray-700 text-sm">
                   {user.name || user.email}
                 </span>
@@ -67,12 +83,20 @@ export default function Navbar() {
               </>
             )}
             {!isLoading && !user && (
-              <Link
-                href="/"
-                className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700"
-              >
-                Login
-              </Link>
+              <>
+                <Link
+                  href="/voice"
+                  className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Voice
+                </Link>
+                <Link
+                  href="/"
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700"
+                >
+                  Login
+                </Link>
+              </>
             )}
           </div>
         </div>

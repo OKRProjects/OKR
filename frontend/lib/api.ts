@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
 
 export interface Item {
   _id?: string;
@@ -100,11 +100,39 @@ async function fetchPublic(url: string, options: RequestInit = {}) {
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'An error occurred' }));
-    throw new Error(error.message || error.error || `HTTP error! status: ${response.status}`);
+    const text = await response.text();
+    let msg = `Error ${response.status}`;
+    try {
+      const error = JSON.parse(text);
+      msg = error.error || error.message || msg;
+    } catch {
+      if (text.length < 200) msg = text || msg;
+    }
+    throw new Error(msg);
   }
 
   return response.json();
+}
+
+async function fetchPublicBlob(url: string, options: RequestInit = {}) {
+  const isFormData = options.body instanceof FormData;
+  const headers: HeadersInit = {
+    ...(!isFormData && { 'Content-Type': 'application/json' }),
+    ...options.headers,
+  };
+
+  const response = await fetch(`${API_URL}${url}`, {
+    ...options,
+    headers,
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'An error occurred' }));
+    throw new Error(error.message || error.error || `HTTP error! status: ${response.status}`);
+  }
+
+  return response.blob();
 }
 
 export const api = {
@@ -257,11 +285,142 @@ export const api = {
     });
   },
 
-  // Chat API (public endpoint, no auth required)
-  async sendChatMessage(messages: Array<{ role: string; content: string }>, model?: string): Promise<{ message: string; usage?: any }> {
+  // Chat API (public, no auth). Optional images, optional mode 'assistant' | 'roast'.
+  async sendChatMessage(
+    messages: Array<{ role: string; content: string }>,
+    model?: string,
+    imagesBase64?: string[],
+    mode?: 'assistant' | 'roast'
+  ): Promise<{ message: string; usage?: any }> {
+    const body: { messages: typeof messages; model?: string; images?: string[]; mode?: string } = {
+      messages,
+      model: model || 'openai/gpt-3.5-turbo',
+    };
+    if (imagesBase64?.length) body.images = imagesBase64;
+    if (mode) body.mode = mode;
     return fetchPublic('/api/chat', {
       method: 'POST',
-      body: JSON.stringify({ messages, model: model || 'openai/gpt-3.5-turbo' }),
+      body: JSON.stringify(body),
     });
   },
+
+  // Voice API (public - text to speech: OpenAI TTS or Magic Hour) - from JP-Branch
+  async generateVoice(params: {
+    text: string;
+    provider: 'openai' | 'magic_hour';
+    voice?: string;
+    model?: string;
+    speed?: number;
+    voice_name?: string;
+    name?: string;
+  }): Promise<Blob> {
+    const body: Record<string, unknown> = {
+      text: params.text,
+      provider: params.provider,
+    };
+    if (params.provider === 'openai') {
+      if (params.voice) body.voice = params.voice;
+      if (params.model) body.model = params.model;
+      if (params.speed != null) body.speed = params.speed;
+    } else {
+      if (params.voice_name) body.voice_name = params.voice_name;
+      if (params.name) body.name = params.name;
+    }
+    return fetchPublicBlob('/api/voice/generate', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  // Roast AI (public, no auth)
+  async analyzeRoast(image: File): Promise<RoastAnalyzeResponse> {
+    const formData = new FormData();
+    formData.append('image', image);
+    return fetchPublic('/api/multiverse/analyze', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
+  // Voice-to-Text API (Whisper - pipeline backend)
+  async transcribeAudio(file: File, options?: { language?: string; model?: string }): Promise<{ text: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (options?.language) formData.append('language', options.language);
+    if (options?.model) formData.append('model', options.model);
+    return fetchPublic('/api/transcribe', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
+  // Chat Pipeline: STT -> Chat (text+images) -> TTS (pipeline backend)
+  async chatPipeline(options: {
+    audio?: File;
+    text?: string;
+    images?: File[];
+    messages?: Array<{ role: string; content: string }>;
+    tts?: boolean;
+    voice?: string;
+    mode?: 'assistant' | 'roast';
+  }): Promise<{ message: string; transcribed_text?: string; audio_base64?: string; audio_format?: 'mp3' | 'wav'; tts_error?: string; usage?: any }> {
+    const formData = new FormData();
+    if (options.text) formData.append('text', options.text);
+    if (options.messages?.length) {
+      formData.append('messages', JSON.stringify(options.messages));
+    }
+    formData.append('tts', String(options.tts ?? false));
+    if (options.voice) formData.append('voice', options.voice);
+    if (options.mode) formData.append('mode', options.mode);
+    if (options.audio) formData.append('audio', options.audio);
+    if (options.images?.length) {
+      options.images.forEach((f) => formData.append('images', f));
+    }
+    return fetchPublic('/api/chat/pipeline', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
+  // Text-to-Speech API (OpenAI TTS - pipeline backend)
+  async textToSpeech(
+    text: string,
+    options?: { voice?: string; model?: string }
+  ): Promise<Blob> {
+    const response = await fetch(`${API_URL}/api/speech`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        voice: options?.voice || 'coral',
+        model: options?.model || 'tts-1-hd',
+      }),
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'An error occurred' }));
+      throw new Error(error.error || error.message || `HTTP error! status: ${response.status}`);
+    }
+
+    return response.blob();
+  },
 };
+
+// Roast AI types (aligned with backend JSON)
+export interface TruthResponse {
+  truth_caption: string;
+  truth_objects: string[];
+  scene_type: string;
+  truth_ocr: string;
+  confidence: string;
+}
+
+export interface RoastAnalyzeResponse {
+  truth: TruthResponse;
+  roast: string;
+  truth_source: 'local' | 'openrouter';
+  roast_source: string;
+  latency_ms_truth: number;
+  latency_ms_roast: number;
+}
