@@ -105,8 +105,62 @@ export default function ChatPage() {
   const chunksRef = useRef<Blob[]>([]);
   const vadIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /** Split message roughly in half at a paragraph boundary. Still 2 TTS calls (same API cost as sentence split). */
+  const splitMessageForTts = (text: string): [string, string] => {
+    const t = text.trim();
+    if (!t) return ['', ''];
+    const paragraphs = t.split(/\n\n+/);
+    if (paragraphs.length <= 1) {
+      const mid = Math.floor(t.length / 2);
+      const searchStart = Math.max(0, mid - 100);
+      const searchEnd = Math.min(t.length, mid + 100);
+      const slice = t.slice(searchStart, searchEnd);
+      const periodIdx = slice.indexOf('. ');
+      const breakPoint = periodIdx >= 0 ? searchStart + periodIdx + 2 : mid;
+      return [t.slice(0, breakPoint).trim(), t.slice(breakPoint).trim()];
+    }
+    const mid = Math.floor(t.length / 2);
+    let cum = 0;
+    let splitIdx = 0;
+    for (let i = 0; i < paragraphs.length; i++) {
+      cum += paragraphs[i].length + 2;
+      if (cum >= mid) {
+        splitIdx = i + 1;
+        break;
+      }
+      splitIdx = i + 1;
+    }
+    const first = paragraphs.slice(0, splitIdx).join('\n\n').trim();
+    const second = paragraphs.slice(splitIdx).join('\n\n').trim();
+    return [first, second];
+  };
+
+  /** Play a TTS blob with hidden audio; call onEnded when playback finishes. */
+  const playTtsBlob = (blob: Blob, onEnded: () => void) => {
+    const url = URL.createObjectURL(blob);
+    const audio = ttsAudioRef.current || new Audio();
+    if (!ttsAudioRef.current) ttsAudioRef.current = audio;
+    const cleanup = () => {
+      URL.revokeObjectURL(url);
+    };
+    audio.onended = () => {
+      cleanup();
+      onEnded();
+    };
+    audio.onerror = () => {
+      cleanup();
+      onEnded();
+    };
+    audio.src = url;
+    audio.play().catch(() => {
+      cleanup();
+      onEnded();
+    });
+  };
 
   useEffect(() => {
     getCurrentUser().then((u) => setUser(u)).catch(() => login());
@@ -269,7 +323,7 @@ export default function ChatPage() {
         { role: 'user' as const, content: inputText || (audio ? '(Voice message)' : currentVideo ? '(See video)' : '(See image)') },
       ];
 
-      // Voice messages use pipeline (STT + chat + TTS). Text/images/video use same API as popout chat.
+      // Voice messages use pipeline (STT + chat). TTS is done in two halves for faster start and auto-played (no visible player).
       if (audio) {
         const pipelineMessages = apiMessages.slice(0, -1);
         const result = await api.chatPipeline({
@@ -278,18 +332,15 @@ export default function ChatPage() {
           images: images.length ? images : undefined,
           video: currentVideo?.file,
           messages: pipelineMessages,
-          tts: ttsEnabled,
+          tts: false,
           voice: ttsVoice,
           mode: chatMode,
         });
+        const fullMessage = result.message || 'No response.';
         const assistantMsg: Message = {
           role: 'assistant',
-          content: result.message || 'No response.',
+          content: fullMessage,
         };
-        if (result.audio_base64) {
-          const format = result.audio_format === 'wav' ? 'wav' : 'mpeg';
-          assistantMsg.audioUrl = `data:audio/${format};base64,${result.audio_base64}`;
-        }
         setMessages((prev) => {
           const next = [...prev];
           const lastIdx = next.length - 1;
@@ -298,6 +349,22 @@ export default function ChatPage() {
           }
           return [...next, assistantMsg];
         });
+
+        if (ttsEnabled && fullMessage.trim()) {
+          const [first, second] = splitMessageForTts(fullMessage);
+          const voiceOpt = { voice: ttsVoice };
+          if (!second) {
+            api.textToSpeech(first || fullMessage, voiceOpt).then((blob) => playTtsBlob(blob, () => {}));
+          } else {
+            const p1 = api.textToSpeech(first, voiceOpt);
+            const p2 = api.textToSpeech(second, voiceOpt);
+            p1.then((blob1) => {
+              playTtsBlob(blob1, () => {
+                p2.then((blob2) => playTtsBlob(blob2, () => {}));
+              });
+            });
+          }
+        }
       } else {
         let imagesBase64: string[] | undefined;
         let videoBase64: string | undefined;
@@ -388,9 +455,6 @@ export default function ChatPage() {
                   </div>
                 )}
                 <p className="whitespace-pre-wrap">{m.content}</p>
-                {m.audioUrl && (
-                  <audio controls src={m.audioUrl} className="mt-2 w-full max-w-xs" />
-                )}
               </div>
             </div>
           ))}
