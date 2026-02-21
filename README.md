@@ -154,6 +154,22 @@ CLOUDINARY_API_SECRET=YOUR_CLOUDINARY_API_SECRET
 OPENROUTER_API_KEY=YOUR_OPENROUTER_API_KEY
 ```
 
+#### Zoho Mail SMTP (optional)
+
+To send email from the backend (e.g. contact form, notifications), add to `backend/.env`:
+
+```env
+# Zoho: use smtp.zoho.com for @zoho.com; smtppro.zoho.com for custom domain
+SMTP_HOST=smtp.zoho.com
+SMTP_PORT=587
+SMTP_USER=your-zoho-email@zoho.com
+SMTP_PASSWORD=your-app-password
+SMTP_FROM=your-zoho-email@zoho.com
+```
+
+- Use an [Application-specific password](https://www.zoho.com/mail/help/adminconsole/two-factor-authentication.html#alink5) if you have 2FA enabled.
+- API: `GET /api/email/status` (check config), `POST /api/email/send` (send), `POST /api/email/test` (send test email).
+
 #### Root .env (for Docker Compose)
 
 Create `.env` in the root directory (or copy from `.env.example`) with all variables from both frontend and backend:

@@ -175,7 +175,8 @@ export default function ChatPage() {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
+    // Use recorder state (not isRecording) so VAD interval can stop recording — avoids stale closure
+    if (mediaRecorderRef.current?.state === 'recording') {
       if (vadIntervalRef.current) {
         clearInterval(vadIntervalRef.current);
         vadIntervalRef.current = null;
