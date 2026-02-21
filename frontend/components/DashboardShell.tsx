@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'motion/react';
-import { LayoutDashboard, User, ArrowLeft, Brain } from 'lucide-react';
+import { LayoutDashboard, User, ArrowLeft, Brain, Flame } from 'lucide-react';
 import { logout } from '@/lib/auth';
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Overview', href: '/dashboard' },
   { icon: User, label: 'Profile', href: '/profile' },
+  { icon: Flame, label: 'Roast AI', href: '/multiverse' },
 ];
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
