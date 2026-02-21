@@ -89,7 +89,7 @@ interface Message {
 export default function ChatPage() {
   const [user, setUser] = useState<{ name?: string; email?: string } | null>(null);
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'Hello! I\'m your AI assistant. You can speak, type, or attach images. Enable "Speak response" to hear my replies.' },
+    { role: 'assistant', content: 'Hello! I\'m your AI assistant. You can speak, type, or attach image/video. Enable "Speak response" to hear my replies.' },
   ]);
   const [text, setText] = useState('');
   // Combined mode: roast when user attaches image/video, assistant for text-only (no toggle)
@@ -391,7 +391,7 @@ export default function ChatPage() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#0E1117] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0c0712] flex items-center justify-center">
         <div className="text-gray-400">Loading...</div>
       </div>
     );
@@ -405,6 +405,7 @@ export default function ChatPage() {
           <p className="text-gray-400 text-sm">
             Voice, text, or attach image/video → AI responds (roasts media, chats otherwise) → optional speech
           </p>
+          <p className="text-xs text-gray-500 mt-1">We respond. You provide. (Roast mode for media; chat otherwise.)</p>
         </div>
 
         {/* Messages */}
@@ -417,7 +418,7 @@ export default function ChatPage() {
               <div
                 className={`max-w-[85%] rounded-lg px-4 py-2 ${
                   m.role === 'user'
-                    ? 'bg-[#4F8CFF]/20 text-white'
+                    ? 'bg-orange-500/20 text-white'
                     : 'bg-white/10 text-gray-200'
                 }`}
               >
@@ -445,7 +446,7 @@ export default function ChatPage() {
           {attachedVideo && (
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
-                <Video className="w-5 h-5 text-[#4F8CFF]" />
+                <Video className="w-5 h-5 text-orange-400" />
                 <span className="text-sm">Video ({attachedVideo.duration.toFixed(1)}s)</span>
               </div>
               <button type="button" onClick={removeVideo} className="p-1.5 bg-red-500/80 rounded-lg hover:bg-red-500">×</button>
@@ -499,6 +500,19 @@ export default function ChatPage() {
               onChange={handleImageSelect}
             />
 
+            <select
+              value={ttsVoice}
+              onChange={(e) => setTtsVoice(e.target.value)}
+              className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 min-w-[140px]"
+              title="Voice (OpenAI or Magic Hour)"
+            >
+              {TTS_VOICES.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.label}
+                </option>
+              ))}
+            </select>
+
             <button
               type="button"
               onClick={() => setTtsEnabled((v) => !v)}
@@ -508,42 +522,26 @@ export default function ChatPage() {
               <Volume2 className="w-5 h-5" />
             </button>
 
-            {ttsEnabled && (
-              <select
-                value={ttsVoice}
-                onChange={(e) => setTtsVoice(e.target.value)}
-                className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-sm focus:outline-none focus:ring-2 focus:ring-[#4F8CFF]"
-                title="TTS voice"
-              >
-                {TTS_VOICES.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.label}
-                  </option>
-                ))}
-              </select>
-            )}
-
             <input
               type="text"
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder={getEffectiveMode({ images: attachedImages, video: attachedVideo }) === 'roast' ? 'Optional caption for image/video' : 'Type a message or attach image/video…'}
-              className="flex-1 px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-[#4F8CFF]"
+              className="flex-1 px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500"
             />
 
             <button
               type="submit"
               disabled={isLoading || (!text.trim() && attachedImages.length === 0 && !attachedVideo)}
-              className="p-3 rounded-lg bg-[#4F8CFF] hover:bg-[#6BA0FF] disabled:opacity-50"
+              className="p-3 rounded-lg bg-orange-500 hover:bg-orange-400 disabled:opacity-50"
             >
               <Send className="w-5 h-5" />
             </button>
           </div>
 
           <p className="text-xs text-gray-500">
-            {getEffectiveMode({ images: attachedImages, video: attachedVideo }) === 'roast' && 'Roast mode: image or video (MOV, MP4, WebM; max 20s). '}
-            {ttsEnabled ? `✓ Voice: ${TTS_VOICES.find((v) => v.id === ttsVoice)?.label || ttsVoice}` : 'Enable speaker icon to hear responses'}
-            {' • '}Press mic to speak — auto-sends when you stop talking
+            Choose voice (OpenAI or Magic Hour) • {ttsEnabled ? '✓ Speak response on. ' : 'Click speaker to hear replies. '}
+            Press mic to speak — auto-sends when you stop talking
           </p>
         </form>
       </div>
