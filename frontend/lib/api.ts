@@ -285,19 +285,32 @@ export const api = {
     });
   },
 
-  // Chat API (public, no auth). Optional images, optional mode 'assistant' | 'roast'.
+  // Chat API (public, no auth). Optional images, optional video (roast: video max 20s), optional mode 'assistant' | 'roast'.
   async sendChatMessage(
     messages: Array<{ role: string; content: string }>,
     model?: string,
     imagesBase64?: string[],
-    mode?: 'assistant' | 'roast'
+    mode?: 'assistant' | 'roast',
+    videoBase64?: string,
+    videoMime?: string
   ): Promise<{ message: string; usage?: any }> {
-    const body: { messages: typeof messages; model?: string; images?: string[]; mode?: string } = {
+    const body: {
+      messages: typeof messages;
+      model?: string;
+      images?: string[];
+      mode?: string;
+      video_b64?: string;
+      video_mime?: string;
+    } = {
       messages,
       model: model || 'openai/gpt-3.5-turbo',
     };
     if (imagesBase64?.length) body.images = imagesBase64;
     if (mode) body.mode = mode;
+    if (videoBase64) {
+      body.video_b64 = videoBase64;
+      body.video_mime = videoMime || 'video/mp4';
+    }
     return fetchPublic('/api/chat', {
       method: 'POST',
       body: JSON.stringify(body),
