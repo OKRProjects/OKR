@@ -14,6 +14,39 @@ from app.services.web_search import search_web
 bp = Blueprint('chat', __name__)
 
 # Tool definition for web search (OpenRouter/OpenAI-style)
+def _normalize_text(s: str) -> str:
+    """Collapse whitespace to single space and strip."""
+    return re.sub(r'\s+', ' ', (s or '').strip())
+
+
+def _remove_echo_sentences(user_content: str, last_assistant_content: str) -> str:
+    """
+    Remove from user_content any sentence that appears in the last assistant message.
+    Avoids sending back the AI's previous output (e.g. TTS echo or copy-paste) as part of the prompt.
+    """
+    if not user_content or not last_assistant_content:
+        return user_content
+    last_plain = (last_assistant_content or '').strip()
+    if not last_plain:
+        return user_content
+    last_norm = _normalize_text(last_plain).lower()
+    # Split into sentences: period, !, ? followed by space or end
+    parts = re.split(r'(?<=[.!?])\s+', (user_content or '').strip())
+    sentences = [p.strip() for p in parts if p.strip()]
+    kept = []
+    for s in sentences:
+        snorm = _normalize_text(s).lower()
+        if not snorm:
+            kept.append(s)
+            continue
+        if snorm in last_norm:
+            continue
+        kept.append(s)
+    if not kept:
+        return user_content
+    return ' '.join(kept)
+
+
 SEARCH_WEB_TOOLS = [
     {
         'type': 'function',
@@ -446,6 +479,10 @@ def chat_pipeline():
             messages = []
 
         user_content = text or ('(See video)' if has_video else '(See image)')
+        # Remove any sentence from the user prompt that appears in the previous AI reply (echo/TTS overlap)
+        last_assistant = next((m for m in reversed(messages) if m.get('role') == 'assistant'), None)
+        if last_assistant and isinstance(last_assistant.get('content'), str):
+            user_content = _remove_echo_sentences(user_content, last_assistant['content']) or user_content
         messages.append({'role': 'user', 'content': user_content})
 
         # Step 4: Call chat (reuse existing logic; support roast + video like chatbot)
@@ -480,6 +517,7 @@ def chat_pipeline():
         timeout_sec = 120 if has_video else 60
 
         if mode == 'assistant' and not has_images and not has_video:
+            # Assistant mode: web search tool is available; model can search the internet when needed
             assistant_message, usage_merged = _chat_with_web_search(messages, model, headers, timeout_sec)
             out = {'message': assistant_message, 'usage': usage_merged}
         else:
@@ -518,5 +556,7 @@ def chat_pipeline():
 
     except ValueError as e:
         return jsonify({'error': str(e)}), 500
+    except requests.RequestException as e:
+        return jsonify({'error': f'Network/API error: {str(e)}'}), 502
     except Exception as e:
         return jsonify({'error': f'Pipeline error: {str(e)}'}), 500

@@ -15,7 +15,7 @@ def create_app():
     app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24 hours
     
     # CORS configuration
-    cors_origins = os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(',')
+    cors_origins = [o.strip() for o in os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(',') if o.strip()]
     CORS(app, origins=cors_origins, supports_credentials=True)
     
     # Initialize MongoDB (non-blocking - will connect on first request)

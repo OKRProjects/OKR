@@ -131,6 +131,7 @@ export default function VoiceAssistantPage() {
   const [micAllowed, setMicAllowed] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [isAwake, setIsAwake] = useState(false);
+  const [hasWokenOnce, setHasWokenOnce] = useState(false);
   const [wakePhrase, setWakePhrase] = useState(DEFAULT_WAKE_PHRASE);
   const [sleepPhrase, setSleepPhrase] = useState(DEFAULT_SLEEP_PHRASE);
   const recognitionRef = useRef<InstanceType<typeof SpeechRecognition> | null>(null);
@@ -138,6 +139,7 @@ export default function VoiceAssistantPage() {
   const isBusyRef = useRef(false);
   const isPausedRef = useRef(false);
   const isAwakeRef = useRef(false);
+  const hasWokenOnceRef = useRef(false);
   const messagesRef = useRef<Message[]>([]);
   const selectedVoiceRef = useRef(selectedVoice);
   const wakePhraseRef = useRef(DEFAULT_WAKE_PHRASE);
@@ -150,6 +152,7 @@ export default function VoiceAssistantPage() {
   messagesRef.current = messages;
   isPausedRef.current = isPaused;
   isAwakeRef.current = isAwake;
+  hasWokenOnceRef.current = hasWokenOnce;
   selectedVoiceRef.current = selectedVoice;
   wakePhraseRef.current = wakePhrase;
   sleepPhraseRef.current = sleepPhrase;
@@ -249,8 +252,13 @@ export default function VoiceAssistantPage() {
         if (!awake) {
           if (isWakePhrase(text, wake)) {
             setIsAwake(true);
+            setHasWokenOnce(true);
             const afterWake = stripWakePhrase(text, wake);
             if (afterWake && !isLikelyNoise(afterWake)) sendToPipeline(afterWake);
+          } else if (hasWokenOnceRef.current) {
+            // After first wake this session, any speech wakes again (no need to repeat wake phrase)
+            setIsAwake(true);
+            if (!isLikelyNoise(text)) sendToPipeline(text);
           }
           setLiveTranscript('');
           lastTranscriptRef.current = '';
@@ -344,7 +352,12 @@ export default function VoiceAssistantPage() {
   }, []);
 
   const startListening = useCallback(async () => {
-    const rec = recognitionRef.current;
+    let rec = recognitionRef.current;
+    if (!rec) {
+      // Ref may not be set yet (e.g. Strict Mode); retry once after a tick
+      await new Promise((r) => setTimeout(r, 50));
+      rec = recognitionRef.current;
+    }
     if (!rec) {
       setError('Voice recognition not ready. Refresh the page and try again.');
       return;
@@ -368,15 +381,22 @@ export default function VoiceAssistantPage() {
         return;
       }
     }
-    setStatus('listening');
     setIsPaused(false);
+    setStatus('listening');
     setIsAwake(false);
+    setHasWokenOnce(false);
     try {
       rec.start();
     } catch (err) {
-      setStatus('idle');
       const msg = err instanceof Error ? err.message : String(err);
-      setError(msg ? `Could not start listening: ${msg}` : 'Could not start listening. Try again.');
+      const alreadyStarted = msg && /already started/i.test(String(msg));
+      if (alreadyStarted) {
+        // Already running; keep UI in listening state
+        setStatus('listening');
+      } else {
+        setStatus('idle');
+        setError(msg ? `Could not start listening: ${msg}` : 'Could not start listening. Try again.');
+      }
     }
   }, [micAllowed]);
 
