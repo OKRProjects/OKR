@@ -105,6 +105,12 @@ export default function Dashboard() {
                 >
                   Edit Profile
                 </Link>
+                <Link
+                  href="/voice-to-text"
+                  className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-md transition-colors"
+                >
+                  Voice-to-Text
+                </Link>
               </div>
             </div>
           </div>

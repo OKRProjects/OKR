@@ -264,4 +264,16 @@ export const api = {
       body: JSON.stringify({ messages, model: model || 'openai/gpt-3.5-turbo' }),
     });
   },
+
+  // Voice-to-Text API (Whisper - public endpoint)
+  async transcribeAudio(file: File, options?: { language?: string; model?: string }): Promise<{ text: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (options?.language) formData.append('language', options.language);
+    if (options?.model) formData.append('model', options.model);
+    return fetchPublic('/api/transcribe', {
+      method: 'POST',
+      body: formData,
+    });
+  },
 };
