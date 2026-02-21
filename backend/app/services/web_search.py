@@ -4,7 +4,7 @@ import os
 import requests
 
 
-def _search_duckduckgo(query: str, max_results: int = 5) -> str:
+def _search_duckduckgo(query: str, max_results: int = 8) -> str:
     """Search via DuckDuckGo; returns formatted string of results or error message."""
     if not query or not str(query).strip():
         return "Error: empty search query."
@@ -17,7 +17,7 @@ def _search_duckduckgo(query: str, max_results: int = 5) -> str:
         return f"DuckDuckGo search failed: {e!s}"
 
     if not results:
-        return "No results found for that query."
+        return "No results found for that query. Try a more specific query (e.g. 'weather Lamoni Iowa' or 'today news headlines')."
 
     lines = []
     for i, r in enumerate(results, 1):
@@ -28,7 +28,7 @@ def _search_duckduckgo(query: str, max_results: int = 5) -> str:
     return "\n\n".join(lines)
 
 
-def _search_serpapi(query: str, max_results: int = 5) -> str:
+def _search_serpapi(query: str, max_results: int = 8) -> str:
     """Search via SerpAPI Google; returns formatted string of results or error message."""
     if not query or not str(query).strip():
         return "Error: empty search query."
@@ -56,7 +56,7 @@ def _search_serpapi(query: str, max_results: int = 5) -> str:
 
     results = data.get("organic_results") or []
     if not results:
-        return "No results found for that query."
+        return "No results found for that query. Try a more specific query (e.g. 'weather Lamoni Iowa' or 'today news headlines')."
 
     lines = []
     for i, r in enumerate(results[:max_results], 1):
@@ -67,7 +67,7 @@ def _search_serpapi(query: str, max_results: int = 5) -> str:
     return "\n\n".join(lines)
 
 
-def search_web(query: str, max_results: int = 5, provider: str | None = None) -> str:
+def search_web(query: str, max_results: int = 8, provider: str | None = None) -> str:
     """
     Run a web search and return a single string of results (title, snippet, URL per result).
     Provider: 'duckduckgo' | 'serpapi' | None (use env WEB_SEARCH_PROVIDER, default duckduckgo).
