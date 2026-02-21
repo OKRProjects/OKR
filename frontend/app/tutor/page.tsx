@@ -310,7 +310,7 @@ export default function TutorPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0E1117] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0c0712] flex items-center justify-center">
         <div className="text-gray-400">Loading...</div>
       </div>
     );
@@ -336,7 +336,7 @@ export default function TutorPage() {
             >
               <div
                 className={`max-w-[85%] rounded-lg px-4 py-2 whitespace-pre-wrap ${
-                  m.role === 'user' ? 'bg-[#4F8CFF]/20 text-white' : 'bg-white/10 text-gray-200'
+                  m.role === 'user' ? 'bg-orange-500/20 text-white' : 'bg-white/10 text-slate-200'
                 }`}
               >
                 {m.content}
@@ -361,7 +361,7 @@ export default function TutorPage() {
         {attachedVideo && (
           <div className="flex items-center gap-2 mb-2">
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
-              <Video className="w-5 h-5 text-[#4F8CFF]" />
+              <Video className="w-5 h-5 text-orange-400" />
               <span className="text-sm">Video ({attachedVideo.duration.toFixed(1)}s)</span>
             </div>
             <button type="button" onClick={removeVideo} className="p-1.5 bg-red-500/80 rounded-lg hover:bg-red-500">×</button>
@@ -412,7 +412,7 @@ export default function TutorPage() {
             <select
               value={ttsVoice}
               onChange={(e) => setTtsVoice(e.target.value)}
-              className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-sm focus:outline-none focus:ring-2 focus:ring-[#4F8CFF] min-w-[140px] text-white"
+              className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 min-w-[140px] text-white"
               title="Voice (OpenAI or Magic Hour)"
             >
               {TTS_VOICES.map((v) => (
@@ -437,14 +437,14 @@ export default function TutorPage() {
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), sendToTutor())}
               placeholder="Type a message or attach image/video…"
-              className="flex-1 px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-[#4F8CFF] text-white placeholder-gray-500"
+              className="flex-1 px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-orange-500 text-white placeholder-slate-500"
               disabled={tutorLoading}
             />
 
             <button
               type="submit"
               disabled={tutorLoading || (!text.trim() && attachedImages.length === 0 && !attachedVideo)}
-              className="p-3 rounded-lg bg-[#4F8CFF] hover:bg-[#6BA0FF] disabled:opacity-50"
+              className="p-3 rounded-lg bg-orange-500 hover:bg-orange-400 disabled:opacity-50"
             >
               <Send className="w-5 h-5" />
             </button>
