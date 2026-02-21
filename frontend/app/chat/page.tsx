@@ -33,6 +33,19 @@ function getVideoDuration(file: File): Promise<number> {
   });
 }
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.includes(',') ? result.split(',')[1] : result;
+      resolve(base64 || '');
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 const TTS_VOICES = [
   // OpenAI
   { id: 'alloy', label: 'Alloy' },
@@ -179,7 +192,7 @@ export default function ChatPage() {
     setVideoError(null);
     const file = files[0];
     const isVideo = isVideoFile(file);
-    if (chatMode === 'roast' && isVideo) {
+    if (isVideo) {
       setVideoError(null);
       getVideoDuration(file)
         .then((duration) => {
@@ -191,14 +204,13 @@ export default function ChatPage() {
           setAttachedImages([]);
         })
         .catch(() => {
-          // e.g. .mov not decodable in this browser; still attach and let backend handle it
           setAttachedVideo({ file, preview: URL.createObjectURL(file), duration: 0 });
           setAttachedImages([]);
         });
       e.target.value = '';
       return;
     }
-    if (chatMode === 'roast' && attachedVideo) setAttachedVideo(null);
+    if (attachedVideo) setAttachedVideo(null);
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       if (!f.type.startsWith('image/')) continue;
@@ -249,38 +261,64 @@ export default function ChatPage() {
     setError(null);
 
     try {
-      const prevMessages = messages.slice(0, -1);
-      const apiMessages = prevMessages
-        .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .map((m) => ({ role: m.role, content: m.content }));
+      const prevMessages = messages;
+      const apiMessages = [
+        ...prevMessages
+          .filter((m) => m.role === 'user' || m.role === 'assistant')
+          .map((m) => ({ role: m.role, content: m.content })),
+        { role: 'user' as const, content: inputText || (audio ? '(Voice message)' : currentVideo ? '(See video)' : '(See image)') },
+      ];
 
-      const result = await api.chatPipeline({
-        audio: audio || undefined,
-        text: inputText || undefined,
-        images: images.length ? images : undefined,
-        video: currentVideo ? currentVideo.file : undefined,
-        messages: apiMessages,
-        tts: ttsEnabled,
-        voice: ttsVoice,
-        mode: chatMode,
-      });
-
-      const assistantMsg: Message = {
-        role: 'assistant',
-        content: result.message || 'No response.',
-      };
-      if (result.audio_base64) {
-        const format = result.audio_format === 'wav' ? 'wav' : 'mpeg';
-        assistantMsg.audioUrl = `data:audio/${format};base64,${result.audio_base64}`;
-      }
-      setMessages((prev) => {
-        const next = [...prev];
-        const lastIdx = next.length - 1;
-        if (lastIdx >= 0 && next[lastIdx].role === 'user' && result.transcribed_text) {
-          next[lastIdx] = { ...next[lastIdx], content: result.transcribed_text };
+      // Voice messages use pipeline (STT + chat + TTS). Text/images/video use same API as popout chat.
+      if (audio) {
+        const pipelineMessages = apiMessages.slice(0, -1);
+        const result = await api.chatPipeline({
+          audio,
+          text: inputText || undefined,
+          images: images.length ? images : undefined,
+          video: currentVideo?.file,
+          messages: pipelineMessages,
+          tts: ttsEnabled,
+          voice: ttsVoice,
+          mode: chatMode,
+        });
+        const assistantMsg: Message = {
+          role: 'assistant',
+          content: result.message || 'No response.',
+        };
+        if (result.audio_base64) {
+          const format = result.audio_format === 'wav' ? 'wav' : 'mpeg';
+          assistantMsg.audioUrl = `data:audio/${format};base64,${result.audio_base64}`;
         }
-        return [...next, assistantMsg];
-      });
+        setMessages((prev) => {
+          const next = [...prev];
+          const lastIdx = next.length - 1;
+          if (lastIdx >= 0 && next[lastIdx].role === 'user' && result.transcribed_text) {
+            next[lastIdx] = { ...next[lastIdx], content: result.transcribed_text };
+          }
+          return [...next, assistantMsg];
+        });
+      } else {
+        let imagesBase64: string[] | undefined;
+        let videoBase64: string | undefined;
+        let videoMime: string | undefined;
+        if (currentVideo) {
+          videoBase64 = await fileToBase64(currentVideo.file);
+          const f = currentVideo.file;
+          videoMime = f.type?.startsWith('video/') ? f.type : (f.name?.toLowerCase().endsWith('.mov') ? 'video/quicktime' : 'video/mp4');
+        } else if (images.length > 0) {
+          imagesBase64 = await Promise.all(images.map((f) => fileToBase64(f)));
+        }
+        const result = await api.sendChatMessage(
+          apiMessages,
+          'openai/gpt-3.5-turbo',
+          imagesBase64,
+          chatMode,
+          videoBase64,
+          videoMime
+        );
+        setMessages((prev) => [...prev, { role: 'assistant', content: result.message || 'No response.' }]);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error';
       setError(msg);
@@ -416,15 +454,15 @@ export default function ChatPage() {
               onClick={() => fileInputRef.current?.click()}
               disabled={isLoading}
               className="p-3 rounded-lg bg-white/10 hover:bg-white/20"
-              title="Attach image"
+              title="Attach image or video"
             >
               <ImagePlus className="w-5 h-5" />
             </button>
             <input
               ref={fileInputRef}
               type="file"
-              accept={chatMode === 'roast' ? 'image/*,video/mp4,video/webm,video/quicktime,video/mpeg,.mov,.mp4,.webm,.mpeg' : 'image/*'}
-              multiple={chatMode !== 'roast'}
+              accept="image/*,video/mp4,video/webm,video/quicktime,video/mpeg,.mov,.mp4,.webm,.mpeg"
+              multiple={!attachedVideo}
               className="hidden"
               onChange={handleImageSelect}
             />
