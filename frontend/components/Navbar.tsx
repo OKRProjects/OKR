@@ -61,6 +61,12 @@ export default function Navbar() {
                 >
                   Voice
                 </Link>
+                <Link
+                  href="/voice-assistant"
+                  className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Voice Assistant
+                </Link>
                 <span className="text-gray-700 text-sm">
                   {user.name || user.email}
                 </span>
@@ -79,6 +85,12 @@ export default function Navbar() {
                   className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
                 >
                   Voice
+                </Link>
+                <Link
+                  href="/voice-assistant"
+                  className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Voice Assistant
                 </Link>
                 <Link
                   href="/"

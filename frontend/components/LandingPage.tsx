@@ -17,6 +17,7 @@ import {
   Shield,
   Clock,
   Settings,
+  Mic,
 } from 'lucide-react';
 import { useRef } from 'react';
 
@@ -48,6 +49,13 @@ const capabilities = [
     description: 'Automate repetitive workflows and delegate routine tasks to AI. Optimize efficiency autonomously.',
     color: 'from-orange-500/20 to-orange-500/5',
     iconColor: 'text-orange-400',
+  },
+  {
+    icon: Mic,
+    title: 'AI Voice Assistant',
+    description: 'Always-on voice. Speak naturally—the same AI pipeline listens and replies with speech. No typing required.',
+    color: 'from-cyan-500/20 to-cyan-500/5',
+    iconColor: 'text-cyan-400',
   },
 ];
 
@@ -235,6 +243,21 @@ export default function LandingPage({ children }: LandingPageProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {capabilities.map((capability, index) => {
               const Icon = capability.icon;
+              const isVoiceAssistant = capability.title === 'AI Voice Assistant';
+              const card = (
+                <>
+                  <div className={`bg-gradient-to-br ${capability.color} p-4 rounded-xl inline-flex mb-6 group-hover:scale-110 transition-transform`}>
+                    <Icon className={`w-8 h-8 ${capability.iconColor}`} />
+                  </div>
+                  <h3 className="text-2xl font-semibold mb-4">{capability.title}</h3>
+                  <p className="text-gray-400 leading-relaxed">{capability.description}</p>
+                  {isVoiceAssistant && (
+                    <Link href="/voice-assistant" className="inline-flex items-center gap-2 mt-4 text-[#4F8CFF] hover:text-[#6BA0FF] text-sm font-medium">
+                      Try Voice Assistant <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  )}
+                </>
+              );
               return (
                 <motion.div
                   key={capability.title}
@@ -245,11 +268,7 @@ export default function LandingPage({ children }: LandingPageProps) {
                   whileHover={{ y: -8, scale: 1.01 }}
                   className="group bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-8 hover:bg-white/8 hover:border-white/20 transition-all duration-300"
                 >
-                  <div className={`bg-gradient-to-br ${capability.color} p-4 rounded-xl inline-flex mb-6 group-hover:scale-110 transition-transform`}>
-                    <Icon className={`w-8 h-8 ${capability.iconColor}`} />
-                  </div>
-                  <h3 className="text-2xl font-semibold mb-4">{capability.title}</h3>
-                  <p className="text-gray-400 leading-relaxed">{capability.description}</p>
+                  {card}
                 </motion.div>
               );
             })}
@@ -323,6 +342,7 @@ export default function LandingPage({ children }: LandingPageProps) {
             {[
               { icon: MessageSquare, title: 'Natural Conversation', description: 'Engage through natural language. No commands to memorize—just talk.' },
               { icon: Camera, title: 'Visual Recognition', description: 'Upload images for instant analysis. From homework help to product identification.' },
+              { icon: Mic, title: 'Always-On Voice Assistant', description: 'Microphone always listening. Speak and get spoken replies from the same AI pipeline—hands-free.' },
               { icon: Lightbulb, title: 'Contextual Intelligence', description: 'Understands your environment, preferences, and patterns for relevant insights.' },
               { icon: BarChart3, title: 'Business Analytics', description: 'Real-time insights and data visualization for informed decision-making.' },
             ].map((feature, index) => {
