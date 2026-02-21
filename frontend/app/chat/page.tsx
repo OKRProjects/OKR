@@ -5,7 +5,33 @@ import { getCurrentUser, login } from '@/lib/auth';
 import { api } from '@/lib/api';
 import Navbar from '@/components/Navbar';
 import Link from 'next/link';
-import { Mic, MicOff, ImagePlus, Volume2, Send } from 'lucide-react';
+import { Mic, MicOff, ImagePlus, Volume2, Send, Video } from 'lucide-react';
+
+const MAX_VIDEO_SECONDS = 20;
+
+const VIDEO_EXTENSIONS = ['.mov', '.mp4', '.webm', '.mpeg', '.mpeg4'];
+function isVideoFile(file: File): boolean {
+  if (file.type.startsWith('video/')) return true;
+  const name = (file.name || '').toLowerCase();
+  return VIDEO_EXTENSIONS.some((ext) => name.endsWith(ext));
+}
+
+function getVideoDuration(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+      resolve(video.duration);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Could not load video'));
+    };
+    video.src = url;
+  });
+}
 
 const TTS_VOICES = [
   // OpenAI
@@ -44,6 +70,8 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   audioUrl?: string;
+  isVideo?: boolean;
+  videoDuration?: number;
 }
 
 export default function ChatPage() {
@@ -52,7 +80,10 @@ export default function ChatPage() {
     { role: 'assistant', content: 'Hello! I\'m your AI assistant. You can speak, type, or attach images. Enable "Speak response" to hear my replies.' },
   ]);
   const [text, setText] = useState('');
+  const [chatMode, setChatMode] = useState<'assistant' | 'roast'>('assistant');
   const [attachedImages, setAttachedImages] = useState<{ file: File; preview: string }[]>([]);
+  const [attachedVideo, setAttachedVideo] = useState<{ file: File; preview: string; duration: number } | null>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
   const [ttsEnabled, setTtsEnabled] = useState(false);
   const [ttsVoice, setTtsVoice] = useState('coral');
   const [isRecording, setIsRecording] = useState(false);
@@ -145,11 +176,35 @@ export default function ChatPage() {
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files?.length) return;
+    setVideoError(null);
+    const file = files[0];
+    const isVideo = isVideoFile(file);
+    if (chatMode === 'roast' && isVideo) {
+      setVideoError(null);
+      getVideoDuration(file)
+        .then((duration) => {
+          if (duration > MAX_VIDEO_SECONDS) {
+            setVideoError(`Video must be ${MAX_VIDEO_SECONDS}s or less (this one is ${duration.toFixed(1)}s).`);
+            return;
+          }
+          setAttachedVideo({ file, preview: URL.createObjectURL(file), duration });
+          setAttachedImages([]);
+        })
+        .catch(() => {
+          // e.g. .mov not decodable in this browser; still attach and let backend handle it
+          setAttachedVideo({ file, preview: URL.createObjectURL(file), duration: 0 });
+          setAttachedImages([]);
+        });
+      e.target.value = '';
+      return;
+    }
+    if (chatMode === 'roast' && attachedVideo) setAttachedVideo(null);
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       if (!f.type.startsWith('image/')) continue;
       setAttachedImages((prev) => [...prev, { file: f, preview: URL.createObjectURL(f) }]);
     }
+    e.target.value = '';
   };
 
   const removeImage = (idx: number) => {
@@ -161,17 +216,35 @@ export default function ChatPage() {
     });
   };
 
+  const removeVideo = () => {
+    if (attachedVideo) {
+      URL.revokeObjectURL(attachedVideo.preview);
+      setAttachedVideo(null);
+      setVideoError(null);
+    }
+  };
+
   const sendPipeline = async (overrides?: { audio?: File; text?: string }) => {
     const inputText = (overrides?.text ?? text).trim();
     const audio = overrides?.audio;
     const images = attachedImages.map((x) => x.file);
+    const video = attachedVideo?.file;
 
-    if (!inputText && !audio && images.length === 0) return;
+    const hasMedia = images.length > 0 || !!video;
+    if (!inputText && !audio && !hasMedia) return;
 
-    const userContent = inputText || (audio ? '(Voice message)' : '(Image attached)');
-    setMessages((prev) => [...prev, { role: 'user', content: userContent }]);
+    const userContent = inputText || (audio ? '(Voice message)' : video ? '(See video)' : '(Image attached)');
+    const userMsg: Message = { role: 'user', content: userContent };
+    if (video) {
+      userMsg.isVideo = true;
+      userMsg.videoDuration = attachedVideo?.duration;
+    }
+    setMessages((prev) => [...prev, userMsg]);
     setText('');
     setAttachedImages([]);
+    const currentVideo = attachedVideo;
+    setAttachedVideo(null);
+    setVideoError(null);
     setIsLoading(true);
     setError(null);
 
@@ -185,9 +258,11 @@ export default function ChatPage() {
         audio: audio || undefined,
         text: inputText || undefined,
         images: images.length ? images : undefined,
+        video: currentVideo ? currentVideo.file : undefined,
         messages: apiMessages,
         tts: ttsEnabled,
         voice: ttsVoice,
+        mode: chatMode,
       });
 
       const assistantMsg: Message = {
@@ -239,8 +314,24 @@ export default function ChatPage() {
           </Link>
           <h1 className="text-2xl font-bold mt-2">AI Chat Pipeline</h1>
           <p className="text-gray-400 text-sm">
-            Voice, text, and images → AI response → optional speech
+            Voice, text, images, or video (Roast) → AI response → optional speech
           </p>
+          <div className="flex gap-1 p-1 bg-white/5 rounded-lg mt-2 w-fit">
+            <button
+              type="button"
+              onClick={() => { setChatMode('assistant'); if (attachedVideo) removeVideo(); }}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium ${chatMode === 'assistant' ? 'bg-[#4F8CFF] text-white' : 'text-gray-400 hover:text-white'}`}
+            >
+              Assistant
+            </button>
+            <button
+              type="button"
+              onClick={() => setChatMode('roast')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium ${chatMode === 'roast' ? 'bg-[#4F8CFF] text-white' : 'text-gray-400 hover:text-white'}`}
+            >
+              Roast
+            </button>
+          </div>
         </div>
 
         {/* Messages */}
@@ -257,6 +348,12 @@ export default function ChatPage() {
                     : 'bg-white/10 text-gray-200'
                 }`}
               >
+                {m.isVideo && (
+                  <div className="flex items-center gap-2 text-xs text-gray-400 mb-1">
+                    <Video className="w-4 h-4" />
+                    Video{m.videoDuration != null ? ` (${m.videoDuration.toFixed(1)}s)` : ''}
+                  </div>
+                )}
                 <p className="whitespace-pre-wrap">{m.content}</p>
                 {m.audioUrl && (
                   <audio controls src={m.audioUrl} className="mt-2 w-full max-w-xs" />
@@ -267,16 +364,25 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {error && (
+        {(error || videoError) && (
           <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300 text-sm">
-            {error}
+            {error || videoError}
           </div>
         )}
 
         {/* Input */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+          {attachedVideo && (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
+                <Video className="w-5 h-5 text-[#4F8CFF]" />
+                <span className="text-sm">Video ({attachedVideo.duration.toFixed(1)}s)</span>
+              </div>
+              <button type="button" onClick={removeVideo} className="p-1.5 bg-red-500/80 rounded-lg hover:bg-red-500">×</button>
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
-            {attachedImages.map((img, i) => (
+            {!attachedVideo && attachedImages.map((img, i) => (
               <div key={i} className="relative">
                 <img
                   src={img.preview}
@@ -317,8 +423,8 @@ export default function ChatPage() {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
-              multiple
+              accept={chatMode === 'roast' ? 'image/*,video/mp4,video/webm,video/quicktime,video/mpeg,.mov,.mp4,.webm,.mpeg' : 'image/*'}
+              multiple={chatMode !== 'roast'}
               className="hidden"
               onChange={handleImageSelect}
             />
@@ -351,13 +457,13 @@ export default function ChatPage() {
               type="text"
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Type a message..."
+              placeholder={chatMode === 'roast' ? 'Attach image or video ≤20s (optional caption)' : 'Type a message...'}
               className="flex-1 px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-[#4F8CFF]"
             />
 
             <button
               type="submit"
-              disabled={isLoading || (!text.trim() && attachedImages.length === 0)}
+              disabled={isLoading || (!text.trim() && attachedImages.length === 0 && !attachedVideo)}
               className="p-3 rounded-lg bg-[#4F8CFF] hover:bg-[#6BA0FF] disabled:opacity-50"
             >
               <Send className="w-5 h-5" />
@@ -365,6 +471,7 @@ export default function ChatPage() {
           </div>
 
           <p className="text-xs text-gray-500">
+            {chatMode === 'roast' && 'Roast: image or video (MOV, MP4, WebM; max 20s). '}
             {ttsEnabled ? `✓ Voice: ${TTS_VOICES.find((v) => v.id === ttsVoice)?.label || ttsVoice}` : 'Enable speaker icon to hear responses'}
             {' • '}Press mic to speak — auto-sends when you stop talking
           </p>

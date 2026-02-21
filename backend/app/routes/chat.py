@@ -228,8 +228,9 @@ def _text_to_speech(text: str, voice: str = 'coral') -> bytes:
 @bp.route('/chat/pipeline', methods=['POST'])
 def chat_pipeline():
     """
-    Integrated pipeline: Speech-to-Text -> Chat (text + images) -> Text-to-Speech.
-    Accepts multipart: audio (optional), text (optional), images[] (optional), messages (JSON), tts (bool), voice (str).
+    Integrated pipeline: Speech-to-Text -> Chat (text + images + video) -> Text-to-Speech.
+    Accepts multipart: audio (optional), text (optional), images[] (optional), video (optional, for roast),
+    messages (JSON), tts (bool), voice (str), mode ('assistant' | 'roast').
     """
     try:
         # Parse form data
@@ -255,8 +256,23 @@ def chat_pipeline():
                 if f and f.filename and f.content_type and 'image' in f.content_type:
                     images_b64.append(base64.b64encode(f.read()).decode('utf-8'))
 
-        if not text and not images_b64:
-            return jsonify({'error': 'Provide audio, text, or at least one image'}), 400
+        # Step 2b: Get video (single file, for roast); accept MOV (video/quicktime) and others
+        video_b64 = ''
+        video_mime = 'video/mp4'
+        video_file = request.files.get('video')
+        if video_file and video_file.filename:
+            ct = (video_file.content_type or '').strip().lower()
+            fn = (video_file.filename or '').lower()
+            is_video = 'video' in ct or fn.endswith('.mov') or fn.endswith('.mp4') or fn.endswith('.webm') or fn.endswith('.mpeg') or fn.endswith('.mpeg4')
+            if is_video:
+                video_b64 = base64.b64encode(video_file.read()).decode('utf-8')
+                video_mime = ct if ct and 'video' in ct else ('video/quicktime' if fn.endswith('.mov') else 'video/mp4')
+
+        has_video = bool(video_b64)
+        has_images = len(images_b64) > 0
+
+        if not text and not has_images and not has_video:
+            return jsonify({'error': 'Provide audio, text, at least one image, or a video'}), 400
 
         # Step 3: Build messages
         try:
@@ -264,12 +280,15 @@ def chat_pipeline():
         except json.JSONDecodeError:
             messages = []
 
-        user_content = text or '(See image)'
+        user_content = text or ('(See video)' if has_video else '(See image)')
         messages.append({'role': 'user', 'content': user_content})
 
-        # Step 4: Call chat (reuse existing logic)
-        has_images = len(images_b64) > 0
-        if mode == 'roast' and has_images:
+        # Step 4: Call chat (reuse existing logic; support roast + video like chatbot)
+        if mode == 'roast' and has_video:
+            user_text = text if text and text not in ('(See video)', '(Video attached)', '(See image)', '(Image attached)') else None
+            messages = _build_roast_messages_video(video_b64, video_mime, user_text)
+            model = os.getenv('OPENROUTER_VIDEO_MODEL') or os.getenv('OPENROUTER_CHAT_VISION_MODEL') or 'google/gemini-2.5-flash'
+        elif mode == 'roast' and has_images:
             user_text = text if text and text not in ('(See image)', '(Image attached)') else None
             messages = _build_roast_messages(images_b64, user_text)
             model = os.getenv('OPENROUTER_CHAT_VISION_MODEL') or 'openai/gpt-4o-mini'
@@ -290,11 +309,12 @@ def chat_pipeline():
             'X-Title': 'Hackathon Chat Pipeline',
         }
 
+        timeout_sec = 120 if has_video else 60
         response = requests.post(
             'https://openrouter.ai/api/v1/chat/completions',
             headers=headers,
             json={'model': model, 'messages': messages},
-            timeout=60,
+            timeout=timeout_sec,
         )
 
         if not response.ok:

@@ -367,15 +367,17 @@ export const api = {
     });
   },
 
-  // Chat Pipeline: STT -> Chat (text+images) -> TTS (pipeline backend)
+  // Chat Pipeline: STT -> Chat (text+images+video) -> TTS (same features as Chatbot: mode, video for roast)
   async chatPipeline(options: {
     audio?: File;
     text?: string;
     images?: File[];
+    video?: File;
     messages?: Array<{ role: string; content: string }>;
     tts?: boolean;
     voice?: string;
     mode?: 'assistant' | 'roast';
+    model?: string;
   }): Promise<{ message: string; transcribed_text?: string; audio_base64?: string; audio_format?: 'mp3' | 'wav'; tts_error?: string; usage?: any }> {
     const formData = new FormData();
     if (options.text) formData.append('text', options.text);
@@ -385,10 +387,12 @@ export const api = {
     formData.append('tts', String(options.tts ?? false));
     if (options.voice) formData.append('voice', options.voice);
     if (options.mode) formData.append('mode', options.mode);
+    if (options.model) formData.append('model', options.model);
     if (options.audio) formData.append('audio', options.audio);
     if (options.images?.length) {
       options.images.forEach((f) => formData.append('images', f));
     }
+    if (options.video) formData.append('video', options.video);
     return fetchPublic('/api/chat/pipeline', {
       method: 'POST',
       body: formData,

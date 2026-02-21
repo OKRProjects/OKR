@@ -43,6 +43,13 @@ function getVideoDuration(file: File): Promise<number> {
   });
 }
 
+const VIDEO_EXTENSIONS = ['.mov', '.mp4', '.webm', '.mpeg', '.mpeg4'];
+function isVideoFile(file: File): boolean {
+  if (file.type.startsWith('video/')) return true;
+  const name = (file.name || '').toLowerCase();
+  return VIDEO_EXTENSIONS.some((ext) => name.endsWith(ext));
+}
+
 const CHAT_MODELS = [
   { id: 'openai/gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
   { id: 'openai/gpt-4o-mini', label: 'GPT-4o Mini' },
@@ -111,7 +118,8 @@ export default function Chatbot() {
       let videoMime: string | undefined;
       if (currentVideo) {
         videoBase64 = await fileToBase64(currentVideo.file);
-        videoMime = currentVideo.file.type || 'video/mp4';
+        const f = currentVideo.file;
+        videoMime = f.type?.startsWith('video/') ? f.type : (f.name?.toLowerCase().endsWith('.mov') ? 'video/quicktime' : 'video/mp4');
       } else if (currentImages.length > 0) {
         imagesBase64 = await Promise.all(currentImages.map(({ file }) => fileToBase64(file)));
       }
@@ -149,7 +157,7 @@ export default function Chatbot() {
     if (!files?.length) return;
     setVideoError(null);
     const file = files[0];
-    const isVideo = file.type.startsWith('video/');
+    const isVideo = isVideoFile(file);
     if (chatMode === 'roast' && isVideo) {
       getVideoDuration(file)
         .then((duration) => {
@@ -164,7 +172,11 @@ export default function Chatbot() {
           });
           setAttachedImages([]);
         })
-        .catch(() => setVideoError('Could not load video.'));
+        .catch(() => {
+          // e.g. .mov not decodable in this browser; still attach and let backend handle it
+          setAttachedVideo({ file, preview: URL.createObjectURL(file), duration: 0 });
+          setAttachedImages([]);
+        });
       e.target.value = '';
       return;
     }
@@ -394,7 +406,7 @@ export default function Chatbot() {
               <input
                 type="file"
                 ref={fileInputRef}
-                accept={chatMode === 'roast' ? 'image/*,video/mp4,video/webm,video/quicktime,video/mpeg' : 'image/*'}
+                accept={chatMode === 'roast' ? 'image/*,video/mp4,video/webm,video/quicktime,video/mpeg,.mov,.mp4,.webm,.mpeg' : 'image/*'}
                 multiple={chatMode !== 'roast'}
                 className="hidden"
                 onChange={addImages}
