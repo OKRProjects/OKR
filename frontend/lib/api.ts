@@ -114,6 +114,27 @@ async function fetchPublic(url: string, options: RequestInit = {}) {
   return response.json();
 }
 
+async function fetchPublicBlob(url: string, options: RequestInit = {}) {
+  const isFormData = options.body instanceof FormData;
+  const headers: HeadersInit = {
+    ...(!isFormData && { 'Content-Type': 'application/json' }),
+    ...options.headers,
+  };
+
+  const response = await fetch(`${API_URL}${url}`, {
+    ...options,
+    headers,
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'An error occurred' }));
+    throw new Error(error.message || error.error || `HTTP error! status: ${response.status}`);
+  }
+
+  return response.blob();
+}
+
 export const api = {
   // Auth API
   async login(): Promise<{ auth_url: string }> {
@@ -283,7 +304,35 @@ export const api = {
     });
   },
 
-  // Roast AI (public, no auth) — image → truth + roast
+  // Voice API (public - text to speech: OpenAI TTS or Magic Hour) - from JP-Branch
+  async generateVoice(params: {
+    text: string;
+    provider: 'openai' | 'magic_hour';
+    voice?: string;
+    model?: string;
+    speed?: number;
+    voice_name?: string;
+    name?: string;
+  }): Promise<Blob> {
+    const body: Record<string, unknown> = {
+      text: params.text,
+      provider: params.provider,
+    };
+    if (params.provider === 'openai') {
+      if (params.voice) body.voice = params.voice;
+      if (params.model) body.model = params.model;
+      if (params.speed != null) body.speed = params.speed;
+    } else {
+      if (params.voice_name) body.voice_name = params.voice_name;
+      if (params.name) body.name = params.name;
+    }
+    return fetchPublicBlob('/api/voice/generate', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  // Roast AI (public, no auth)
   async analyzeRoast(image: File): Promise<RoastAnalyzeResponse> {
     const formData = new FormData();
     formData.append('image', image);
@@ -293,7 +342,7 @@ export const api = {
     });
   },
 
-  // Voice-to-Text API (Whisper - public endpoint)
+  // Voice-to-Text API (Whisper - pipeline backend)
   async transcribeAudio(file: File, options?: { language?: string; model?: string }): Promise<{ text: string }> {
     const formData = new FormData();
     formData.append('file', file);
@@ -305,7 +354,7 @@ export const api = {
     });
   },
 
-  // Chat Pipeline: STT -> Chat (text+images) -> TTS
+  // Chat Pipeline: STT -> Chat (text+images) -> TTS (pipeline backend)
   async chatPipeline(options: {
     audio?: File;
     text?: string;
@@ -333,7 +382,7 @@ export const api = {
     });
   },
 
-  // Text-to-Speech API (OpenAI TTS - public endpoint)
+  // Text-to-Speech API (OpenAI TTS - pipeline backend)
   async textToSpeech(
     text: string,
     options?: { voice?: string; model?: string }

@@ -66,22 +66,10 @@ export default function Navbar() {
                   Profile
                 </Link>
                 <Link
-                  href="/chat"
+                  href="/voice"
                   className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
                 >
-                  Chat Pipeline
-                </Link>
-                <Link
-                  href="/voice-to-text"
-                  className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Voice-to-Text
-                </Link>
-                <Link
-                  href="/text-to-voice"
-                  className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Text-to-Voice
+                  Voice
                 </Link>
                 <span className="text-gray-700 text-sm">
                   {user.name || user.email}
@@ -95,12 +83,20 @@ export default function Navbar() {
               </>
             )}
             {!isLoading && !user && (
-              <Link
-                href="/"
-                className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700"
-              >
-                Login
-              </Link>
+              <>
+                <Link
+                  href="/voice"
+                  className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Voice
+                </Link>
+                <Link
+                  href="/"
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700"
+                >
+                  Login
+                </Link>
+              </>
             )}
           </div>
         </div>
