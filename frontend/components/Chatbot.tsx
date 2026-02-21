@@ -3,10 +3,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { api } from '@/lib/api';
 
+const MAX_VIDEO_SECONDS = 20;
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   imagePreview?: string;
+  videoPreview?: string;
+  videoDuration?: number;
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -19,6 +23,23 @@ function fileToBase64(file: File): Promise<string> {
     };
     reader.onerror = reject;
     reader.readAsDataURL(file);
+  });
+}
+
+function getVideoDuration(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+      resolve(video.duration);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Could not load video'));
+    };
+    video.src = url;
   });
 }
 
@@ -40,6 +61,8 @@ export default function Chatbot() {
   ]);
   const [input, setInput] = useState('');
   const [attachedImages, setAttachedImages] = useState<{ file: File; preview: string }[]>([]);
+  const [attachedVideo, setAttachedVideo] = useState<{ file: File; preview: string; duration: number } | null>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -52,35 +75,55 @@ export default function Chatbot() {
     scrollToBottom();
   }, [messages]);
 
-  const canSend = chatMode === 'roast' ? attachedImages.length > 0 : (input.trim() || attachedImages.length > 0);
+  const canSend = chatMode === 'roast'
+    ? attachedImages.length > 0 || attachedVideo !== null
+    : (input.trim() || attachedImages.length > 0);
 
   const sendMessage = async () => {
-    if ((!input.trim() && attachedImages.length === 0) || isLoading) return;
+    if ((!input.trim() && attachedImages.length === 0 && !attachedVideo) || isLoading) return;
 
-    const userContent = input.trim() || '(See image)';
+    const userContent = input.trim() || (attachedVideo ? '(See video)' : '(See image)');
     const userMessage: Message = {
       role: 'user',
       content: userContent,
       imagePreview: attachedImages[0]?.preview,
+      videoPreview: attachedVideo?.preview,
+      videoDuration: attachedVideo?.duration,
     };
     setMessages((prev) => [...prev, userMessage]);
     const currentInput = input;
     const currentImages = [...attachedImages];
+    const currentVideo = attachedVideo;
     setInput('');
     setAttachedImages([]);
+    setAttachedVideo(null);
+    setVideoError(null);
     setIsLoading(true);
 
     try {
       const apiMessages = [
         ...messages.map((msg) => ({ role: msg.role, content: msg.content })),
-        { role: 'user' as const, content: currentInput || '(See image)' },
+        { role: 'user' as const, content: currentInput || (currentVideo ? '(See video)' : '(See image)') },
       ];
 
-      const imagesBase64 = currentImages.length > 0
-        ? await Promise.all(currentImages.map(({ file }) => fileToBase64(file)))
-        : undefined;
+      let imagesBase64: string[] | undefined;
+      let videoBase64: string | undefined;
+      let videoMime: string | undefined;
+      if (currentVideo) {
+        videoBase64 = await fileToBase64(currentVideo.file);
+        videoMime = currentVideo.file.type || 'video/mp4';
+      } else if (currentImages.length > 0) {
+        imagesBase64 = await Promise.all(currentImages.map(({ file }) => fileToBase64(file)));
+      }
 
-      const response = await api.sendChatMessage(apiMessages, selectedModel, imagesBase64, chatMode);
+      const response = await api.sendChatMessage(
+        apiMessages,
+        selectedModel,
+        imagesBase64,
+        chatMode,
+        videoBase64,
+        videoMime
+      );
 
       const assistantMessage: Message = {
         role: 'assistant',
@@ -104,11 +147,33 @@ export default function Chatbot() {
   const addImages = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files?.length) return;
+    setVideoError(null);
+    const file = files[0];
+    const isVideo = file.type.startsWith('video/');
+    if (chatMode === 'roast' && isVideo) {
+      getVideoDuration(file)
+        .then((duration) => {
+          if (duration > MAX_VIDEO_SECONDS) {
+            setVideoError(`Video must be ${MAX_VIDEO_SECONDS} seconds or less (this one is ${duration.toFixed(1)}s).`);
+            return;
+          }
+          setAttachedVideo({
+            file,
+            preview: URL.createObjectURL(file),
+            duration,
+          });
+          setAttachedImages([]);
+        })
+        .catch(() => setVideoError('Could not load video.'));
+      e.target.value = '';
+      return;
+    }
+    if (chatMode === 'roast' && attachedVideo) setAttachedVideo(null);
     const newList: { file: File; preview: string }[] = [];
     for (let i = 0; i < Math.min(files.length, 3); i++) {
-      const file = files[i];
-      if (!file.type.startsWith('image/')) continue;
-      newList.push({ file, preview: URL.createObjectURL(file) });
+      const f = files[i];
+      if (!f.type.startsWith('image/')) continue;
+      newList.push({ file: f, preview: URL.createObjectURL(f) });
     }
     setAttachedImages((prev) => [...prev, ...newList].slice(0, 3));
     e.target.value = '';
@@ -121,6 +186,14 @@ export default function Chatbot() {
       next.splice(index, 1);
       return next;
     });
+  };
+
+  const removeVideo = () => {
+    if (attachedVideo) {
+      URL.revokeObjectURL(attachedVideo.preview);
+      setAttachedVideo(null);
+      setVideoError(null);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -165,7 +238,10 @@ export default function Chatbot() {
             <div className="flex gap-1 p-1 bg-white/5 rounded-lg">
               <button
                 type="button"
-                onClick={() => setChatMode('assistant')}
+                onClick={() => {
+                  setChatMode('assistant');
+                  if (attachedVideo) removeVideo();
+                }}
                 className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
                   chatMode === 'assistant' ? 'bg-[#4F8CFF] text-white' : 'text-gray-400 hover:text-white'
                 }`}
@@ -218,8 +294,11 @@ export default function Chatbot() {
               {attachedImages.length > 0 && (
                 <span className="text-xs text-gray-400">(images → vision model)</span>
               )}
-              {chatMode === 'roast' && (
-                <span className="text-xs text-amber-400/90">Attach image to roast</span>
+              {attachedVideo && (
+                <span className="text-xs text-amber-400/90">Video → video model</span>
+              )}
+              {chatMode === 'roast' && !attachedVideo && attachedImages.length === 0 && (
+                <span className="text-xs text-amber-400/90">Image or video (max {MAX_VIDEO_SECONDS}s)</span>
               )}
             </div>
           </div>
@@ -245,6 +324,14 @@ export default function Chatbot() {
                       className="rounded-lg mb-2 max-h-24 object-cover"
                     />
                   )}
+                  {message.videoPreview && (
+                    <div className="rounded-lg mb-2 max-h-24 overflow-hidden bg-black/30 flex items-center justify-center gap-2 text-gray-400 text-xs">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                      Video{message.videoDuration != null ? ` (${message.videoDuration.toFixed(1)}s)` : ''}
+                    </div>
+                  )}
                   <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                 </div>
               </div>
@@ -265,7 +352,28 @@ export default function Chatbot() {
 
           {/* Input */}
           <div className="p-4 border-t border-white/10 bg-white/5 rounded-b-xl">
-            {attachedImages.length > 0 && (
+            {videoError && (
+              <p className="text-amber-400 text-xs mb-2">{videoError}</p>
+            )}
+            {attachedVideo && (
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-[#4F8CFF]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <span className="text-sm text-gray-300">Video ({attachedVideo.duration.toFixed(1)}s)</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={removeVideo}
+                  className="p-1.5 bg-red-500/80 text-white rounded-lg hover:bg-red-500"
+                  aria-label="Remove video"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+            {attachedImages.length > 0 && !attachedVideo && (
               <div className="flex flex-wrap gap-2 mb-2">
                 {attachedImages.map((img, i) => (
                   <div key={i} className="relative">
@@ -283,7 +391,14 @@ export default function Chatbot() {
               </div>
             )}
             <div className="flex gap-2">
-              <input type="file" ref={fileInputRef} accept="image/*" multiple className="hidden" onChange={addImages} />
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept={chatMode === 'roast' ? 'image/*,video/mp4,video/webm,video/quicktime,video/mpeg' : 'image/*'}
+                multiple={chatMode !== 'roast'}
+                className="hidden"
+                onChange={addImages}
+              />
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -300,7 +415,7 @@ export default function Chatbot() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder={chatMode === 'roast' ? 'Attach an image (optional caption)…' : 'Type your message or attach an image…'}
+                placeholder={chatMode === 'roast' ? 'Attach image or video ≤20s (optional caption)…' : 'Type your message or attach an image…'}
                 className="flex-1 px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#4F8CFF]/50"
                 disabled={isLoading}
               />

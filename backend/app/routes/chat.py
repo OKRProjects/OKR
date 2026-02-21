@@ -39,6 +39,29 @@ def _build_roast_messages(images_b64, user_text=None):
         {'role': 'user', 'content': content},
     ]
 
+
+def _video_data_url(b64: str, mime: str) -> str:
+    """Build data URL for video. OpenRouter accepts video/mp4, video/webm, video/mov, video/mpeg."""
+    normalized = (mime or 'video/mp4').strip().lower()
+    if normalized not in ('video/mp4', 'video/webm', 'video/quicktime', 'video/mpeg'):
+        normalized = 'video/mp4'
+    if normalized == 'video/quicktime':
+        normalized = 'video/mp4'  # mov as mp4 for compatibility
+    return f'data:{normalized};base64,{b64}'
+
+
+def _build_roast_messages_video(video_b64: str, video_mime: str, user_text=None):
+    """Single turn for Roast mode: system roast + user with one video (video_url)."""
+    text = (user_text or 'Roast this video.').strip()
+    content = [
+        {'type': 'text', 'text': text},
+        {'type': 'video_url', 'video_url': {'url': _video_data_url(video_b64, video_mime)}},
+    ]
+    return [
+        {'role': 'system', 'content': ROAST_CHAT_SYSTEM},
+        {'role': 'user', 'content': content},
+    ]
+
 @bp.route('/chat', methods=['POST'])
 def chat():
     """AI Assistant: OpenRouter only. Supports text + optional images (vision model)."""
@@ -51,9 +74,21 @@ def chat():
         messages = data['messages']
         images_b64 = data.get('images') or []
         has_images = isinstance(images_b64, list) and len(images_b64) > 0
+        video_b64 = data.get('video_b64') or ''
+        video_mime = (data.get('video_mime') or 'video/mp4').strip()
+        has_video = isinstance(video_b64, str) and len(video_b64) > 0
         mode = data.get('mode') or 'assistant'
 
-        if mode == 'roast' and has_images:
+        if mode == 'roast' and has_video:
+            last_user = next((m for m in reversed(messages) if m.get('role') == 'user'), None)
+            user_text = last_user.get('content', '') if isinstance(last_user, dict) else ''
+            if not user_text or (isinstance(user_text, str) and user_text.strip() in ('(See video)', '(Video attached)', '(See image)', '(Image attached)', '')):
+                user_text = None
+            else:
+                user_text = user_text.strip() if isinstance(user_text, str) else None
+            messages = _build_roast_messages_video(video_b64, video_mime, user_text)
+            model = os.getenv('OPENROUTER_VIDEO_MODEL') or os.getenv('OPENROUTER_CHAT_VISION_MODEL') or 'google/gemini-2.5-flash'
+        elif mode == 'roast' and has_images:
             last_user = next((m for m in reversed(messages) if m.get('role') == 'user'), None)
             user_text = last_user.get('content', '') if isinstance(last_user, dict) else ''
             if not user_text or (isinstance(user_text, str) and user_text.strip() in ('(See image)', '(Image attached)', '')):
@@ -86,11 +121,12 @@ def chat():
             'messages': messages,
         }
         
+        timeout_sec = 120 if has_video else 60
         response = requests.post(
             'https://openrouter.ai/api/v1/chat/completions',
             headers=headers,
             json=payload,
-            timeout=60
+            timeout=timeout_sec
         )
         
         if not response.ok:
