@@ -92,7 +92,9 @@ export default function ChatPage() {
     { role: 'assistant', content: 'Hello! I\'m your AI assistant. You can speak, type, or attach images. Enable "Speak response" to hear my replies.' },
   ]);
   const [text, setText] = useState('');
-  const [chatMode, setChatMode] = useState<'assistant' | 'roast'>('assistant');
+  // Combined mode: roast when user attaches image/video, assistant for text-only (no toggle)
+  const getEffectiveMode = (opts: { images?: unknown[]; video?: unknown }): 'assistant' | 'roast' =>
+    (opts.images?.length || opts.video) ? 'roast' : 'assistant';
   const [attachedImages, setAttachedImages] = useState<{ file: File; preview: string }[]>([]);
   const [attachedVideo, setAttachedVideo] = useState<{ file: File; preview: string; duration: number } | null>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
@@ -109,34 +111,24 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  /** Split message roughly in half at a paragraph boundary. Still 2 TTS calls (same API cost as sentence split). */
-  const splitMessageForTts = (text: string): [string, string] => {
+  /** Split message into chunks for TTS: one per paragraph when multiple paragraphs, else two halves for speed. */
+  const getParagraphsForTts = (text: string): string[] => {
     const t = text.trim();
-    if (!t) return ['', ''];
-    const paragraphs = t.split(/\n\n+/);
-    if (paragraphs.length <= 1) {
+    if (!t) return [];
+    const paragraphs = t.split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
+    if (paragraphs.length >= 2) return paragraphs;
+    if (paragraphs.length === 1) {
       const mid = Math.floor(t.length / 2);
       const searchStart = Math.max(0, mid - 100);
       const searchEnd = Math.min(t.length, mid + 100);
       const slice = t.slice(searchStart, searchEnd);
       const periodIdx = slice.indexOf('. ');
       const breakPoint = periodIdx >= 0 ? searchStart + periodIdx + 2 : mid;
-      return [t.slice(0, breakPoint).trim(), t.slice(breakPoint).trim()];
+      const first = t.slice(0, breakPoint).trim();
+      const second = t.slice(breakPoint).trim();
+      return second ? [first, second] : [first];
     }
-    const mid = Math.floor(t.length / 2);
-    let cum = 0;
-    let splitIdx = 0;
-    for (let i = 0; i < paragraphs.length; i++) {
-      cum += paragraphs[i].length + 2;
-      if (cum >= mid) {
-        splitIdx = i + 1;
-        break;
-      }
-      splitIdx = i + 1;
-    }
-    const first = paragraphs.slice(0, splitIdx).join('\n\n').trim();
-    const second = paragraphs.slice(splitIdx).join('\n\n').trim();
-    return [first, second];
+    return [t];
   };
 
   /** Play a TTS blob with hidden audio; call onEnded when playback finishes. */
@@ -334,7 +326,7 @@ export default function ChatPage() {
           messages: pipelineMessages,
           tts: false,
           voice: ttsVoice,
-          mode: chatMode,
+          mode: getEffectiveMode({ images, video: currentVideo }),
         });
         const fullMessage = result.message || 'No response.';
         const assistantMsg: Message = {
@@ -351,19 +343,16 @@ export default function ChatPage() {
         });
 
         if (ttsEnabled && fullMessage.trim()) {
-          const [first, second] = splitMessageForTts(fullMessage);
+          const chunks = getParagraphsForTts(fullMessage);
+          if (chunks.length === 0) return;
           const voiceOpt = { voice: ttsVoice };
-          if (!second) {
-            api.textToSpeech(first || fullMessage, voiceOpt).then((blob) => playTtsBlob(blob, () => {}));
-          } else {
-            const p1 = api.textToSpeech(first, voiceOpt);
-            const p2 = api.textToSpeech(second, voiceOpt);
-            p1.then((blob1) => {
-              playTtsBlob(blob1, () => {
-                p2.then((blob2) => playTtsBlob(blob2, () => {}));
-              });
-            });
-          }
+          Promise.all(chunks.map((c) => api.textToSpeech(c, voiceOpt))).then((blobs) => {
+            const playNext = (i: number) => {
+              if (i >= blobs.length) return;
+              playTtsBlob(blobs[i], () => playNext(i + 1));
+            };
+            playNext(0);
+          });
         }
       } else {
         let imagesBase64: string[] | undefined;
@@ -380,7 +369,7 @@ export default function ChatPage() {
           apiMessages,
           'openai/gpt-3.5-turbo',
           imagesBase64,
-          chatMode,
+          getEffectiveMode({ images: imagesBase64, video: videoBase64 }),
           videoBase64,
           videoMime
         );
@@ -414,24 +403,8 @@ export default function ChatPage() {
         <div className="mb-4">
           <h2 className="text-2xl font-bold mb-1">Chat Pipeline</h2>
           <p className="text-gray-400 text-sm">
-            Voice, text, images, or video → AI response → optional speech
+            Voice, text, or attach image/video → AI responds (roasts media, chats otherwise) → optional speech
           </p>
-          <div className="flex gap-1 p-1 bg-white/5 rounded-lg mt-2 w-fit">
-            <button
-              type="button"
-              onClick={() => { setChatMode('assistant'); if (attachedVideo) removeVideo(); }}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium ${chatMode === 'assistant' ? 'bg-[#4F8CFF] text-white' : 'text-gray-400 hover:text-white'}`}
-            >
-              Assistant
-            </button>
-            <button
-              type="button"
-              onClick={() => setChatMode('roast')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium ${chatMode === 'roast' ? 'bg-[#4F8CFF] text-white' : 'text-gray-400 hover:text-white'}`}
-            >
-              Roast
-            </button>
-          </div>
         </div>
 
         {/* Messages */}
@@ -554,7 +527,7 @@ export default function ChatPage() {
               type="text"
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder={chatMode === 'roast' ? 'Attach image or video ≤20s (optional caption)' : 'Type a message...'}
+              placeholder={getEffectiveMode({ images: attachedImages, video: attachedVideo }) === 'roast' ? 'Optional caption for image/video' : 'Type a message or attach image/video…'}
               className="flex-1 px-4 py-3 rounded-lg bg-white/10 border border-white/20 focus:outline-none focus:ring-2 focus:ring-[#4F8CFF]"
             />
 
@@ -568,7 +541,7 @@ export default function ChatPage() {
           </div>
 
           <p className="text-xs text-gray-500">
-            {chatMode === 'roast' && 'Roast: image or video (MOV, MP4, WebM; max 20s). '}
+            {getEffectiveMode({ images: attachedImages, video: attachedVideo }) === 'roast' && 'Roast mode: image or video (MOV, MP4, WebM; max 20s). '}
             {ttsEnabled ? `✓ Voice: ${TTS_VOICES.find((v) => v.id === ttsVoice)?.label || ttsVoice}` : 'Enable speaker icon to hear responses'}
             {' • '}Press mic to speak — auto-sends when you stop talking
           </p>
