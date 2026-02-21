@@ -154,6 +154,20 @@ CLOUDINARY_API_SECRET=YOUR_CLOUDINARY_API_SECRET
 OPENROUTER_API_KEY=YOUR_OPENROUTER_API_KEY
 ```
 
+#### Web search (chat pipeline)
+
+The chat pipeline can search the web when the assistant needs current information. Two providers are supported:
+
+- **DuckDuckGo** (default, no API key): set `WEB_SEARCH_PROVIDER=duckduckgo` or leave unset.
+- **SerpAPI** (Google results, requires API key): set `WEB_SEARCH_PROVIDER=serpapi` and add your key:
+
+```env
+WEB_SEARCH_PROVIDER=serpapi
+SERPAPI_API_KEY=your_serpapi_key
+```
+
+Get a SerpAPI key at [serpapi.com](https://serpapi.com/). The backend also accepts the env var `SerpAPI` for the key.
+
 #### Zoho Mail SMTP (optional)
 
 To send email from the backend (e.g. contact form, notifications), add to `backend/.env`:

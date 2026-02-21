@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, type MutableRefObject } from 'react';
 import Navbar from '@/components/Navbar';
 import { api } from '@/lib/api';
 
@@ -16,6 +16,54 @@ const VOICES = [
   'shimmer',
 ] as const;
 
+const DEFAULT_WAKE_PHRASE = 'hey assistant';
+const DEFAULT_SLEEP_PHRASE = 'goodbye';
+
+function normalizeForMatch(s: string): string {
+  return s.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+function isWakePhrase(transcript: string, wakePhrase: string): boolean {
+  const n = normalizeForMatch(transcript);
+  const wake = normalizeForMatch(wakePhrase);
+  return n.includes(wake) || n.startsWith(wake);
+}
+
+function isSleepPhrase(transcript: string, sleepPhrase: string): boolean {
+  const n = normalizeForMatch(transcript);
+  const sleep = normalizeForMatch(sleepPhrase);
+  if (n === sleep) return true;
+  if (n.startsWith(sleep)) {
+    const rest = n.slice(sleep.length).trim();
+    return !rest || rest === '.' || rest === ',';
+  }
+  return false;
+}
+
+/** If transcript contains wake phrase, return the rest after it (command); otherwise null. */
+function stripWakePhrase(transcript: string, wakePhrase: string): string | null {
+  const n = normalizeForMatch(transcript);
+  const wake = normalizeForMatch(wakePhrase);
+  if (!n.includes(wake)) return null;
+  const idx = n.indexOf(wake);
+  const after = n.slice(idx + wake.length).trim();
+  return after || null;
+}
+
+const MIN_SEND_LENGTH = 2; // ignore single chars / tiny noise
+
+/** Avoid sending obvious noise: too short, only punctuation, or filler. */
+function isLikelyNoise(text: string): boolean {
+  const t = text.trim();
+  if (t.length < MIN_SEND_LENGTH) return true;
+  const letters = t.replace(/[\s.,!?;:'"-]/g, '');
+  if (letters.length < MIN_SEND_LENGTH) return true;
+  const lower = t.toLowerCase();
+  const filler = ['um', 'uh', 'eh', 'ah', 'oh', 'hmm', 'mm', 'hm'];
+  if (filler.includes(lower) || filler.some((f) => lower === f + '.' || lower === f + ',')) return true;
+  return false;
+}
+
 declare global {
   interface Window {
     SpeechRecognition?: typeof SpeechRecognition;
@@ -28,8 +76,17 @@ function getSpeechRecognition(): typeof SpeechRecognition | null {
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
 }
 
-function playBase64Audio(base64: string, format: 'mp3' | 'wav'): Promise<void> {
+function playBase64Audio(
+  base64: string,
+  format: 'mp3' | 'wav',
+  currentPlayingRef: MutableRefObject<{ audio: HTMLAudioElement; url: string } | null>
+): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (currentPlayingRef.current) {
+      currentPlayingRef.current.audio.pause();
+      URL.revokeObjectURL(currentPlayingRef.current.url);
+      currentPlayingRef.current = null;
+    }
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -37,16 +94,31 @@ function playBase64Audio(base64: string, format: 'mp3' | 'wav'): Promise<void> {
     const blob = new Blob([bytes], { type: mime });
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
+    currentPlayingRef.current = { audio, url };
     audio.onended = () => {
-      URL.revokeObjectURL(url);
+      if (currentPlayingRef.current?.url === url) {
+        URL.revokeObjectURL(url);
+        currentPlayingRef.current = null;
+      }
       resolve();
     };
     audio.onerror = (e) => {
-      URL.revokeObjectURL(url);
+      if (currentPlayingRef.current?.url === url) {
+        URL.revokeObjectURL(url);
+        currentPlayingRef.current = null;
+      }
       reject(e);
     };
     audio.play().catch(reject);
   });
+}
+
+function interruptCurrentPlayback(ref: MutableRefObject<{ audio: HTMLAudioElement; url: string } | null>) {
+  if (ref.current) {
+    ref.current.audio.pause();
+    URL.revokeObjectURL(ref.current.url);
+    ref.current = null;
+  }
 }
 
 export default function VoiceAssistantPage() {
@@ -58,20 +130,30 @@ export default function VoiceAssistantPage() {
   const [hasRecognition, setHasRecognition] = useState(false);
   const [micAllowed, setMicAllowed] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
+  const [isAwake, setIsAwake] = useState(false);
+  const [wakePhrase, setWakePhrase] = useState(DEFAULT_WAKE_PHRASE);
+  const [sleepPhrase, setSleepPhrase] = useState(DEFAULT_SLEEP_PHRASE);
   const recognitionRef = useRef<InstanceType<typeof SpeechRecognition> | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isBusyRef = useRef(false);
   const isPausedRef = useRef(false);
+  const isAwakeRef = useRef(false);
   const messagesRef = useRef<Message[]>([]);
   const selectedVoiceRef = useRef(selectedVoice);
+  const wakePhraseRef = useRef(DEFAULT_WAKE_PHRASE);
+  const sleepPhraseRef = useRef(DEFAULT_SLEEP_PHRASE);
   const interimDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTranscriptRef = useRef('');
-  const SEND_DEBOUNCE_MS = 1400;
+  const currentPlayingRef = useRef<{ audio: HTMLAudioElement; url: string } | null>(null);
+  const INTERIM_CLEAR_MS = 2000; // clear "Hearing..." after silence
 
   messagesRef.current = messages;
   isPausedRef.current = isPaused;
+  isAwakeRef.current = isAwake;
   selectedVoiceRef.current = selectedVoice;
-  isBusyRef.current = status === 'processing' || status === 'speaking';
+  wakePhraseRef.current = wakePhrase;
+  sleepPhraseRef.current = sleepPhrase;
+  isBusyRef.current = status === 'processing' || status === 'speaking'; // ignore mic input while thinking or while TTS is playing (avoid hearing assistant output)
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -83,6 +165,7 @@ export default function VoiceAssistantPage() {
 
   const sendToPipeline = useCallback(async (text: string) => {
     if (!text.trim()) return;
+    interruptCurrentPlayback(currentPlayingRef);
     setStatus('processing');
     setError(null);
     const currentMessages = messagesRef.current;
@@ -103,7 +186,8 @@ export default function VoiceAssistantPage() {
       ]);
       if (response.audio_base64 && response.audio_format) {
         setStatus('speaking');
-        await playBase64Audio(response.audio_base64, response.audio_format);
+        setLiveTranscript(''); // clear so we don't show echoed TTS while ignoring mic
+        await playBase64Audio(response.audio_base64, response.audio_format, currentPlayingRef);
       }
       setStatus('listening');
     } catch (err) {
@@ -134,6 +218,9 @@ export default function VoiceAssistantPage() {
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       if (isPausedRef.current || isBusyRef.current) return;
+      const awake = isAwakeRef.current;
+      const wake = wakePhraseRef.current;
+      const sleep = sleepPhraseRef.current;
       let finalTranscript = '';
       let interimTranscript = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -149,28 +236,50 @@ export default function VoiceAssistantPage() {
       if (anyTranscript) {
         lastTranscriptRef.current = finalTranscript || interimTranscript || lastTranscriptRef.current;
         setLiveTranscript(anyTranscript);
+      } else {
+        setLiveTranscript('');
       }
+      // Only act on final results — never send from interim to avoid random/noise sends
       if (finalTranscript.trim()) {
+        const text = finalTranscript.trim();
         if (interimDebounceRef.current) {
           clearTimeout(interimDebounceRef.current);
           interimDebounceRef.current = null;
         }
-        sendToPipeline(finalTranscript.trim());
+        if (!awake) {
+          if (isWakePhrase(text, wake)) {
+            setIsAwake(true);
+            const afterWake = stripWakePhrase(text, wake);
+            if (afterWake && !isLikelyNoise(afterWake)) sendToPipeline(afterWake);
+          }
+          setLiveTranscript('');
+          lastTranscriptRef.current = '';
+          return;
+        }
+        if (isSleepPhrase(text, sleep)) {
+          setIsAwake(false);
+          setLiveTranscript('');
+          lastTranscriptRef.current = '';
+          return;
+        }
+        if (isLikelyNoise(text)) {
+          setLiveTranscript('');
+          lastTranscriptRef.current = '';
+          return;
+        }
+        sendToPipeline(text);
         setLiveTranscript('');
         lastTranscriptRef.current = '';
         return;
       }
+      // Interim only: update live display; do not send to pipeline (reduces random sends when it can't hear clearly)
       if (interimTranscript.trim()) {
         if (interimDebounceRef.current) clearTimeout(interimDebounceRef.current);
         interimDebounceRef.current = setTimeout(() => {
           interimDebounceRef.current = null;
-          const toSend = (lastTranscriptRef.current || interimTranscript).trim();
-          if (toSend && !isBusyRef.current && !isPausedRef.current) {
-            sendToPipeline(toSend);
-            setLiveTranscript('');
-            lastTranscriptRef.current = '';
-          }
-        }, SEND_DEBOUNCE_MS);
+          setLiveTranscript('');
+          lastTranscriptRef.current = '';
+        }, INTERIM_CLEAR_MS);
       }
     };
 
@@ -197,8 +306,6 @@ export default function VoiceAssistantPage() {
     };
 
     recognitionRef.current = recognition;
-    // Don't auto-start: browsers require a user gesture (click) to allow microphone.
-    // User must click "Start listening" to begin.
 
     return () => {
       if (interimDebounceRef.current) {
@@ -238,24 +345,45 @@ export default function VoiceAssistantPage() {
 
   const startListening = useCallback(async () => {
     const rec = recognitionRef.current;
-    if (!rec) return;
+    if (!rec) {
+      setError('Voice recognition not ready. Refresh the page and try again.');
+      return;
+    }
     setError(null);
+    // Request mic in the same user gesture as the click so the browser shows the permission prompt
     if (!micAllowed) {
-      const ok = await requestMic();
-      if (!ok) return;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((t) => t.stop());
+        setMicAllowed(true);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes('Permission denied') || msg.includes('NotAllowedError')) {
+          setError('Microphone blocked. Use the lock icon → Site settings → Microphone → Allow, then click again.');
+        } else if (msg.includes('secure') || msg.includes('SecureContext')) {
+          setError('Use http://localhost:3000 or HTTPS for the microphone.');
+        } else {
+          setError(`Microphone error: ${msg}`);
+        }
+        return;
+      }
     }
     setStatus('listening');
     setIsPaused(false);
+    setIsAwake(false);
     try {
       rec.start();
-    } catch {
+    } catch (err) {
       setStatus('idle');
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg ? `Could not start listening: ${msg}` : 'Could not start listening. Try again.');
     }
-  }, [micAllowed, requestMic]);
+  }, [micAllowed]);
 
   const stopListening = useCallback(() => {
     setIsPaused(true);
     setStatus('idle');
+    setLiveTranscript('');
     try {
       recognitionRef.current?.stop();
     } catch {
@@ -267,20 +395,50 @@ export default function VoiceAssistantPage() {
     <div className="min-h-screen bg-[#0E1117] text-white">
       <Navbar />
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* One-click entry: runs Start listening logic so browser will show mic prompt (requires user gesture) */}
+        {status === 'idle' && hasRecognition && (
+          <button
+            type="button"
+            onClick={startListening}
+            className="w-full mb-6 py-6 rounded-xl border-2 border-[#4F8CFF]/50 bg-[#4F8CFF]/20 text-white font-medium text-lg hover:bg-[#4F8CFF]/30 hover:border-[#4F8CFF]/70 transition-colors focus:outline-none focus:ring-2 focus:ring-[#4F8CFF]"
+          >
+            Click to start listening — browser will ask for microphone access
+          </button>
+        )}
         <h1 className="text-2xl font-bold text-white mb-1">AI Voice Assistant</h1>
         <p className="text-gray-400 text-sm mb-4">
-          Click Start listening. Your browser will ask for microphone access — choose <strong className="text-gray-300">Allow</strong>. Then speak and the assistant will reply with voice using the same AI pipeline as chat.
+          Click the button above to start. Allow the microphone when prompted. Then the assistant listens for <strong className="text-gray-300">&quot;{wakePhrase}&quot;</strong> — say it to wake, then speak. Say <strong className="text-gray-300">&quot;{sleepPhrase}&quot;</strong> to put it back to sleep.
         </p>
 
-        <details className="mb-6 text-sm text-gray-500 border border-white/10 rounded-lg bg-white/5">
+        <details className="mb-4 text-sm text-gray-500 border border-white/10 rounded-lg bg-white/5">
           <summary className="px-4 py-2 cursor-pointer hover:text-gray-400 select-none">
-            Why does Chrome keep blocking the mic?
+            Wake word &amp; sleep word
           </summary>
-          <ul className="px-4 py-3 space-y-1.5 list-disc list-inside text-gray-400">
-            <li><strong className="text-gray-300">You chose “Block” before</strong> — Chrome remembers. Click the lock/info icon in the address bar → Site settings → Microphone → set to <strong>Allow</strong>, then reload the page.</li>
-            <li><strong className="text-gray-300">Not a secure context</strong> — Use <code className="bg-white/10 px-1 rounded">http://localhost:3000</code> (localhost is allowed). If you use <code className="bg-white/10 px-1 rounded">http://127.0.0.1</code> or a network IP like <code className="bg-white/10 px-1 rounded">http://192.168.x.x</code>, Chrome may block the mic; switch to <code className="bg-white/10 px-1 rounded">localhost</code> or HTTPS.</li>
-            <li><strong className="text-gray-300">OS or browser policy</strong> — In Windows: Settings → Privacy → Microphone, and ensure “Allow apps to access your microphone” is on and Chrome is allowed. At work, admin policies can block the mic.</li>
-          </ul>
+          <div className="px-4 py-3 space-y-3 text-gray-400">
+            <p className="text-gray-300">When <strong>asleep</strong>, the assistant only reacts to the wake phrase. When <strong>awake</strong>, it processes your speech and goes to sleep if you say the sleep phrase.</p>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex flex-col gap-1">
+                <span className="text-gray-400 text-xs">Wake phrase</span>
+                <input
+                  type="text"
+                  value={wakePhrase}
+                  onChange={(e) => setWakePhrase(e.target.value)}
+                  placeholder={DEFAULT_WAKE_PHRASE}
+                  className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white w-48 focus:outline-none focus:ring-1 focus:ring-[#4F8CFF]"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-gray-400 text-xs">Sleep phrase</span>
+                <input
+                  type="text"
+                  value={sleepPhrase}
+                  onChange={(e) => setSleepPhrase(e.target.value)}
+                  placeholder={DEFAULT_SLEEP_PHRASE}
+                  className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white w-48 focus:outline-none focus:ring-1 focus:ring-[#4F8CFF]"
+                />
+              </label>
+            </div>
+          </div>
         </details>
 
         {/* Status & controls */}
@@ -304,13 +462,23 @@ export default function VoiceAssistantPage() {
               }`}
             />
             <span className="text-sm font-medium text-gray-200">
-              {status === 'listening' && 'Listening…'}
+              {status === 'listening' && (isAwake ? 'Listening…' : 'Listening for wake word…')}
               {status === 'processing' && 'Thinking…'}
               {status === 'speaking' && 'Speaking…'}
               {status === 'idle' && (isPaused ? 'Paused' : 'Starting…')}
               {status === 'error' && 'Error'}
             </span>
           </div>
+          {status === 'listening' && (
+            <div
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm ${
+                isAwake ? 'bg-green-500/10 border-green-500/40 text-green-300' : 'bg-gray-500/20 border-gray-500/40 text-gray-400'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-current" />
+              {isAwake ? 'Awake' : 'Asleep'}
+            </div>
+          )}
           {hasRecognition && (
             <button
               type="button"
@@ -354,7 +522,7 @@ export default function VoiceAssistantPage() {
         <div className="rounded-xl border border-white/10 bg-white/5 overflow-hidden flex flex-col" style={{ minHeight: '320px' }}>
           <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar" style={{ maxHeight: '50vh' }}>
             {messages.length === 0 && !liveTranscript && (
-              <p className="text-gray-500 text-sm">Say something after starting the mic. The assistant will reply with voice.</p>
+              <p className="text-gray-500 text-sm">Say &quot;{wakePhrase}&quot; to wake the assistant, then speak. Say &quot;{sleepPhrase}&quot; to put it back to sleep.</p>
             )}
             {liveTranscript && (
               <p className="text-gray-400 text-sm italic">Hearing: &quot;{liveTranscript}&quot;</p>

@@ -8,8 +8,86 @@ import requests
 from openai import OpenAI
 from app.prompts.roast import ROAST_CHAT_SYSTEM
 from app.prompts.support import SUPPORT_SYSTEM
+from app.prompts.assistant_web import ASSISTANT_WEB_SYSTEM
+from app.services.web_search import search_web
 
 bp = Blueprint('chat', __name__)
+
+# Tool definition for web search (OpenRouter/OpenAI-style)
+SEARCH_WEB_TOOLS = [
+    {
+        'type': 'function',
+        'function': {
+            'name': 'search_web',
+            'description': 'Search the web for current information. Use when the user asks about recent events, facts, or when you need up-to-date information to answer accurately.',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'query': {
+                        'type': 'string',
+                        'description': 'Search query (a few clear keywords)',
+                    },
+                },
+                'required': ['query'],
+            },
+        },
+    },
+]
+
+
+def _chat_with_web_search(messages, model, headers, timeout_sec=60):
+    """Run chat with web search tool; returns (assistant_message, usage)."""
+    if not messages or messages[0].get('role') != 'system':
+        messages = [{'role': 'system', 'content': ASSISTANT_WEB_SYSTEM}] + list(messages)
+    payload = {'model': model, 'messages': messages, 'tools': SEARCH_WEB_TOOLS, 'tool_choice': 'auto'}
+    max_turns = 5
+    usage_merged = {}
+    content = ''
+    for _ in range(max_turns):
+        resp = requests.post(
+            'https://openrouter.ai/api/v1/chat/completions',
+            headers=headers,
+            json=payload,
+            timeout=timeout_sec,
+        )
+        if not resp.ok:
+            err = resp.json() if resp.content else {}
+            msg = err.get('error', resp.reason)
+            if isinstance(msg, dict):
+                msg = msg.get('message', str(msg))
+            raise ValueError(str(msg))
+        result = resp.json()
+        choice = (result.get('choices') or [{}])[0]
+        msg = choice.get('message') or {}
+        content = (msg.get('content') or '').strip()
+        tool_calls = msg.get('tool_calls') or []
+        if result.get('usage'):
+            for k, v in result['usage'].items():
+                if isinstance(v, (int, float)):
+                    usage_merged[k] = usage_merged.get(k, 0) + v
+                elif isinstance(v, dict) and k not in usage_merged:
+                    usage_merged[k] = v
+        if not tool_calls:
+            return (content or "I couldn't generate a response."), usage_merged
+        messages = list(messages)
+        messages.append({
+            'role': 'assistant',
+            'content': content or None,
+            'tool_calls': [{'id': tc.get('id'), 'type': 'function', 'function': tc.get('function', {})} for tc in tool_calls],
+        })
+        for tc in tool_calls:
+            tid = tc.get('id') or ''
+            fn = tc.get('function') or {}
+            name = fn.get('name') or ''
+            args_str = fn.get('arguments') or '{}'
+            try:
+                args = json.loads(args_str)
+            except json.JSONDecodeError:
+                args = {}
+            tool_result = search_web(args.get('query', '')) if name == 'search_web' else f'Unknown tool: {name}'
+            messages.append({'role': 'tool', 'tool_call_id': tid, 'content': tool_result})
+        payload['messages'] = messages
+    return (content or 'I hit the search limit. Please try a shorter question.'), usage_merged
 
 
 def _process_support_actions(message: str) -> str:
@@ -400,28 +478,30 @@ def chat_pipeline():
         }
 
         timeout_sec = 120 if has_video else 60
-        response = requests.post(
-            'https://openrouter.ai/api/v1/chat/completions',
-            headers=headers,
-            json={'model': model, 'messages': messages},
-            timeout=timeout_sec,
-        )
 
-        if not response.ok:
-            err = response.json() if response.content else {}
-            msg = err.get('error', {})
-            if isinstance(msg, dict):
-                msg = msg.get('message', response.reason)
-            return jsonify({'error': str(msg)}), response.status_code
-
-        result = response.json()
-        assistant_message = ''
-        if result.get('choices'):
-            assistant_message = result['choices'][0].get('message', {}).get('content', '')
-        if mode == 'support':
-            assistant_message = _process_support_actions(assistant_message)
-
-        out = {'message': assistant_message, 'usage': result.get('usage', {})}
+        if mode == 'assistant' and not has_images and not has_video:
+            assistant_message, usage_merged = _chat_with_web_search(messages, model, headers, timeout_sec)
+            out = {'message': assistant_message, 'usage': usage_merged}
+        else:
+            response = requests.post(
+                'https://openrouter.ai/api/v1/chat/completions',
+                headers=headers,
+                json={'model': model, 'messages': messages},
+                timeout=timeout_sec,
+            )
+            if not response.ok:
+                err = response.json() if response.content else {}
+                msg = err.get('error', {})
+                if isinstance(msg, dict):
+                    msg = msg.get('message', response.reason)
+                return jsonify({'error': str(msg)}), response.status_code
+            result = response.json()
+            assistant_message = ''
+            if result.get('choices'):
+                assistant_message = result['choices'][0].get('message', {}).get('content', '')
+            if mode == 'support':
+                assistant_message = _process_support_actions(assistant_message)
+            out = {'message': assistant_message, 'usage': result.get('usage', {})}
         if transcribed_text is not None:
             out['transcribed_text'] = transcribed_text
 
