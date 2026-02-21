@@ -3,8 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { getCurrentUser, login } from '@/lib/auth';
 import { api } from '@/lib/api';
-import Navbar from '@/components/Navbar';
-import Link from 'next/link';
+import DashboardShell from '@/components/DashboardShell';
 import { Mic, MicOff, ImagePlus, Volume2, Send, Video } from 'lucide-react';
 
 const MAX_VIDEO_SECONDS = 20;
@@ -342,17 +341,12 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0E1117] text-white flex flex-col">
-      <Navbar />
-
-      <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full px-4 py-6">
+    <DashboardShell>
+      <div className="flex flex-col max-w-4xl mx-auto w-full">
         <div className="mb-4">
-          <Link href="/dashboard" className="text-sm text-gray-400 hover:text-white">
-            ← Back to Dashboard
-          </Link>
-          <h1 className="text-2xl font-bold mt-2">AI Chat Pipeline</h1>
+          <h2 className="text-2xl font-bold mb-1">Chat Pipeline</h2>
           <p className="text-gray-400 text-sm">
-            Voice, text, images, or video (Roast) → AI response → optional speech
+            Voice, text, images, or video → AI response → optional speech
           </p>
           <div className="flex gap-1 p-1 bg-white/5 rounded-lg mt-2 w-fit">
             <button
@@ -373,7 +367,7 @@ export default function ChatPage() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto space-y-4 mb-4 rounded-xl bg-white/5 p-4 min-h-[300px]">
+        <div className="flex-1 overflow-y-auto space-y-4 mb-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 p-4 min-h-[320px]">
           {messages.map((m, i) => (
             <div
               key={i}
@@ -515,6 +509,6 @@ export default function ChatPage() {
           </p>
         </form>
       </div>
-    </div>
+    </DashboardShell>
   );
 }
