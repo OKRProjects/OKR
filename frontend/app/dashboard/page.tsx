@@ -111,6 +111,12 @@ export default function Dashboard() {
                 >
                   Voice-to-Text
                 </Link>
+                <Link
+                  href="/text-to-voice"
+                  className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50 rounded-md transition-colors"
+                >
+                  Text-to-Voice
+                </Link>
               </div>
             </div>
           </div>

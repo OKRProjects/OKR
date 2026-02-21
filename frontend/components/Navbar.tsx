@@ -61,6 +61,12 @@ export default function Navbar() {
                 >
                   Voice-to-Text
                 </Link>
+                <Link
+                  href="/text-to-voice"
+                  className="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Text-to-Voice
+                </Link>
                 <span className="text-gray-700 text-sm">
                   {user.name || user.email}
                 </span>

@@ -276,4 +276,28 @@ export const api = {
       body: formData,
     });
   },
+
+  // Text-to-Speech API (OpenAI TTS - public endpoint)
+  async textToSpeech(
+    text: string,
+    options?: { voice?: string; model?: string }
+  ): Promise<Blob> {
+    const response = await fetch(`${API_URL}/api/speech`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text,
+        voice: options?.voice || 'coral',
+        model: options?.model || 'tts-1-hd',
+      }),
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'An error occurred' }));
+      throw new Error(error.error || error.message || `HTTP error! status: ${response.status}`);
+    }
+
+    return response.blob();
+  },
 };
