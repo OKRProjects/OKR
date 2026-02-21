@@ -141,16 +141,6 @@ export default function LandingPage({ children }: LandingPageProps) {
       {/* Hero Section */}
       <motion.div style={{ opacity, scale }} className="relative pt-40 pb-32">
         <div className="max-w-6xl mx-auto px-8 text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className="inline-flex items-center gap-2 bg-white/5 backdrop-blur-sm border border-white/10 rounded-full px-4 py-2 mb-8"
-          >
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-            <span className="text-sm text-gray-300">Introducing Multi-Modal AI Assistant</span>
-          </motion.div>
-
           <motion.h1
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -317,6 +307,10 @@ export default function LandingPage({ children }: LandingPageProps) {
             transition={{ duration: 0.8 }}
             className="text-center mb-20"
           >
+            <div className="inline-flex items-center gap-2 bg-white/5 backdrop-blur-sm border border-white/10 rounded-full px-4 py-2 mb-6">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+              <span className="text-sm text-gray-300">Introducing Multi-Modal AI Assistant</span>
+            </div>
             <h2 className="text-5xl md:text-6xl font-bold mb-6 tracking-tight">
               Advanced Capabilities
             </h2>
