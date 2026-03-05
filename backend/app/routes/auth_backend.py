@@ -442,13 +442,13 @@ def get_current_user(user_id):
             db = get_db()
             app_user = db.users.find_one({'_id': user_id})
             if app_user:
-                user_info['role'] = app_user.get('role', 'standard')
+                user_info['role'] = app_user.get('role', 'developer')
                 if app_user.get('departmentId') is not None:
                     user_info['departmentId'] = str(app_user['departmentId'])
         except Exception:
-            user_info['role'] = user_info.get('role', 'standard')
+            user_info['role'] = user_info.get('role', 'developer')
         if 'role' not in user_info:
-            user_info['role'] = 'standard'
+            user_info['role'] = 'developer'
         return jsonify(user_info), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 401

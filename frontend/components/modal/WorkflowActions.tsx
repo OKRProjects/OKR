@@ -44,6 +44,7 @@ export function WorkflowActions({ objective, onUpdate, onError }: WorkflowAction
         <Button
           size="sm"
           disabled={!!loading}
+          className="min-h-[44px] min-w-[44px] touch-manipulation"
           onClick={() =>
             objective._id && run(() => api.submitObjective(objective._id!), 'Submit')
           }
@@ -56,6 +57,7 @@ export function WorkflowActions({ objective, onUpdate, onError }: WorkflowAction
           <Button
             size="sm"
             disabled={!!loading}
+            className="min-h-[44px] min-w-[44px] touch-manipulation"
             onClick={() =>
               objective._id && run(() => api.approveObjective(objective._id!), 'Approve')
             }
@@ -66,6 +68,7 @@ export function WorkflowActions({ objective, onUpdate, onError }: WorkflowAction
             size="sm"
             variant="outline"
             disabled={!!loading}
+            className="min-h-[44px] min-w-[44px] touch-manipulation"
             onClick={() =>
               objective._id &&
               run(
@@ -82,6 +85,7 @@ export function WorkflowActions({ objective, onUpdate, onError }: WorkflowAction
         <Button
           size="sm"
           disabled={!!loading}
+          className="min-h-[44px] min-w-[44px] touch-manipulation"
           onClick={() =>
             objective._id && run(() => api.resubmitObjective(objective._id!), 'Resubmit')
           }

@@ -3,16 +3,20 @@ from app.db.mongodb import get_db
 from app.routes.auth_backend import require_auth
 from app.services.permissions import (
     get_user_role,
+    ROLE_VIEW_ONLY,
     can_submit_for_review,
     can_approve_reject,
     can_resubmit,
     can_edit_kr,
     can_edit_objective,
     can_delete_objective,
+    can_create_share_link,
 )
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 from bson.errors import InvalidId
+import secrets
+import os
 
 bp = Blueprint('okrs', __name__)
 
@@ -85,6 +89,114 @@ def list_objectives(user_id):
         cursor = coll.find(q).sort('createdAt', -1)
         items = [_serialize_doc(d) for d in cursor]
         return jsonify(items), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def _build_objectives_query():
+    """Build the same query dict as list_objectives (from request args). Returns (q, error_response)."""
+    q = {}
+    fiscal_year = request.args.get('fiscalYear', type=int)
+    if fiscal_year is not None:
+        q['fiscalYear'] = fiscal_year
+    level = request.args.get('level')
+    if level:
+        q['level'] = level
+    division = request.args.get('division')
+    if division:
+        q['division'] = division
+    status = request.args.get('status')
+    if status:
+        q['status'] = status
+    owner_id = request.args.get('ownerId')
+    if owner_id:
+        q['ownerId'] = owner_id
+    parent_id = request.args.get('parentObjectiveId')
+    if parent_id:
+        oid = _parse_object_id(parent_id)
+        if oid is None:
+            return None, (jsonify({'error': 'Invalid parentObjectiveId'}), 400)
+        q['parentObjectiveId'] = oid
+    elif parent_id is not None and parent_id == '':
+        q['$or'] = [{'parentObjectiveId': None}, {'parentObjectiveId': {'$exists': False}}]
+    return q, None
+
+
+@bp.route('/objectives/export', methods=['GET'])
+@require_auth
+def export_objectives(user_id):
+    """Export OKRs as JSON (API dump), Excel, or PDF. Same filters as list_objectives. view_only cannot export."""
+    try:
+        db = get_db()
+        if get_user_role(db, user_id) == ROLE_VIEW_ONLY:
+            return jsonify({'error': 'View-only users cannot export'}), 403
+        fmt = request.args.get('format', 'json').lower()
+        if fmt == 'json':
+            q, err = _build_objectives_query()
+            if err is not None:
+                return err
+            cursor = db.objectives.find(q).sort('createdAt', -1)
+            objectives = list(cursor)
+            tree_mode = request.args.get('tree', '').lower() in ('1', 'true', 'yes')
+            if tree_mode:
+                # Build trees: roots are objectives with no parent or parent not in result set
+                id_set = {doc['_id'] for doc in objectives}
+                roots = [d for d in objectives if not d.get('parentObjectiveId') or d.get('parentObjectiveId') not in id_set]
+
+                def build_node(obj_doc):
+                    node = _serialize_doc(obj_doc)
+                    node_id = obj_doc['_id']
+                    children = list(db.objectives.find({'parentObjectiveId': node_id}))
+                    node['children'] = [build_node(c) for c in children]
+                    krs = list(db.key_results.find({'objectiveId': node_id}))
+                    node['keyResults'] = [_serialize_doc(kr) for kr in krs]
+                    scores = [kr.get('score') for kr in krs if kr.get('score') is not None]
+                    node['averageScore'] = round(sum(scores) / len(scores), 1) if scores else None
+                    return node
+
+                trees = [build_node(r) for r in roots]
+                return jsonify({'trees': trees}), 200
+            # Flat: objectives with keyResults each
+            out = []
+            for doc in objectives:
+                ser = _serialize_doc(doc)
+                krs = list(db.key_results.find({'objectiveId': doc['_id']}))
+                ser['keyResults'] = [_serialize_doc(kr) for kr in krs]
+                scores = [kr.get('score') for kr in krs if kr.get('score') is not None]
+                ser['averageScore'] = round(sum(scores) / len(scores), 1) if scores else None
+                out.append(ser)
+            return jsonify({'objectives': out}), 200
+        if fmt == 'xlsx':
+            from flask import send_file
+            import io
+            try:
+                from app.services.export_xlsx import build_okr_workbook
+            except ImportError:
+                return jsonify({'error': 'Excel export not available'}), 501
+            q, err = _build_objectives_query()
+            if err is not None:
+                return err
+            objectives = list(db.objectives.find(q).sort('createdAt', -1))
+            buf = io.BytesIO()
+            build_okr_workbook(db, objectives, buf)
+            buf.seek(0)
+            return send_file(buf, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name='okrs_export.xlsx')
+        if fmt == 'pdf':
+            from flask import send_file
+            import io
+            try:
+                from app.services.export_pdf import build_okr_pdf
+            except ImportError:
+                return jsonify({'error': 'PDF export not available'}), 501
+            q, err = _build_objectives_query()
+            if err is not None:
+                return err
+            objectives = list(db.objectives.find(q).sort('createdAt', -1))
+            buf = io.BytesIO()
+            build_okr_pdf(db, objectives, buf)
+            buf.seek(0)
+            return send_file(buf, mimetype='application/pdf', as_attachment=True, download_name='okrs_export.pdf')
+        return jsonify({'error': 'Unsupported format. Use json, xlsx, or pdf'}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -296,6 +408,108 @@ def delete_objective(objective_id, user_id):
         return jsonify({'error': str(e)}), 500
 
 
+# ---- Share links ----
+
+def _share_link_serialize(doc):
+    out = _serialize_doc(doc, date_fields=['createdAt', 'expiresAt'])
+    if out and 'objectiveId' in out:
+        out['objectiveId'] = str(out['objectiveId'])
+    return out
+
+
+@bp.route('/objectives/<objective_id>/share-links', methods=['POST'])
+@require_auth
+def create_share_link(objective_id, user_id):
+    """Create a shareable link for this objective. Body: { expiresInDays? }."""
+    try:
+        oid = _parse_object_id(objective_id)
+        if oid is None:
+            return jsonify({'error': 'Invalid objective ID'}), 400
+        db = get_db()
+        obj = db.objectives.find_one({'_id': oid})
+        if not obj:
+            return jsonify({'error': 'Objective not found'}), 404
+        if not can_create_share_link(db, user_id, obj):
+            return jsonify({'error': 'Not allowed to create share link for this objective'}), 403
+        data = request.get_json() or {}
+        try:
+            expires_in_days = int(data.get('expiresInDays') or 0) or None
+        except (TypeError, ValueError):
+            expires_in_days = None
+        now = _now()
+        expires_at = (now + timedelta(days=expires_in_days)) if expires_in_days else None
+        token = secrets.token_urlsafe(24)
+        frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000').rstrip('/')
+        url = f'{frontend_url}/share/{token}'
+        doc = {
+            'token': token,
+            'objectiveId': oid,
+            'createdBy': user_id,
+            'createdAt': now,
+            'expiresAt': expires_at,
+            'permission': 'view',
+        }
+        db.share_links.insert_one(doc)
+        return jsonify({
+            'token': token,
+            'url': url,
+            'expiresAt': expires_at.isoformat() if expires_at else None,
+        }), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/objectives/<objective_id>/share-links', methods=['GET'])
+@require_auth
+def list_share_links(objective_id, user_id):
+    """List share links for this objective. Creator or admin only."""
+    try:
+        oid = _parse_object_id(objective_id)
+        if oid is None:
+            return jsonify({'error': 'Invalid objective ID'}), 400
+        db = get_db()
+        obj = db.objectives.find_one({'_id': oid})
+        if not obj:
+            return jsonify({'error': 'Objective not found'}), 404
+        if not can_create_share_link(db, user_id, obj):
+            return jsonify({'error': 'Not allowed to list share links for this objective'}), 403
+        cursor = db.share_links.find({'objectiveId': oid}).sort('createdAt', -1)
+        items = [_share_link_serialize(d) for d in cursor]
+        frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000').rstrip('/')
+        for item in items:
+            item['url'] = f"{frontend_url}/share/{item.get('token', '')}"
+        return jsonify(items), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/objectives/<objective_id>/post-update', methods=['POST'])
+@require_auth
+def post_update_to_channel(objective_id, user_id):
+    """Manual 'Post Update': send current objective summary to configured Slack/Teams webhook."""
+    try:
+        oid = _parse_object_id(objective_id)
+        if oid is None:
+            return jsonify({'error': 'Invalid objective ID'}), 400
+        db = get_db()
+        obj = db.objectives.find_one({'_id': oid})
+        if not obj:
+            return jsonify({'error': 'Objective not found'}), 404
+        cfg = db.integration_configs.find_one({'_id': user_id})
+        if not cfg or not cfg.get('webhookUrl'):
+            return jsonify({'error': 'No Slack/Teams webhook configured. Add one in Integrations.'}), 400
+        from app.services.notifications import post_okr_update_to_webhook, format_okr_update_message
+        title = obj.get('title') or 'OKR'
+        status = obj.get('status') or 'draft'
+        payload = format_okr_update_message(title, status, actor_name='', event_type='manual')
+        ok = post_okr_update_to_webhook(cfg['webhookUrl'], cfg.get('channelType') or 'slack', payload)
+        if not ok:
+            return jsonify({'error': 'Failed to send message to webhook'}), 502
+        return jsonify({'message': 'Update posted to channel'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @bp.route('/objectives/<objective_id>/workflow-history', methods=['GET'])
 @require_auth
 def get_workflow_history(objective_id, user_id):
@@ -371,6 +585,16 @@ def _workflow_transition(objective_id, user_id, from_status, to_status, reason=N
     })
     db.objectives.update_one({'_id': oid}, {'$set': {'status': to_status, 'updatedAt': now}})
     updated = db.objectives.find_one({'_id': oid})
+    # Notify configured Slack/Teams webhook (fire-and-forget)
+    try:
+        cfg = db.integration_configs.find_one({'_id': user_id})
+        if cfg and cfg.get('webhookUrl'):
+            from app.services.notifications import post_okr_update_to_webhook, format_okr_update_message
+            title = updated.get('title') or 'OKR'
+            payload = format_okr_update_message(title, to_status, actor_name='', event_type='workflow')
+            post_okr_update_to_webhook(cfg['webhookUrl'], cfg.get('channelType') or 'slack', payload)
+    except Exception:
+        pass
     return jsonify(_serialize_doc(updated)), 200
 
 

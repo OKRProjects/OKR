@@ -115,13 +115,13 @@ export function FilesTab({ objective, keyResults, readOnly }: FilesTabProps) {
         <CardContent className="space-y-4">
           {!readOnly && (
             <>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
                 <span className="text-sm font-medium">Associate with:</span>
                 <Select
                   value={selectedKrId ?? 'objective'}
                   onValueChange={(v) => setSelectedKrId(v === 'objective' ? null : v)}
                 >
-                  <SelectTrigger className="w-[220px]">
+                  <SelectTrigger className="w-full sm:w-[220px] min-h-[44px]">
                     <SelectValue placeholder="Objective" />
                   </SelectTrigger>
                   <SelectContent>
@@ -141,13 +141,13 @@ export function FilesTab({ objective, keyResults, readOnly }: FilesTabProps) {
                 }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                className={`border-2 border-dashed rounded-lg p-6 sm:p-8 text-center transition-colors min-h-[120px] flex flex-col items-center justify-center ${
                   dragOver ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'
                 }`}
               >
-                <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground mb-2">
-                  Drag and drop files here, or click to browse.
+                <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-2 shrink-0" />
+                <p className="text-sm text-muted-foreground mb-3">
+                  Drag and drop files here, or tap to browse.
                 </p>
                 <input
                   type="file"
@@ -163,6 +163,7 @@ export function FilesTab({ objective, keyResults, readOnly }: FilesTabProps) {
                   type="button"
                   variant="outline"
                   disabled={uploading}
+                  className="min-h-[44px] min-w-[44px] touch-manipulation"
                   onClick={() => document.getElementById('file-upload')?.click()}
                 >
                   {uploading ? 'Uploading…' : 'Choose files'}
@@ -219,8 +220,8 @@ export function FilesTab({ objective, keyResults, readOnly }: FilesTabProps) {
                       </p>
                     )}
                     <div className="flex gap-2 mt-2">
-                      <Button variant="ghost" size="sm" asChild>
-                        <a href={att.url} target="_blank" rel="noopener noreferrer">
+                      <Button variant="ghost" size="sm" className="min-h-[44px] min-w-[44px] touch-manipulation" asChild>
+                        <a href={att.url} target="_blank" rel="noopener noreferrer" aria-label="Download">
                           <Download className="h-4 w-4" />
                         </a>
                       </Button>
@@ -228,8 +229,9 @@ export function FilesTab({ objective, keyResults, readOnly }: FilesTabProps) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-destructive hover:text-destructive"
+                          className="text-destructive hover:text-destructive min-h-[44px] min-w-[44px] touch-manipulation"
                           onClick={() => att._id && handleDelete(att._id)}
+                          aria-label="Delete attachment"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -254,15 +256,15 @@ export function FilesTab({ objective, keyResults, readOnly }: FilesTabProps) {
             className="bg-card rounded-lg max-w-4xl max-h-[90vh] overflow-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-2 flex justify-between items-center border-b">
-              <span className="font-medium truncate">{preview.fileName}</span>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" asChild>
+            <div className="p-2 flex flex-wrap justify-between items-center gap-2 border-b">
+              <span className="font-medium truncate min-w-0">{preview.fileName}</span>
+              <div className="flex gap-2 shrink-0">
+                <Button variant="outline" size="sm" className="min-h-[44px] touch-manipulation" asChild>
                   <a href={preview.url} target="_blank" rel="noopener noreferrer">
                     <Download className="h-4 w-4 mr-1" /> Download
                   </a>
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setPreview(null)}>
+                <Button variant="ghost" size="sm" className="min-h-[44px] min-w-[44px] touch-manipulation" onClick={() => setPreview(null)}>
                   Close
                 </Button>
               </div>

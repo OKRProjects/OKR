@@ -8,7 +8,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Search, Filter } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Search, Filter, RotateCcw } from 'lucide-react';
+import type { DashboardSortField, SortDirection } from '@/lib/api';
 
 export interface DashboardFilters {
   search: string;
@@ -26,13 +28,24 @@ const defaultFilters: DashboardFilters = {
   scoreRange: 'all',
 };
 
+export interface ViewPreferencesBarProps {
+  sort: DashboardSortField;
+  sortDirection: SortDirection;
+  onSortChange: (sort: DashboardSortField, direction: SortDirection) => void;
+  filterUpdateType: string;
+  onFilterUpdateTypeChange: (value: string) => void;
+  onResetToDefault?: () => void;
+}
+
 interface FilterBarProps {
   filters: DashboardFilters;
   onFiltersChange: (f: DashboardFilters) => void;
   divisions: string[];
+  /** When provided, show sort, update-type filter, and Reset to default (saved to profile) */
+  viewPreferences?: ViewPreferencesBarProps;
 }
 
-export function FilterBar({ filters, onFiltersChange, divisions }: FilterBarProps) {
+export function FilterBar({ filters, onFiltersChange, divisions, viewPreferences }: FilterBarProps) {
   const set = (key: keyof DashboardFilters, value: string) => {
     onFiltersChange({ ...filters, [key]: value });
   };
@@ -97,6 +110,52 @@ export function FilterBar({ filters, onFiltersChange, divisions }: FilterBarProp
             <SelectItem value="off_track">Off Track (&lt;40%)</SelectItem>
           </SelectContent>
         </Select>
+        {viewPreferences && (
+          <>
+            <Select
+              value={`${viewPreferences.sort}-${viewPreferences.sortDirection}`}
+              onValueChange={(v) => {
+                const [sort, dir] = v.split('-') as [DashboardSortField, SortDirection];
+                viewPreferences.onSortChange(sort, dir);
+              }}
+            >
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="score-desc">Score (high first)</SelectItem>
+                <SelectItem value="score-asc">Score (low first)</SelectItem>
+                <SelectItem value="owner-asc">Owner (A–Z)</SelectItem>
+                <SelectItem value="owner-desc">Owner (Z–A)</SelectItem>
+                <SelectItem value="updated-desc">Updated (newest)</SelectItem>
+                <SelectItem value="updated-asc">Updated (oldest)</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={viewPreferences.filterUpdateType}
+              onValueChange={viewPreferences.onFilterUpdateTypeChange}
+            >
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Update type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Any activity</SelectItem>
+                <SelectItem value="recent">Updated last 7 days</SelectItem>
+              </SelectContent>
+            </Select>
+            {viewPreferences.onResetToDefault && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={viewPreferences.onResetToDefault}
+                className="gap-1.5"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Reset view
+              </Button>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

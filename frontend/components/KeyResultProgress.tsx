@@ -2,6 +2,8 @@
 
 import { useState, FormEvent } from 'react';
 import { api, KeyResult } from '@/lib/api';
+import { ErrorMessage } from '@/components/shared/ErrorMessage';
+import { InlineHelp } from '@/components/shared/InlineHelp';
 
 interface KeyResultProgressProps {
   keyResult: KeyResult;
@@ -70,7 +72,10 @@ export default function KeyResultProgress({ keyResult, onUpdate }: KeyResultProg
           Current: {keyResult.currentValue} {keyResult.unit || ''}
         </p>
       )}
-      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+      {error && <ErrorMessage message={error} className="mt-2" />}
+      <InlineHelp learnMoreHref="/docs#scoring" className="mt-2">
+        Score is 0–100% of target achieved. Enter a number and click Save.
+      </InlineHelp>
       <form onSubmit={handleSaveScore} className="mt-2 flex items-center gap-2">
         <label className="text-sm text-gray-600">Score (0–100):</label>
         <input

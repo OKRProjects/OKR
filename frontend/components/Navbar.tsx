@@ -60,6 +60,12 @@ export default function Navbar() {
                   Dashboard
                 </Link>
                 <Link
+                  href="/docs"
+                  className="text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Docs
+                </Link>
+                <Link
                   href="/profile"
                   className="text-slate-500 hover:text-slate-700 hover:bg-slate-200/60 px-3 py-2 rounded-md text-sm font-medium"
                 >

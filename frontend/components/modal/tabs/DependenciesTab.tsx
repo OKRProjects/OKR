@@ -130,8 +130,9 @@ export function DependenciesTab({
           <Button
             variant="ghost"
             size="sm"
-            className="text-destructive hover:text-destructive"
+            className="text-destructive hover:text-destructive min-h-[44px] min-w-[44px] touch-manipulation"
             onClick={() => handleRemoveLink(dep._id!)}
+            aria-label="Remove link"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -155,6 +156,7 @@ export function DependenciesTab({
               <Button
                 variant="outline"
                 size="sm"
+                className="min-h-[44px] touch-manipulation"
                 onClick={() => {
                   setSearchOpen((o) => !o);
                   if (!searchOpen) loadCandidates();
@@ -183,7 +185,7 @@ export function DependenciesTab({
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="w-full justify-start text-left"
+                            className="w-full justify-start text-left min-h-[44px] touch-manipulation"
                             onClick={() => o._id && handleAddLink(o._id)}
                           >
                             {o.title} {o.division && `(${o.division})`}

@@ -137,41 +137,57 @@ export function UpdatesTab({ objective, readOnly }: UpdatesTabProps) {
           ) : feed.length === 0 ? (
             <p className="text-sm text-muted-foreground">No comments or status changes yet.</p>
           ) : (
-            <ul className="space-y-4">
-              {feed.map((item) => (
-                <li key={`${item.type}-${item.id}`} className="flex gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
-                    {item.type === 'comment' ? (
-                      <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <GitBranch className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2 text-sm">
-                      <span className="font-medium flex items-center gap-1">
-                        <User className="h-3 w-3" />
-                        {displayActor(item.type === 'comment' ? item.authorId : item.actorId)}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {formatDate(item.type === 'comment' ? item.createdAt : item.timestamp)}
-                      </span>
+            <>
+              <ul className="space-y-4">
+                {(showAllActivity ? feed : feed.slice(0, ACTIVITY_PREVIEW)).map((item) => (
+                  <li key={`${item.type}-${item.id}`} className="flex gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
+                      {item.type === 'comment' ? (
+                        <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <GitBranch className="h-4 w-4 text-muted-foreground" />
+                      )}
                     </div>
-                    {item.type === 'comment' ? (
-                      <p className="mt-1 text-sm">{item.body}</p>
-                    ) : (
-                      <p className="mt-1 text-sm">
-                        Status: <span className="font-medium">{item.fromStatus}</span> →{' '}
-                        <span className="font-medium">{item.toStatus}</span>
-                        {item.reason && (
-                          <span className="text-muted-foreground"> — {item.reason}</span>
-                        )}
-                      </p>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <span className="font-medium flex items-center gap-1">
+                          <User className="h-3 w-3" />
+                          {displayActor(item.type === 'comment' ? item.authorId : item.actorId)}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {formatDate(item.type === 'comment' ? item.createdAt : item.timestamp)}
+                        </span>
+                      </div>
+                      {item.type === 'comment' ? (
+                        <p className="mt-1 text-sm break-words">{item.body}</p>
+                      ) : (
+                        <p className="mt-1 text-sm">
+                          Status: <span className="font-medium">{item.fromStatus}</span> →{' '}
+                          <span className="font-medium">{item.toStatus}</span>
+                          {item.reason && (
+                            <span className="text-muted-foreground"> — {item.reason}</span>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              {feed.length > ACTIVITY_PREVIEW && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="mt-2 min-h-[44px] touch-manipulation"
+                  onClick={() => setShowAllActivity((v) => !v)}
+                >
+                  {showAllActivity ? (
+                    <>Show less <ChevronUp className="h-4 w-4 ml-1" /></>
+                  ) : (
+                    <>Show more ({feed.length - ACTIVITY_PREVIEW} more) <ChevronDown className="h-4 w-4 ml-1" /></>
+                  )}
+                </Button>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

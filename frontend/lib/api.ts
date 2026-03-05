@@ -587,4 +587,133 @@ export const api = {
   async deleteAttachment(attachmentId: string): Promise<void> {
     return fetchWithAuth(`/api/attachments/${attachmentId}`, { method: 'DELETE' });
   },
+
+  /** Create shareable link for an objective. Returns { token, url, expiresAt }. */
+  async createShareLink(objectiveId: string, options?: { expiresInDays?: number }): Promise<{ token: string; url: string; expiresAt?: string | null }> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/share-links`, {
+      method: 'POST',
+      body: JSON.stringify(options ?? {}),
+    });
+  },
+
+  /** List share links for an objective. */
+  async getShareLinks(objectiveId: string): Promise<Array<{ token: string; url: string; createdAt?: string; expiresAt?: string | null }>> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/share-links`);
+  },
+
+  /** Revoke a share link. */
+  async revokeShareLink(token: string): Promise<void> {
+    return fetchWithAuth(`/api/share-links/${token}`, { method: 'DELETE' });
+  },
+
+  /** Get current user outgoing webhook config (masked). */
+  async getOutgoingConfig(): Promise<{ webhookUrlMasked?: string | null; channelType?: string | null; channelDisplayName?: string | null; configured: boolean }> {
+    return fetchWithAuth('/api/integrations/outgoing');
+  },
+
+  /** Save Slack/Teams webhook. Body: { webhookUrl, channelType?, channelDisplayName? }. */
+  async saveOutgoingConfig(body: { webhookUrl: string; channelType?: 'slack' | 'teams'; channelDisplayName?: string }): Promise<{ message: string; configured: boolean }> {
+    return fetchWithAuth('/api/integrations/outgoing', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  /** Send test message to configured webhook. */
+  async testOutgoingWebhook(): Promise<{ message: string }> {
+    return fetchWithAuth('/api/integrations/outgoing/test', { method: 'POST' });
+  },
+
+  /** Get incoming webhook URL for the current user (for automation tools). */
+  async getIncomingWebhookUrl(): Promise<{ url: string }> {
+    return fetchWithAuth('/api/integrations/incoming-url');
+  },
+
+  /** Get Google OAuth URL to connect account for Slides export. */
+  async getGoogleAuthUrl(): Promise<{ url: string }> {
+    return fetchWithAuth('/api/integrations/google/auth-url');
+  },
+
+  /** Create Google Slides presentation from OKR tree. Body: { treeRootId } or { objectiveIds: string[] }. */
+  async exportToGoogleSlides(body: { treeRootId?: string; objectiveIds?: string[] }): Promise<{ presentationId: string; link: string }> {
+    return fetchWithAuth('/api/integrations/google/export', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  /** Post current OKR summary to configured Slack/Teams channel. */
+  async postUpdateToChannel(objectiveId: string): Promise<{ message: string }> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/post-update`, { method: 'POST' });
+  },
+
+  /** Resolve share token (public, no auth). Returns { objective, keyResults }. */
+  async getShareByToken(token: string): Promise<{ objective: Objective; keyResults: KeyResult[] }> {
+    const res = await fetch(`${API_URL}/api/shares/${encodeURIComponent(token)}`, { credentials: 'include' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Failed to load shared OKR: ${res.status}`);
+    }
+    return res.json();
+  },
+
+  /**
+   * Trigger download of OKR export (JSON, Excel, or PDF). Uses current filters. view_only users get 403.
+   */
+  async exportObjectivesDownload(params: {
+    format: 'json' | 'xlsx' | 'pdf';
+    tree?: boolean;
+    fiscalYear?: number;
+    level?: string;
+    division?: string;
+    status?: string;
+    ownerId?: string;
+    parentObjectiveId?: string | null;
+  }): Promise<void> {
+    const search = new URLSearchParams();
+    search.set('format', params.format);
+    if (params.tree) search.set('tree', '1');
+    if (params.fiscalYear != null) search.set('fiscalYear', String(params.fiscalYear));
+    if (params.level) search.set('level', params.level);
+    if (params.division) search.set('division', params.division);
+    if (params.status) search.set('status', params.status);
+    if (params.ownerId) search.set('ownerId', params.ownerId);
+    if (params.parentObjectiveId !== undefined) search.set('parentObjectiveId', params.parentObjectiveId ?? '');
+    const url = `${API_URL}/api/objectives/export?${search.toString()}`;
+    const token = await getAccessToken();
+    if (!token) throw new Error('Unable to get access token.');
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || err.message || `Export failed: ${response.status}`);
+    }
+    const contentType = response.headers.get('content-type') || '';
+    const disposition = response.headers.get('content-disposition') || '';
+    const match = disposition.match(/filename="?([^";]+)"?/);
+    const defaultNames: Record<string, string> = {
+      json: 'okrs_export.json',
+      xlsx: 'okrs_export.xlsx',
+      pdf: 'okrs_export.pdf',
+    };
+    const filename = match ? match[1] : defaultNames[params.format];
+    if (params.format === 'json' || contentType.includes('application/json')) {
+      const data = await response.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } else {
+      const blob = await response.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+  },
 };

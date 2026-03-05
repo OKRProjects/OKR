@@ -7,7 +7,9 @@ import { Button } from '@/components/ui/button';
 import { api, type Objective, type KeyResult } from '@/lib/api';
 import { OKRDetailView } from './OKRDetailView';
 import { ShortcutHelp } from '@/components/shared/ShortcutHelp';
+import { ErrorMessage } from '@/components/shared/ErrorMessage';
 import { cn } from '@/components/ui/utils';
+import { useViewRole } from '@/lib/ViewRoleContext';
 
 const VIEW_HEARTBEAT_MS = 28000;
 const LIVE_POLL_MS = 15000;
@@ -19,11 +21,11 @@ interface OKRModalProps {
 }
 
 export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
+  const { effectiveRole } = useViewRole();
   const [objective, setObjective] = useState<Objective | null>(null);
   const [keyResults, setKeyResults] = useState<KeyResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<string | undefined>(undefined);
   const [viewerCount, setViewerCount] = useState(0);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const loadingRef = useRef(false);
@@ -55,10 +57,6 @@ export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    api.getCurrentUser().then((u) => setUserRole(u?.role)).catch(() => setUserRole(undefined));
-  }, []);
 
   // Presence: register view on mount, heartbeat, leave on unmount
   useEffect(() => {
@@ -189,9 +187,9 @@ export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
             </div>
           )}
           {error && (
-            <div className="text-center text-destructive py-8">
-              {error}
-              <Button variant="outline" size="sm" className="mt-2" onClick={load}>
+            <div className="p-4">
+              <ErrorMessage message={error} learnMoreHref="/docs" />
+              <Button variant="outline" size="sm" className="mt-3 min-h-[44px] min-w-[44px] touch-manipulation" onClick={() => load()}>
                 Retry
               </Button>
             </div>
@@ -202,7 +200,7 @@ export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
               keyResults={keyResults}
               onObjectiveUpdate={(updated) => setObjective(updated)}
               onKeyResultsUpdate={() => load(false)}
-              userRole={userRole}
+              userRole={effectiveRole}
               viewerCount={viewerCount}
             />
           )}

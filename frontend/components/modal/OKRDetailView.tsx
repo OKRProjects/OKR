@@ -9,16 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Settings2, RotateCcw } from 'lucide-react';
 import { OverviewTab } from './tabs/OverviewTab';
 import { ProgressTab } from './tabs/ProgressTab';
@@ -65,19 +56,23 @@ export function OKRDetailView({
     ? preferences.lastDetailTab
     : visibleTabIds[0] ?? 'overview';
   const [activeTab, setActiveTab] = useState<(typeof TAB_IDS)[number]>(defaultTab as (typeof TAB_IDS)[number]);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
   const touchStartX = useRef<number | null>(null);
 
+  // When visible tabs change and current tab is hidden, switch to first visible
   useEffect(() => {
     if (visibleTabIds.length && !visibleTabIds.includes(activeTab)) {
       setActiveTab((visibleTabIds[0] ?? 'overview') as (typeof TAB_IDS)[number]);
     }
   }, [visibleTabIds.join(','), activeTab]);
 
+  // Restore last-selected tab from preferences when they first load (run once when defaultTab becomes available)
+  const appliedDefaultRef = useRef(false);
   useEffect(() => {
-    if (defaultTab && activeTab !== defaultTab && visibleTabIds.includes(defaultTab as (typeof TAB_IDS)[number])) {
-      setActiveTab(defaultTab as (typeof TAB_IDS)[number]);
-    }
-  }, [defaultTab]);
+    if (appliedDefaultRef.current || !defaultTab || !visibleTabIds.includes(defaultTab as (typeof TAB_IDS)[number])) return;
+    appliedDefaultRef.current = true;
+    setActiveTab(defaultTab as (typeof TAB_IDS)[number]);
+  }, [defaultTab, visibleTabIds]);
 
   const handleTabChange = useCallback(
     (value: string) => {
@@ -145,48 +140,46 @@ export function OKRDetailView({
           ))}
         </TabsList>
         {/* Customize visible sections + Reset to default */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="shrink-0 min-h-[44px] min-w-[44px" aria-label="Customize view">
-              <Settings2 className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>Visible sections</DropdownMenuLabel>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0 min-h-[44px] min-w-[44px]"
+          aria-label="Customize view"
+          aria-expanded={customizeOpen}
+          onClick={() => setCustomizeOpen((o) => !o)}
+        >
+          <Settings2 className="h-4 w-4" />
+        </Button>
+      </div>
+      {customizeOpen && (
+        <div className="mt-3 p-3 border rounded-lg bg-muted/50 space-y-3">
+          <p className="text-sm font-medium">Visible sections</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
             {TAB_IDS.map((id) => (
-              <DropdownMenuItem
+              <label
                 key={id}
-                onSelect={(e) => e.preventDefault()}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 cursor-pointer text-sm"
               >
-                <Checkbox
-                  id={`visible-${id}`}
+                <input
+                  type="checkbox"
                   checked={preferences.visibleTabs[id] !== false}
-                  onCheckedChange={(checked) => {
+                  onChange={(e) => {
                     updatePreferences({
-                      visibleTabs: { [id]: checked !== false },
+                      visibleTabs: { [id]: e.target.checked },
                     });
                   }}
+                  className="rounded border-input h-4 w-4"
                 />
-                <label htmlFor={`visible-${id}`} className="cursor-pointer flex-1">
-                  {TAB_LABELS[id]}
-                </label>
-              </DropdownMenuItem>
+                {TAB_LABELS[id]}
+              </label>
             ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onSelect={(e) => {
-                e.preventDefault();
-                resetToDefault();
-              }}
-              className="gap-2"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Reset to default
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => resetToDefault()} className="gap-2">
+            <RotateCcw className="h-4 w-4" />
+            Reset to default
+          </Button>
+        </div>
+      )}
 
       {/* Swipeable content area for mobile */}
       <div
@@ -222,7 +215,11 @@ export function OKRDetailView({
         )}
         {visibleTabIds.includes('history') && (
           <TabsContent value="history" className="mt-0">
-            <HistoryTab objective={objective} eventTypeFilter={preferences.historyEventTypeFilter} onEventTypeFilterChange={(v) => updatePreferences({ historyEventTypeFilter: v })} />
+            <HistoryTab
+            objective={objective}
+            eventTypeFilter={preferences.historyEventTypeFilter}
+            onEventTypeFilterChange={(v) => updatePreferences({ historyEventTypeFilter: v })}
+          />
           </TabsContent>
         )}
         {visibleTabIds.includes('dependencies') && (

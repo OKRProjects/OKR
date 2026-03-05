@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScoreSlider } from '@/components/shared/ScoreSlider';
@@ -17,6 +17,8 @@ import {
 } from 'recharts';
 import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, AlertTriangle, Pencil } from 'lucide-react';
 import { cn } from '@/components/ui/utils';
+import { InlineHelp } from '@/components/shared/InlineHelp';
+import { EmptyState } from '@/components/shared/EmptyState';
 
 interface ProgressTabProps {
   objective: Objective;
@@ -207,6 +209,9 @@ function KRProgressRow({
           )}
           {!readOnly && (
             <>
+              <InlineHelp learnMoreHref="/docs#scoring" className="mb-3">
+                Score is 0–100% of target achieved. Update regularly so roll-ups and dashboards stay accurate. Use 10% steps.
+              </InlineHelp>
               <div className="flex flex-wrap items-end gap-4">
                 <div ref={sliderContainerRef} className="min-w-0 flex-1">
                   <label className="block text-sm font-medium text-muted-foreground mb-1">Score (0–100%)</label>

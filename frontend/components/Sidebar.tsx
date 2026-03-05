@@ -9,22 +9,33 @@ import {
   Settings,
   Plus,
   TrendingUp,
-  Users,
   Calendar,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  BookOpen,
+  Plug,
+  Eye,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from './ui/utils';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { api } from '@/lib/api';
+import { useViewRole, type ViewRole } from '@/lib/ViewRoleContext';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface SidebarProps {
   onNewObjective?: () => void;
 }
 
 export function Sidebar({ onNewObjective }: SidebarProps) {
+  const { effectiveRole, setEffectiveRole } = useViewRole();
   const [collapsed, setCollapsed] = useState(false);
   const [stats, setStats] = useState({
     strategic: 0,
@@ -39,6 +50,8 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
     { id: 'objectives', name: 'Objectives', icon: Target, href: '/okrs' },
     { id: 'analytics', name: 'Analytics', icon: BarChart3, href: '/analytics' },
     { id: 'divisions', name: 'By Division', icon: Building2, href: '/divisions' },
+    { id: 'docs', name: 'Documentation', icon: BookOpen, href: '/docs' },
+    { id: 'integrations', name: 'Integrations', icon: Plug, href: '/integrations' },
     { id: 'profile', name: 'Settings', icon: Settings, href: '/profile' },
   ];
 
@@ -91,6 +104,9 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
     }
     if (href === '/divisions') {
       return pathname === '/divisions';
+    }
+    if (href === '/integrations') {
+      return pathname === '/integrations';
     }
     if (href === '/profile') {
       return pathname === '/profile';
@@ -163,6 +179,28 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
           );
         })}
       </nav>
+
+      {/* View as (role switcher) */}
+      {!collapsed && (
+        <div className="border-t p-4">
+          <h3 className="mb-2 text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1.5">
+            <Eye className="h-3.5 w-3.5" />
+            View as
+          </h3>
+          <Select
+            value={effectiveRole}
+            onValueChange={(v) => setEffectiveRole(v as ViewRole)}
+          >
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="developer">Developer</SelectItem>
+              <SelectItem value="view_only">View only</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {/* Quick Stats */}
       {!collapsed && (

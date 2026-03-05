@@ -5,16 +5,24 @@ import { getCurrentUser, login, User } from '@/lib/auth';
 import { useParams, useRouter } from 'next/navigation';
 import { AppLayout } from '@/components/AppLayout';
 import { OKRDetailView } from '@/components/modal/OKRDetailView';
+import { ShortcutHelp } from '@/components/shared/ShortcutHelp';
 import { api, Objective, KeyResult } from '@/lib/api';
+import { useViewRole } from '@/lib/ViewRoleContext';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { Link2, HelpCircle, Share2, Send } from 'lucide-react';
 
 export default function ObjectiveDetailPage() {
+  const { effectiveRole } = useViewRole();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [objective, setObjective] = useState<Objective | null>(null);
   const [keyResults, setKeyResults] = useState<KeyResult[]>([]);
   const [viewerCount, setViewerCount] = useState(0);
+  const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
+  const [shareLinkUrl, setShareLinkUrl] = useState<string | null>(null);
+  const [shareCreating, setShareCreating] = useState(false);
+  const [postingUpdate, setPostingUpdate] = useState(false);
   const loadingRef = useRef(false);
   const params = useParams();
   const router = useRouter();
@@ -96,6 +104,24 @@ export default function ObjectiveDetailPage() {
     return () => clearInterval(interval);
   }, [id, objective?.updatedAt]);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (shortcutHelpOpen) setShortcutHelpOpen(false);
+        else router.push('/okrs');
+      }
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const target = e.target as HTMLElement;
+        if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+          setShortcutHelpOpen((open) => !open);
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [router, shortcutHelpOpen]);
+
   const loadUser = async () => {
     try {
       const currentUser = await getCurrentUser();
@@ -137,12 +163,93 @@ export default function ObjectiveDetailPage() {
               <Link href={`/okrs/tree/${objective._id}`}>Roll-up view</Link>
             </Button>
           )}
+          {id && (
+            <>
+              <Button
+                variant="outline"
+                size="icon"
+                disabled={shareCreating}
+                onClick={async () => {
+                  setShareCreating(true);
+                  try {
+                    const res = await api.createShareLink(id);
+                    setShareLinkUrl(res.url);
+                    await navigator.clipboard.writeText(res.url);
+                  } catch (e) {
+                    console.error('Create share link failed', e);
+                  } finally {
+                    setShareCreating(false);
+                  }
+                }}
+                aria-label="Create shareable link"
+                title="Create shareable link (copy to clipboard)"
+              >
+                <Share2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                disabled={postingUpdate}
+                onClick={async () => {
+                  if (!id) return;
+                  setPostingUpdate(true);
+                  try {
+                    await api.postUpdateToChannel(id);
+                    alert('Update posted to your configured channel.');
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : 'Failed to post update');
+                  } finally {
+                    setPostingUpdate(false);
+                  }
+                }}
+                aria-label="Post update to Slack/Teams"
+                title="Post update to Slack/Teams"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => {
+                  const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/okrs/${id}`;
+                  navigator.clipboard.writeText(url).then(() => {}).catch(() => {});
+                }}
+                aria-label="Copy link"
+                title="Copy link"
+              >
+                <Link2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setShortcutHelpOpen(true)}
+                aria-label="Keyboard shortcuts"
+                title="Shortcuts (?)"
+              >
+                <HelpCircle className="h-4 w-4" />
+              </Button>
+            </>
+          )}
           {viewerCount > 1 && (
             <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
               {viewerCount - 1} other{viewerCount - 1 !== 1 ? 's' : ''} viewing
             </span>
           )}
+          {shareLinkUrl && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Share link copied.</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShareLinkUrl(null)}
+                aria-label="Dismiss"
+              >
+                Dismiss
+              </Button>
+            </div>
+          )}
         </div>
+        <ShortcutHelp open={shortcutHelpOpen} onClose={() => setShortcutHelpOpen(false)} />
         <OKRDetailView
           objective={objective}
           keyResults={keyResults}
@@ -150,7 +257,7 @@ export default function ObjectiveDetailPage() {
           onKeyResultsUpdate={() => {
             loadKeyResults();
           }}
-          userRole={user?.role}
+          userRole={effectiveRole}
           viewerCount={viewerCount}
         />
       </div>

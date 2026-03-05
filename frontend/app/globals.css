@@ -178,3 +178,10 @@
     line-height: 1.5;
   }
 }
+
+/* Mobile: reduce tap delay and ensure touch targets */
+@media (pointer: coarse) {
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+}

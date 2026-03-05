@@ -5,14 +5,15 @@ ROLE_ADMIN = 'admin'
 ROLE_LEADER = 'leader'
 ROLE_STANDARD = 'standard'
 ROLE_VIEW_ONLY = 'view_only'
+ROLE_DEVELOPER = 'developer'
 
 
 def get_user_role(db, user_id: str) -> str:
-    """Get role for user_id (Auth0 sub). Returns view_only if not in users collection."""
+    """Get role for user_id (Auth0 sub). Returns developer if not in users collection or no role."""
     user = db.users.find_one({'_id': user_id})
     if not user:
-        return ROLE_VIEW_ONLY
-    return user.get('role', ROLE_STANDARD)
+        return ROLE_DEVELOPER
+    return user.get('role', ROLE_DEVELOPER)
 
 
 def get_user_department_id(db, user_id: str) -> Optional[str]:
@@ -60,7 +61,7 @@ def can_edit_kr(db, user_id: str, kr: dict, objective: Optional[dict] = None) ->
 
 
 def can_submit_for_review(db, user_id: str, objective: dict) -> bool:
-    """Submit for review: owner, leader, admin."""
+    """Submit for review: owner, leader, admin, developer/standard."""
     role = get_user_role(db, user_id)
     if role in (ROLE_ADMIN, ROLE_LEADER):
         return True
@@ -101,3 +102,20 @@ def can_delete_objective(db, user_id: str, objective: dict) -> bool:
     obj_dept = objective.get('departmentId')
     user_dept = get_user_department_id(db, user_id)
     return obj_dept and user_dept and str(obj_dept) == user_dept
+
+
+def can_create_share_link(db, user_id: str, objective: dict) -> bool:
+    """True if user can create a share link for this objective. Not view_only; admin, leader, owner, or leader in same dept."""
+    role = get_user_role(db, user_id)
+    if role == ROLE_VIEW_ONLY:
+        return False
+    if role == ROLE_ADMIN:
+        return True
+    if objective.get('ownerId') == user_id:
+        return True
+    if role == ROLE_LEADER:
+        obj_dept = objective.get('departmentId')
+        user_dept = get_user_department_id(db, user_id)
+        if obj_dept and user_dept and str(obj_dept) == user_dept:
+            return True
+    return False
