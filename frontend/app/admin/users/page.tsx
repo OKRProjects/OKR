@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { getCurrentUser, login, User } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
+import { useViewRole } from '@/lib/ViewRoleContext';
 import { AppLayout } from '@/components/AppLayout';
 import { api } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -95,6 +96,7 @@ function UserRow({
 }
 
 export default function AdminUsersPage() {
+  const { roleForUI } = useViewRole();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [users, setUsers] = useState<UserRecord[]>([]);
@@ -102,16 +104,17 @@ export default function AdminUsersPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const canAccessAsAdmin = user?.role === 'admin' || roleForUI === 'admin';
 
   useEffect(() => {
     loadUser();
   }, []);
 
   useEffect(() => {
-    if (user?.role === 'admin') {
+    if (canAccessAsAdmin) {
       loadUsers();
     }
-  }, [user?.role]);
+  }, [canAccessAsAdmin]);
 
   const loadUser = async () => {
     try {
@@ -121,7 +124,7 @@ export default function AdminUsersPage() {
         return;
       }
       setUser(currentUser);
-      if (currentUser.role !== 'admin') {
+      if (currentUser.role !== 'admin' && roleForUI !== 'admin') {
         router.replace('/dashboard');
         return;
       }
@@ -180,13 +183,18 @@ export default function AdminUsersPage() {
     );
   }
 
-  if (user.role !== 'admin') {
+  if (!canAccessAsAdmin) {
     return null;
   }
 
   return (
     <AppLayout title="User management" description="Manage user roles and departments (admin only)">
       <div className="space-y-6">
+        {roleForUI === 'admin' && user?.role !== 'admin' && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+            Testing as <strong>Admin</strong>. List and save will return 403 unless your real role is admin.
+          </div>
+        )}
         {error && (
           <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {error}

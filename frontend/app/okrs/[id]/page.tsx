@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Link2, HelpCircle, Share2, Send } from 'lucide-react';
 
 export default function ObjectiveDetailPage() {
-  const { effectiveRole } = useViewRole();
+  const { effectiveRole, userForPermissions } = useViewRole();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [objective, setObjective] = useState<Objective | null>(null);
@@ -257,7 +257,7 @@ export default function ObjectiveDetailPage() {
           onKeyResultsUpdate={() => {
             loadKeyResults();
           }}
-          user={user}
+          user={userForPermissions ?? user}
           effectiveRole={effectiveRole}
           viewerCount={viewerCount}
         />

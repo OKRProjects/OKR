@@ -21,7 +21,7 @@ interface OKRModalProps {
 }
 
 export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
-  const { effectiveRole, user } = useViewRole();
+  const { effectiveRole, userForPermissions } = useViewRole();
   const [objective, setObjective] = useState<Objective | null>(null);
   const [keyResults, setKeyResults] = useState<KeyResult[]>([]);
   const [loading, setLoading] = useState(true);
@@ -228,7 +228,7 @@ export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
               keyResults={keyResults}
               onObjectiveUpdate={(updated) => setObjective(updated)}
               onKeyResultsUpdate={() => load(false)}
-              user={user}
+              user={userForPermissions}
               effectiveRole={effectiveRole}
               viewerCount={viewerCount}
             />

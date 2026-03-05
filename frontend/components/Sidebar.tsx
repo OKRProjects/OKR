@@ -22,7 +22,7 @@ import { cn } from './ui/utils';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { api } from '@/lib/api';
-import { useViewRole, type ViewRole } from '@/lib/ViewRoleContext';
+import { useViewRole } from '@/lib/ViewRoleContext';
 import {
   Select,
   SelectContent,
@@ -36,8 +36,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onNewObjective }: SidebarProps) {
-  const { effectiveRole, setEffectiveRole, user } = useViewRole();
-  const role = user?.role;
+  const { setRolePreview, roleForUI, rolePreview } = useViewRole();
+  const role = roleForUI;
   const [collapsed, setCollapsed] = useState(false);
   const [stats, setStats] = useState({
     strategic: 0,
@@ -259,23 +259,27 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
         </div>
       )}
 
-      {/* View as (admin only - for testing) */}
-      {!collapsed && role === 'admin' && (
+      {/* Test role — switch between roles to test UI and permissions */}
+      {!collapsed && (
         <div className="border-t p-4">
           <h3 className="mb-2 text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1.5">
             <Eye className="h-3.5 w-3.5" />
-            View as
+            Test role
           </h3>
           <Select
-            value={effectiveRole}
-            onValueChange={(v) => setEffectiveRole(v as ViewRole)}
+            value={rolePreview ?? 'actual'}
+            onValueChange={(v) => setRolePreview(v === 'actual' ? null : (v as 'admin' | 'leader' | 'standard' | 'view_only' | 'developer'))}
           >
             <SelectTrigger className="h-9 text-xs">
-              <SelectValue />
+              <SelectValue placeholder="Actual (my real role)" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="developer">Developer</SelectItem>
+              <SelectItem value="actual">Actual (my real role)</SelectItem>
               <SelectItem value="view_only">View only</SelectItem>
+              <SelectItem value="standard">Standard</SelectItem>
+              <SelectItem value="leader">Leader</SelectItem>
+              <SelectItem value="admin">Admin</SelectItem>
+              <SelectItem value="developer">Developer</SelectItem>
             </SelectContent>
           </Select>
         </div>

@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { getCurrentUser, clearUserCache, type User } from '@/lib/auth';
 
 const VIEW_AS_KEY = 'viewAsRole';
+const ROLE_PREVIEW_KEY = 'okrRolePreview';
 
 export type ViewRole = 'developer' | 'view_only';
 
@@ -16,6 +17,14 @@ type ViewRoleContextValue = {
   /** Current user from backend (role, departmentId). Refetched on focus so permission changes apply. */
   user: User | null;
   refetchUser: () => Promise<void>;
+  /** Role used for UI (nav, dashboard, permissions). When set, overrides real role for testing. */
+  roleForUI: string | undefined;
+  /** Set role preview for testing (null = use actual role). Persisted in localStorage. */
+  setRolePreview: (role: AppRole | null) => void;
+  /** Current role preview override (null = using actual role). */
+  rolePreview: AppRole | null;
+  /** User with role overridden for permission checks when testing. Use this when passing "user" to permission-sensitive components. */
+  userForPermissions: User | null;
 };
 
 const ViewRoleContext = createContext<ViewRoleContextValue | null>(null);
@@ -27,9 +36,17 @@ function getStoredViewRole(): ViewRole | null {
   return null;
 }
 
+function getStoredRolePreview(): AppRole | null {
+  if (typeof window === 'undefined') return null;
+  const v = localStorage.getItem(ROLE_PREVIEW_KEY);
+  if (v === 'admin' || v === 'leader' || v === 'standard' || v === 'view_only' || v === 'developer') return v;
+  return null;
+}
+
 export function ViewRoleProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [override, setOverrideState] = useState<ViewRole | null>(() => getStoredViewRole());
+  const [rolePreview, setRolePreviewState] = useState<AppRole | null>(() => getStoredRolePreview());
 
   const refetchUser = useCallback(async () => {
     try {
@@ -60,12 +77,37 @@ export function ViewRoleProvider({ children }: { children: React.ReactNode }) {
     setOverrideState(role);
   }, []);
 
+  const setRolePreview = useCallback((role: AppRole | null) => {
+    if (typeof window !== 'undefined') {
+      if (role) localStorage.setItem(ROLE_PREVIEW_KEY, role);
+      else localStorage.removeItem(ROLE_PREVIEW_KEY);
+    }
+    setRolePreviewState(role);
+  }, []);
+
   const actualRole = user?.role;
+  const roleForUI = rolePreview ?? actualRole;
   const effectiveRole: ViewRole =
-    override ?? (actualRole === 'view_only' ? 'view_only' : 'developer');
+    override ?? (roleForUI === 'view_only' ? 'view_only' : 'developer');
+  const userForPermissions: User | null =
+    user && rolePreview
+      ? { ...user, role: rolePreview }
+      : user;
 
   return (
-    <ViewRoleContext.Provider value={{ effectiveRole, setEffectiveRole, actualRole, user, refetchUser }}>
+    <ViewRoleContext.Provider
+      value={{
+        effectiveRole,
+        setEffectiveRole,
+        actualRole,
+        user,
+        refetchUser,
+        roleForUI,
+        setRolePreview,
+        rolePreview,
+        userForPermissions,
+      }}
+    >
       {children}
     </ViewRoleContext.Provider>
   );
@@ -80,6 +122,10 @@ export function useViewRole(): ViewRoleContextValue {
       actualRole: undefined,
       user: null,
       refetchUser: async () => {},
+      roleForUI: undefined,
+      setRolePreview: () => {},
+      rolePreview: null,
+      userForPermissions: null,
     };
   }
   return ctx;

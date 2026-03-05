@@ -43,9 +43,11 @@ interface FilterBarProps {
   divisions: string[];
   /** When provided, show sort, update-type filter, and Reset to default (saved to profile) */
   viewPreferences?: ViewPreferencesBarProps;
+  /** When true, only show search (e.g. view-only role) */
+  minimal?: boolean;
 }
 
-export function FilterBar({ filters, onFiltersChange, divisions, viewPreferences }: FilterBarProps) {
+export function FilterBar({ filters, onFiltersChange, divisions, viewPreferences, minimal }: FilterBarProps) {
   const set = (key: keyof DashboardFilters, value: string) => {
     onFiltersChange({ ...filters, [key]: value });
   };
@@ -61,6 +63,7 @@ export function FilterBar({ filters, onFiltersChange, divisions, viewPreferences
           className="pl-9"
         />
       </div>
+      {!minimal && (
       <div className="flex flex-wrap items-center gap-2">
         <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
         <Select value={filters.tier} onValueChange={(v) => set('tier', v)}>
@@ -157,6 +160,7 @@ export function FilterBar({ filters, onFiltersChange, divisions, viewPreferences
           </>
         )}
       </div>
+      )}
     </div>
   );
 }

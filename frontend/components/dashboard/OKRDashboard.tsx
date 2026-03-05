@@ -2,58 +2,20 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { api, Objective, KeyResult } from '@/lib/api';
-import { OKRModal } from '@/components/modal/OKRModal';
-import { PresentationMode, type PresentationSlide } from '@/components/presentation/PresentationMode';
-import { DashboardHeader } from './DashboardHeader';
-import { FilterBar, defaultFilters, type DashboardFilters } from './FilterBar';
-import { TierSection } from './TierSection';
-import { Button } from '@/components/ui/button';
-import { Presentation, HelpCircle, Download, ClipboardCheck } from 'lucide-react';
-import { EmptyState } from '@/components/shared/EmptyState';
-import { TutorialOverlay } from '@/components/shared/TutorialOverlay';
-import { useFirstTimeTutorial, getDashboardTutorialSteps } from '@/lib/tutorial';
+import { type PresentationSlide } from '@/components/presentation/PresentationMode';
+import { defaultFilters, type DashboardFilters } from './FilterBar';
+import { useFirstTimeTutorial } from '@/lib/tutorial';
 import { useViewPreferences } from '@/lib/useViewPreferences';
 import { useViewRole } from '@/lib/ViewRoleContext';
-
-function getDaysLeftInQuarter(): number {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const q = Math.floor(month / 3) + 1;
-  const quarterEnd = new Date(year, q * 3, 0);
-  const diff = quarterEnd.getTime() - now.getTime();
-  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-}
-
-function filterObjective(
-  obj: Objective,
-  scoreMap: Record<string, number>,
-  filters: DashboardFilters
-): boolean {
-  if (filters.search) {
-    const q = filters.search.toLowerCase();
-    if (
-      !obj.title?.toLowerCase().includes(q) &&
-      !obj.description?.toLowerCase().includes(q) &&
-      !obj.division?.toLowerCase().includes(q)
-    ) {
-      return false;
-    }
-  }
-  if (filters.tier !== 'all' && obj.level !== filters.tier) return false;
-  if (filters.division !== 'all' && obj.division !== filters.division) return false;
-  if (filters.status !== 'all' && (obj.status ?? 'draft') !== filters.status) return false;
-  if (filters.scoreRange !== 'all' && obj._id) {
-    const s = scoreMap[obj._id] ?? 0;
-    if (filters.scoreRange === 'on_track' && s < 0.7) return false;
-    if (filters.scoreRange === 'at_risk' && (s < 0.4 || s >= 0.7)) return false;
-    if (filters.scoreRange === 'off_track' && s >= 0.4) return false;
-  }
-  return true;
-}
+import { filterObjective, getDaysLeftInQuarter, type DashboardViewProps } from './dashboardShared';
+import { ViewOnlyDashboardView } from './ViewOnlyDashboardView';
+import { StandardDashboardView } from './StandardDashboardView';
+import { LeaderDashboardView } from './LeaderDashboardView';
+import { FullDashboardView } from './FullDashboardView';
 
 export function OKRDashboard() {
-  const { user } = useViewRole();
+  const { userForPermissions } = useViewRole();
+  const user = userForPermissions;
   const role = user?.role;
   const fiscalYear = new Date().getFullYear();
   const [objectives, setObjectives] = useState<Objective[]>([]);
@@ -66,6 +28,8 @@ export function OKRDashboard() {
   const { preferences, updatePreferences, resetToDefault } = useViewPreferences();
   const { shouldShowTutorial, dismissTutorial } = useFirstTimeTutorial('dashboard');
   const [showTutorial, setShowTutorial] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportingSlides, setExportingSlides] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,9 +82,10 @@ export function OKRDashboard() {
     let list = [...filtered];
     const sort = preferences.dashboardSort;
     const dir = preferences.dashboardSortDirection;
-    const cutoff = preferences.dashboardFilterUpdateType === 'recent'
-      ? Date.now() - 7 * 24 * 60 * 60 * 1000
-      : 0;
+    const cutoff =
+      preferences.dashboardFilterUpdateType === 'recent'
+        ? Date.now() - 7 * 24 * 60 * 60 * 1000
+        : 0;
     if (cutoff > 0) {
       list = list.filter((o) => {
         const u = o.updatedAt ? new Date(o.updatedAt).getTime() : 0;
@@ -145,7 +110,13 @@ export function OKRDashboard() {
       return dir === 'asc' ? cmp : -cmp;
     });
     return list;
-  }, [filtered, preferences.dashboardSort, preferences.dashboardSortDirection, preferences.dashboardFilterUpdateType, scoreByObjectiveId]);
+  }, [
+    filtered,
+    preferences.dashboardSort,
+    preferences.dashboardSortDirection,
+    preferences.dashboardFilterUpdateType,
+    scoreByObjectiveId,
+  ]);
 
   const strategic = useMemo(
     () => filteredAndSorted.filter((o) => o.level === 'strategic' && !o.parentObjectiveId),
@@ -169,6 +140,30 @@ export function OKRDashboard() {
     );
   }, [objectives, role, user?.departmentId]);
 
+  const myObjectivesCount = useMemo(() => {
+    if (!user?.sub) return 0;
+    return objectives.filter((o) => o.ownerId === user.sub).length;
+  }, [objectives, user?.sub]);
+
+  const myWorkObjectives = useMemo(() => {
+    if (role !== 'standard' || !user?.sub) return [];
+    return filteredAndSorted.filter((o) => o.ownerId === user.sub);
+  }, [role, user?.sub, filteredAndSorted]);
+
+  const departmentStats = useMemo(() => {
+    if (role !== 'leader' || !user?.departmentId) return null;
+    const dept = objectives.filter(
+      (o) =>
+        o.departmentId === user.departmentId || String(o.departmentId) === user.departmentId
+    );
+    const withScores = dept.filter((o) => o._id && scoreByObjectiveId[o._id] !== undefined);
+    const onTrack = withScores.filter(
+      (o) => o._id && (scoreByObjectiveId[o._id] ?? 0) >= 0.7
+    ).length;
+    const onTrackPct = withScores.length > 0 ? (onTrack / withScores.length) * 100 : 0;
+    return { count: dept.length, onTrackPercent: onTrackPct };
+  }, [objectives, role, user?.departmentId, scoreByObjectiveId]);
+
   const handleSortChange = useCallback(
     (sort: 'score' | 'owner' | 'updated', direction: 'asc' | 'desc') => {
       updatePreferences({ dashboardSort: sort, dashboardSortDirection: direction });
@@ -185,28 +180,29 @@ export function OKRDashboard() {
     }));
   }, [strategic, divisional, tactical, scoreByObjectiveId, keyResultsByObjective]);
 
-  const [exporting, setExporting] = useState(false);
-  const [exportingSlides, setExportingSlides] = useState(false);
-  const handleExport = async (format: 'json' | 'xlsx' | 'pdf') => {
-    setExporting(true);
-    try {
-      await api.exportObjectivesDownload({
-        format,
-        fiscalYear,
-        level: filters.tier !== 'all' ? filters.tier : undefined,
-        division: filters.division !== 'all' ? filters.division : undefined,
-        status: filters.status !== 'all' ? filters.status : undefined,
-        tree: format === 'json',
-      });
-    } catch (e) {
-      console.error('Export failed', e);
-      alert(e instanceof Error ? e.message : 'Export failed');
-    } finally {
-      setExporting(false);
-    }
-  };
+  const handleExport = useCallback(
+    async (format: 'json' | 'xlsx' | 'pdf') => {
+      setExporting(true);
+      try {
+        await api.exportObjectivesDownload({
+          format,
+          fiscalYear,
+          level: filters.tier !== 'all' ? filters.tier : undefined,
+          division: filters.division !== 'all' ? filters.division : undefined,
+          status: filters.status !== 'all' ? filters.status : undefined,
+          tree: format === 'json',
+        });
+      } catch (e) {
+        console.error('Export failed', e);
+        alert(e instanceof Error ? e.message : 'Export failed');
+      } finally {
+        setExporting(false);
+      }
+    },
+    [fiscalYear, filters]
+  );
 
-  const handleExportGoogleSlides = async () => {
+  const handleExportGoogleSlides = useCallback(async () => {
     const ids = filteredAndSorted.map((o) => o._id).filter(Boolean) as string[];
     if (ids.length === 0) {
       alert('No objectives to export.');
@@ -227,7 +223,7 @@ export function OKRDashboard() {
     } finally {
       setExportingSlides(false);
     }
-  };
+  }, [filteredAndSorted]);
 
   const divisions = useMemo(() => {
     const set = new Set<string>();
@@ -260,172 +256,61 @@ export function OKRDashboard() {
     );
   }
 
-  return (
-    <div className="space-y-6">
-      {modalObjectiveId && (
-        <OKRModal
-          objectiveId={modalObjectiveId}
-          onClose={() => setModalObjectiveId(null)}
-        />
-      )}
-      {presentationActive && presentationSlides.length > 0 && (
-        <PresentationMode
-          slides={presentationSlides}
-          currentIndex={Math.min(presentationIndex, presentationSlides.length - 1)}
-          onClose={() => {
-            setPresentationActive(false);
-            setPresentationIndex(0);
-          }}
-          onPrev={() => setPresentationIndex((i) => Math.max(0, i - 1))}
-          onNext={() =>
-            setPresentationIndex((i) => Math.min(presentationSlides.length - 1, i + 1))
-          }
-          onGoToSlide={setPresentationIndex}
-        />
-      )}
-      <DashboardHeader
-        totalObjectives={stats.totalObjectives}
-        averageScore={stats.averageScore}
-        onTrackPercent={stats.onTrackPercent}
-        daysLeftInQuarter={stats.daysLeftInQuarter}
-      />
-      {role === 'leader' && needsReviewObjectives.length > 0 && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20 p-4">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-200 mb-3">
-            <ClipboardCheck className="h-4 w-4" />
-            Needs your review
-          </h2>
-          <TierSection
-            title="Pending review"
-            objectives={needsReviewObjectives}
-            scoreByObjectiveId={scoreByObjectiveId}
-            defaultExpanded
-            onOpenModal={setModalObjectiveId}
-          />
-        </div>
-      )}
-      <div className="flex flex-wrap items-center gap-4">
-        <FilterBar
-          filters={filters}
-          onFiltersChange={setFilters}
-          divisions={divisions}
-          viewPreferences={{
-            sort: preferences.dashboardSort,
-            sortDirection: preferences.dashboardSortDirection,
-            onSortChange: handleSortChange,
-            filterUpdateType: preferences.dashboardFilterUpdateType,
-            onFilterUpdateTypeChange: (v) => updatePreferences({ dashboardFilterUpdateType: v }),
-            onResetToDefault: resetToDefault,
-          }}
-        />
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowTutorial(true)}
-          className="shrink-0 text-muted-foreground hover:text-foreground"
-        >
-          <HelpCircle className="mr-2 h-4 w-4" />
-          Take the tour
-        </Button>
-        {role !== 'view_only' && (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleExport('json')}
-              disabled={exporting || filteredAndSorted.length === 0}
-              className="shrink-0"
-              title="Download as JSON (API dump)"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              JSON
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleExport('xlsx')}
-              disabled={exporting || filteredAndSorted.length === 0}
-              className="shrink-0"
-              title="Download as Excel"
-            >
-              Excel
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleExport('pdf')}
-              disabled={exporting || filteredAndSorted.length === 0}
-              className="shrink-0"
-              title="Download as PDF"
-            >
-              PDF
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportGoogleSlides}
-              disabled={exportingSlides || filteredAndSorted.length === 0}
-              className="shrink-0"
-              title="Export to Google Slides"
-            >
-              Google Slides
-            </Button>
-          </>
-        )}
-        <Button
-          variant="outline"
-          onClick={() => {
-            setPresentationIndex(0);
-            setPresentationActive(true);
-          }}
-          disabled={filteredAndSorted.length === 0}
-          className="shrink-0"
-        >
-          <Presentation className="mr-2 h-4 w-4" />
-          Present
-        </Button>
-      </div>
-      <div className="space-y-4">
-        <TierSection
-          title="Strategic (Annual)"
-          objectives={strategic}
-          scoreByObjectiveId={scoreByObjectiveId}
-          defaultExpanded
-          onOpenModal={setModalObjectiveId}
-        />
-        <TierSection
-          title="Divisional (Annual)"
-          objectives={divisional}
-          scoreByObjectiveId={scoreByObjectiveId}
-          defaultExpanded
-          onOpenModal={setModalObjectiveId}
-        />
-        <TierSection
-          title="Tactical (Quarterly)"
-          objectives={tactical}
-          scoreByObjectiveId={scoreByObjectiveId}
-          defaultExpanded
-          onOpenModal={setModalObjectiveId}
-        />
-      </div>
-      {filteredAndSorted.length === 0 && (
-        <EmptyState
-          icon={objectives.length === 0 ? 'target' : 'filter'}
-          title={objectives.length === 0 ? 'No objectives yet' : 'No objectives match your filters'}
-          description={objectives.length === 0
-            ? 'Create your first objective to get started. Use the OKRs page to add strategic, divisional, or tactical objectives.'
-            : 'Try changing or clearing filters to see more objectives.'}
-          action={objectives.length === 0 ? { label: 'Create objective', onClick: () => window.location.href = '/okrs/new' } : undefined}
-          secondaryLink={objectives.length === 0 ? { label: 'Learn more about OKRs', href: '/docs#okrs' } : undefined}
-        />
-      )}
-      {(showTutorial || (shouldShowTutorial && !modalObjectiveId && filteredAndSorted.length > 0)) && (
-        <TutorialOverlay
-          steps={getDashboardTutorialSteps()}
-          contextName="Dashboard"
-          onDismiss={() => { setShowTutorial(false); dismissTutorial(); }}
-        />
-      )}
-    </div>
-  );
+  const viewPreferences: DashboardViewProps['viewPreferences'] =
+    role === 'view_only'
+      ? undefined
+      : {
+          sort: preferences.dashboardSort,
+          sortDirection: preferences.dashboardSortDirection,
+          onSortChange: handleSortChange,
+          filterUpdateType: preferences.dashboardFilterUpdateType,
+          onFilterUpdateTypeChange: (v) => updatePreferences({ dashboardFilterUpdateType: v }),
+          onResetToDefault: resetToDefault,
+        };
+
+  const baseProps: DashboardViewProps = {
+    role: role as DashboardViewProps['role'],
+    objectives,
+    strategic,
+    divisional,
+    tactical,
+    filteredAndSorted,
+    scoreByObjectiveId,
+    stats,
+    filters,
+    setFilters,
+    divisions,
+    modalObjectiveId,
+    setModalObjectiveId,
+    presentationSlides,
+    presentationActive,
+    setPresentationActive,
+    presentationIndex,
+    setPresentationIndex,
+    needsReviewObjectives: role === 'leader' ? needsReviewObjectives : undefined,
+    myObjectivesCount: role === 'standard' ? myObjectivesCount : undefined,
+    myWorkObjectives: role === 'standard' ? myWorkObjectives : undefined,
+    departmentStats: departmentStats ?? undefined,
+    viewPreferences,
+    onExport: role !== 'view_only' ? handleExport : undefined,
+    onExportGoogleSlides: role !== 'view_only' ? handleExportGoogleSlides : undefined,
+    exporting,
+    exportingSlides,
+    onShowTutorial: role !== 'view_only' ? () => {} : undefined,
+    shouldShowTutorial,
+    onDismissTutorial: dismissTutorial,
+    showTutorial,
+    setShowTutorial,
+  };
+
+  if (role === 'view_only') {
+    return <ViewOnlyDashboardView {...baseProps} />;
+  }
+  if (role === 'standard') {
+    return <StandardDashboardView {...baseProps} />;
+  }
+  if (role === 'leader') {
+    return <LeaderDashboardView {...baseProps} />;
+  }
+  return <FullDashboardView {...baseProps} />;
 }
