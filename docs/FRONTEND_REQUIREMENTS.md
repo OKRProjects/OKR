@@ -2,6 +2,8 @@
 
 This document distils requirements from **docs/OKR_PLATFORM_BUILD_PLAN.md** (and related context) so the frontend can be refactored and redesigned while still meeting the spec. Treat this as the checklist for any redesign.
 
+**Workflow context:** How the org runs OKRs (4-step process, who owns each tier, cadence) is documented in **docs/OKR_WORKFLOW_OVERVIEW.md**. Use it to align copy, onboarding, and hierarchy labels (Strategic → Divisional → Tactical).
+
 ---
 
 ## 1. Tech stack (must keep)

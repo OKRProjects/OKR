@@ -465,3 +465,78 @@ def get_token():
         return jsonify({'error': 'No access token available'}), 401
     
     return jsonify({'accessToken': access_token}), 200
+
+
+def require_admin(f):
+    """Decorator to require authenticated admin user."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        try:
+            user_id = get_user_id_from_request()
+            from app.db.mongodb import get_db
+            from app.services.permissions import get_user_role, ROLE_ADMIN
+            db = get_db()
+            if get_user_role(db, user_id) != ROLE_ADMIN:
+                return jsonify({'error': 'Admin access required'}), 403
+            kwargs['user_id'] = user_id
+            return f(*args, **kwargs)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 401
+        except Exception as e:
+            return jsonify({'error': 'Authentication failed'}), 401
+    return decorated_function
+
+
+@bp.route('/auth/users', methods=['GET'])
+@require_admin
+def list_users(user_id):
+    """List all users (admin only). Returns _id, role, departmentId from db.users."""
+    try:
+        from app.db.mongodb import get_db
+        db = get_db()
+        cursor = db.users.find({}, {'_id': 1, 'role': 1, 'departmentId': 1, 'name': 1, 'email': 1})
+        users = []
+        for doc in cursor:
+            u = {'_id': doc['_id'], 'role': doc.get('role', 'developer')}
+            if doc.get('departmentId') is not None:
+                u['departmentId'] = str(doc['departmentId'])
+            if doc.get('name'):
+                u['name'] = doc['name']
+            if doc.get('email'):
+                u['email'] = doc['email']
+            users.append(u)
+        return jsonify(users), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/auth/users/<uid>', methods=['PATCH'])
+@require_admin
+def update_user(user_id, uid):
+    """Update a user's role and/or departmentId (admin only)."""
+    try:
+        from app.db.mongodb import get_db
+        db = get_db()
+        data = request.get_json() or {}
+        update = {}
+        if 'role' in data and data['role'] in ('admin', 'leader', 'standard', 'view_only', 'developer'):
+            update['role'] = data['role']
+        if 'departmentId' in data:
+            update['departmentId'] = data['departmentId'] if data['departmentId'] else None
+        if not update:
+            return jsonify({'error': 'No valid fields to update'}), 400
+        update['updatedAt'] = datetime.utcnow().isoformat() + 'Z'
+        result = db.users.update_one(
+            {'_id': uid},
+            {'$set': update},
+            upsert=True
+        )
+        if result.matched_count == 0 and not result.upserted_count:
+            return jsonify({'error': 'User not found'}), 404
+        updated = db.users.find_one({'_id': uid}, {'_id': 1, 'role': 1, 'departmentId': 1})
+        out = {'_id': updated['_id'], 'role': updated.get('role', 'developer')}
+        if updated.get('departmentId') is not None:
+            out['departmentId'] = str(updated['departmentId'])
+        return jsonify(out), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

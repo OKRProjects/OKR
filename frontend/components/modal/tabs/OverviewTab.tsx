@@ -27,6 +27,9 @@ interface OverviewTabProps {
   keyResults: KeyResult[];
   onObjectiveUpdate: (updated: Objective) => void;
   readOnly?: boolean;
+  canSubmit?: boolean;
+  canApproveReject?: boolean;
+  canResubmit?: boolean;
 }
 
 export function OverviewTab({
@@ -34,6 +37,9 @@ export function OverviewTab({
   keyResults,
   onObjectiveUpdate,
   readOnly,
+  canSubmit = true,
+  canApproveReject = true,
+  canResubmit = true,
 }: OverviewTabProps) {
   const [showMore, setShowMore] = useState(false);
   const [showMoreKrs, setShowMoreKrs] = useState(false);
@@ -103,11 +109,14 @@ export function OverviewTab({
                 </Button>
               )}
             </div>
-            {!readOnly && (
+            {!readOnly && (canSubmit || canApproveReject || canResubmit) && (
               <WorkflowActions
                 objective={objective}
                 onUpdate={onObjectiveUpdate}
                 onError={(msg) => console.error(msg)}
+                canSubmit={canSubmit}
+                canApproveReject={canApproveReject}
+                canResubmit={canResubmit}
               />
             )}
           </div>

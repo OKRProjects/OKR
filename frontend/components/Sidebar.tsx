@@ -15,6 +15,7 @@ import {
   BookOpen,
   Plug,
   Eye,
+  Users,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from './ui/utils';
@@ -35,7 +36,8 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onNewObjective }: SidebarProps) {
-  const { effectiveRole, setEffectiveRole } = useViewRole();
+  const { effectiveRole, setEffectiveRole, user } = useViewRole();
+  const role = user?.role;
   const [collapsed, setCollapsed] = useState(false);
   const [stats, setStats] = useState({
     strategic: 0,
@@ -45,13 +47,16 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
   });
   const pathname = usePathname();
 
-  const navigation = [
+  const mainNavigation = [
     { id: 'dashboard', name: 'Dashboard', icon: Home, href: '/dashboard' },
     { id: 'objectives', name: 'Objectives', icon: Target, href: '/okrs' },
     { id: 'analytics', name: 'Analytics', icon: BarChart3, href: '/analytics' },
     { id: 'divisions', name: 'By Division', icon: Building2, href: '/divisions' },
+  ];
+
+  const bottomNavigation = [
     { id: 'docs', name: 'Documentation', icon: BookOpen, href: '/docs' },
-    { id: 'integrations', name: 'Integrations', icon: Plug, href: '/integrations' },
+    ...(role !== 'view_only' ? [{ id: 'integrations', name: 'Integrations', icon: Plug, href: '/integrations' }] : []),
     { id: 'profile', name: 'Settings', icon: Settings, href: '/profile' },
   ];
 
@@ -111,6 +116,9 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
     if (href === '/profile') {
       return pathname === '/profile';
     }
+    if (href === '/docs') {
+      return pathname === '/docs';
+    }
     return false;
   };
 
@@ -145,21 +153,23 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
         )}
       </div>
 
-      {/* New Objective Button */}
-      <div className="p-4">
-        <Button 
-          onClick={onNewObjective || (() => window.location.href = '/okrs/new')} 
-          className="w-full"
-          size={collapsed ? 'icon' : 'default'}
-        >
-          <Plus className="h-4 w-4" />
-          {!collapsed && <span className="ml-2">New Objective</span>}
-        </Button>
-      </div>
+      {/* New Objective Button (hidden for view_only) */}
+      {role !== 'view_only' && (
+        <div className="p-4">
+          <Button 
+            onClick={onNewObjective || (() => window.location.href = '/okrs/new')} 
+            className="w-full"
+            size={collapsed ? 'icon' : 'default'}
+          >
+            <Plus className="h-4 w-4" />
+            {!collapsed && <span className="ml-2">New Objective</span>}
+          </Button>
+        </div>
+      )}
 
-      {/* Navigation */}
-      <nav className="flex-1 space-y-1 px-3">
-        {navigation.map((item) => {
+      {/* Main navigation */}
+      <nav className="flex-1 space-y-1 px-3 pt-2">
+        {mainNavigation.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
           return (
@@ -180,30 +190,54 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
         })}
       </nav>
 
-      {/* View as (role switcher) */}
-      {!collapsed && (
-        <div className="border-t p-4">
-          <h3 className="mb-2 text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1.5">
-            <Eye className="h-3.5 w-3.5" />
-            View as
-          </h3>
-          <Select
-            value={effectiveRole}
-            onValueChange={(v) => setEffectiveRole(v as ViewRole)}
+      {/* User management (admin only) */}
+      {role === 'admin' && (
+        <div className="space-y-1 px-3">
+          <Link
+            href="/admin/users"
+            className={cn(
+              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+              pathname?.startsWith('/admin/users')
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            )}
           >
-            <SelectTrigger className="h-9 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="developer">Developer</SelectItem>
-              <SelectItem value="view_only">View only</SelectItem>
-            </SelectContent>
-          </Select>
+            <Users className="h-5 w-5 flex-shrink-0" />
+            {!collapsed && <span>User management</span>}
+          </Link>
         </div>
       )}
 
-      {/* Quick Stats */}
-      {!collapsed && (
+      {/* Help & Settings (bottom group) */}
+      <div className="border-t space-y-1 px-3 py-3">
+        {!collapsed && (
+          <h3 className="mb-2 px-3 text-xs font-semibold uppercase text-muted-foreground">
+            Help & account
+          </h3>
+        )}
+        {bottomNavigation.map((item: { id: string; name: string; icon: typeof BookOpen; href: string }) => {
+          const Icon = item.icon;
+          const active = isActive(item.href);
+          return (
+            <Link
+              key={item.id}
+              href={item.href}
+              className={cn(
+                'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                active
+                  ? 'bg-primary text-primary-foreground font-medium'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              )}
+            >
+              <Icon className="h-5 w-5 flex-shrink-0" />
+              {!collapsed && <span>{item.name}</span>}
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Quick Stats (hidden for view_only to reduce clutter) */}
+      {!collapsed && role !== 'view_only' && (
         <div className="border-t p-4">
           <h3 className="mb-3 text-xs font-semibold uppercase text-muted-foreground">
             Quick Stats
@@ -222,6 +256,28 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* View as (admin only - for testing) */}
+      {!collapsed && role === 'admin' && (
+        <div className="border-t p-4">
+          <h3 className="mb-2 text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1.5">
+            <Eye className="h-3.5 w-3.5" />
+            View as
+          </h3>
+          <Select
+            value={effectiveRole}
+            onValueChange={(v) => setEffectiveRole(v as ViewRole)}
+          >
+            <SelectTrigger className="h-9 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="developer">Developer</SelectItem>
+              <SelectItem value="view_only">View only</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       )}
 

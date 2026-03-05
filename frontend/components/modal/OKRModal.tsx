@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Link2, HelpCircle } from 'lucide-react';
+import { X, Link2, HelpCircle, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api, type Objective, type KeyResult } from '@/lib/api';
 import { OKRDetailView } from './OKRDetailView';
@@ -21,13 +21,14 @@ interface OKRModalProps {
 }
 
 export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
-  const { effectiveRole } = useViewRole();
+  const { effectiveRole, user } = useViewRole();
   const [objective, setObjective] = useState<Objective | null>(null);
   const [keyResults, setKeyResults] = useState<KeyResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewerCount, setViewerCount] = useState(0);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const loadingRef = useRef(false);
 
   const load = useCallback(async (showLoading = true) => {
@@ -145,30 +146,57 @@ export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-1 shrink-0 relative">
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => {
-                const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/okrs/${objectiveId}`;
-                navigator.clipboard.writeText(url).then(() => {}).catch(() => {});
-              }}
-              aria-label="Copy link"
-              title="Copy link"
+              onClick={() => setMoreOpen((o) => !o)}
+              aria-label="More actions"
+              aria-expanded={moreOpen}
+              aria-haspopup="true"
+              title="More"
               className="min-h-[44px] min-w-[44px]"
             >
-              <Link2 className="h-4 w-4" />
+              <MoreHorizontal className="h-5 w-5" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShortcutHelpOpen(true)}
-              aria-label="Keyboard shortcuts"
-              title="Shortcuts (?)"
-              className="min-h-[44px] min-w-[44px]"
-            >
-              <HelpCircle className="h-4 w-4" />
-            </Button>
+            {moreOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-0"
+                  aria-hidden="true"
+                  onClick={() => setMoreOpen(false)}
+                />
+                <div
+                  className="absolute right-0 top-full mt-1 z-10 min-w-[180px] rounded-md border bg-popover py-1 shadow-md"
+                  role="menu"
+                >
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted"
+                    onClick={() => {
+                      const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/okrs/${objectiveId}`;
+                      navigator.clipboard.writeText(url).then(() => setMoreOpen(false)).catch(() => {});
+                    }}
+                    role="menuitem"
+                  >
+                    <Link2 className="h-4 w-4" />
+                    Copy link
+                  </button>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-muted"
+                    onClick={() => {
+                      setShortcutHelpOpen(true);
+                      setMoreOpen(false);
+                    }}
+                    role="menuitem"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                    Keyboard shortcuts
+                  </button>
+                </div>
+              </>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -200,7 +228,8 @@ export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
               keyResults={keyResults}
               onObjectiveUpdate={(updated) => setObjective(updated)}
               onKeyResultsUpdate={() => load(false)}
-              userRole={effectiveRole}
+              user={user}
+              effectiveRole={effectiveRole}
               viewerCount={viewerCount}
             />
           )}

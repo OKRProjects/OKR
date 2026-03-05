@@ -10,6 +10,50 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useViewPreferences } from '@/lib/useViewPreferences';
+import { RotateCcw } from 'lucide-react';
+
+const OKR_TAB_LABELS: Record<string, string> = {
+  overview: 'Overview',
+  progress: 'Progress',
+  updates: 'Updates',
+  history: 'History',
+  dependencies: 'Dependencies',
+  files: 'Files',
+};
+
+function ProfileOKRPreferences() {
+  const { preferences, updatePreferences, resetToDefault, loading } = useViewPreferences();
+  if (loading) return null;
+  return (
+    <div>
+      <h2 className="text-lg font-semibold mb-2">OKR modal tabs</h2>
+      <p className="text-sm text-muted-foreground mb-4">
+        Choose which tabs appear when you open an OKR. At least one must be visible.
+      </p>
+      <div className="flex flex-wrap gap-x-6 gap-y-2 mb-4">
+        {Object.entries(OKR_TAB_LABELS).map(([id, label]) => (
+          <label key={id} className="flex items-center gap-2 cursor-pointer text-sm">
+            <input
+              type="checkbox"
+              checked={preferences.visibleTabs[id] !== false}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                updatePreferences({ visibleTabs: { [id]: checked } });
+              }}
+              className="rounded border-input h-4 w-4"
+            />
+            {label}
+          </label>
+        ))}
+      </div>
+      <Button variant="outline" size="sm" onClick={() => resetToDefault()} className="gap-2">
+        <RotateCcw className="h-4 w-4" />
+        Reset to default
+      </Button>
+    </div>
+  );
+}
 
 export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null);
@@ -205,6 +249,10 @@ export default function ProfilePage() {
                 </p>
               </div>
             </div>
+          </div>
+
+          <div className="border-t pt-6 mt-6">
+            <ProfileOKRPreferences />
           </div>
 
           <div className="mt-8 flex space-x-4">

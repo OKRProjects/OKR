@@ -25,6 +25,8 @@ interface ProgressTabProps {
   keyResults: KeyResult[];
   onKeyResultsUpdate?: () => void;
   readOnly?: boolean;
+  /** When provided, per-KR edit permission (overrides readOnly for each KR). */
+  canEditKr?: (kr: KeyResult) => boolean;
 }
 
 function KRProgressRow({
@@ -278,6 +280,7 @@ export function ProgressTab({
   keyResults,
   onKeyResultsUpdate,
   readOnly,
+  canEditKr,
 }: ProgressTabProps) {
   const refresh = onKeyResultsUpdate ?? (() => {});
 
@@ -301,7 +304,12 @@ export function ProgressTab({
       ) : (
         <div className="space-y-2">
           {keyResults.map((kr) => (
-            <KRProgressRow key={kr._id} kr={kr} onUpdate={refresh} readOnly={readOnly} />
+            <KRProgressRow
+              key={kr._id}
+              kr={kr}
+              onUpdate={refresh}
+              readOnly={readOnly || (canEditKr ? !canEditKr(kr) : false)}
+            />
           ))}
         </div>
       )}

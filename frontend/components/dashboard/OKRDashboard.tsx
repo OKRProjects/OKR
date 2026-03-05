@@ -8,11 +8,12 @@ import { DashboardHeader } from './DashboardHeader';
 import { FilterBar, defaultFilters, type DashboardFilters } from './FilterBar';
 import { TierSection } from './TierSection';
 import { Button } from '@/components/ui/button';
-import { Presentation, HelpCircle, Download } from 'lucide-react';
+import { Presentation, HelpCircle, Download, ClipboardCheck } from 'lucide-react';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { TutorialOverlay } from '@/components/shared/TutorialOverlay';
 import { useFirstTimeTutorial, getDashboardTutorialSteps } from '@/lib/tutorial';
 import { useViewPreferences } from '@/lib/useViewPreferences';
+import { useViewRole } from '@/lib/ViewRoleContext';
 
 function getDaysLeftInQuarter(): number {
   const now = new Date();
@@ -52,6 +53,8 @@ function filterObjective(
 }
 
 export function OKRDashboard() {
+  const { user } = useViewRole();
+  const role = user?.role;
   const fiscalYear = new Date().getFullYear();
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [keyResultsByObjective, setKeyResultsByObjective] = useState<Record<string, KeyResult[]>>({});
@@ -156,6 +159,15 @@ export function OKRDashboard() {
     () => filteredAndSorted.filter((o) => o.level === 'tactical'),
     [filteredAndSorted]
   );
+
+  const needsReviewObjectives = useMemo(() => {
+    if (role !== 'leader' || !user?.departmentId) return [];
+    return objectives.filter(
+      (o) =>
+        (o.status ?? 'draft') === 'in_review' &&
+        (o.departmentId === user.departmentId || String(o.departmentId) === user.departmentId)
+    );
+  }, [objectives, role, user?.departmentId]);
 
   const handleSortChange = useCallback(
     (sort: 'score' | 'owner' | 'updated', direction: 'asc' | 'desc') => {
@@ -277,6 +289,21 @@ export function OKRDashboard() {
         onTrackPercent={stats.onTrackPercent}
         daysLeftInQuarter={stats.daysLeftInQuarter}
       />
+      {role === 'leader' && needsReviewObjectives.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20 p-4">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-200 mb-3">
+            <ClipboardCheck className="h-4 w-4" />
+            Needs your review
+          </h2>
+          <TierSection
+            title="Pending review"
+            objectives={needsReviewObjectives}
+            scoreByObjectiveId={scoreByObjectiveId}
+            defaultExpanded
+            onOpenModal={setModalObjectiveId}
+          />
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-4">
         <FilterBar
           filters={filters}
@@ -300,47 +327,51 @@ export function OKRDashboard() {
           <HelpCircle className="mr-2 h-4 w-4" />
           Take the tour
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => handleExport('json')}
-          disabled={exporting || filteredAndSorted.length === 0}
-          className="shrink-0"
-          title="Download as JSON (API dump)"
-        >
-          <Download className="mr-2 h-4 w-4" />
-          JSON
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => handleExport('xlsx')}
-          disabled={exporting || filteredAndSorted.length === 0}
-          className="shrink-0"
-          title="Download as Excel"
-        >
-          Excel
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => handleExport('pdf')}
-          disabled={exporting || filteredAndSorted.length === 0}
-          className="shrink-0"
-          title="Download as PDF"
-        >
-          PDF
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleExportGoogleSlides}
-          disabled={exportingSlides || filteredAndSorted.length === 0}
-          className="shrink-0"
-          title="Export to Google Slides"
-        >
-          Google Slides
-        </Button>
+        {role !== 'view_only' && (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleExport('json')}
+              disabled={exporting || filteredAndSorted.length === 0}
+              className="shrink-0"
+              title="Download as JSON (API dump)"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              JSON
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleExport('xlsx')}
+              disabled={exporting || filteredAndSorted.length === 0}
+              className="shrink-0"
+              title="Download as Excel"
+            >
+              Excel
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleExport('pdf')}
+              disabled={exporting || filteredAndSorted.length === 0}
+              className="shrink-0"
+              title="Download as PDF"
+            >
+              PDF
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportGoogleSlides}
+              disabled={exportingSlides || filteredAndSorted.length === 0}
+              className="shrink-0"
+              title="Export to Google Slides"
+            >
+              Google Slides
+            </Button>
+          </>
+        )}
         <Button
           variant="outline"
           onClick={() => {

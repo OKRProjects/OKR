@@ -10,9 +10,22 @@ interface WorkflowActionsProps {
   objective: Objective;
   onUpdate: (updated: Objective) => void;
   onError?: (message: string) => void;
+  /** When false, hide Submit for Review. Default true for backward compat. */
+  canSubmit?: boolean;
+  /** When false, hide Approve/Reject. Default true. */
+  canApproveReject?: boolean;
+  /** When false, hide Resubmit. Default true. */
+  canResubmit?: boolean;
 }
 
-export function WorkflowActions({ objective, onUpdate, onError }: WorkflowActionsProps) {
+export function WorkflowActions({
+  objective,
+  onUpdate,
+  onError,
+  canSubmit = true,
+  canApproveReject = true,
+  canResubmit = true,
+}: WorkflowActionsProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const status = (objective.status as Status) ?? 'draft';
 
@@ -40,7 +53,7 @@ export function WorkflowActions({ objective, onUpdate, onError }: WorkflowAction
 
   return (
     <div className="flex flex-wrap gap-2">
-      {status === 'draft' && (
+      {status === 'draft' && canSubmit && (
         <Button
           size="sm"
           disabled={!!loading}
@@ -52,7 +65,7 @@ export function WorkflowActions({ objective, onUpdate, onError }: WorkflowAction
           {loading === 'Submit' ? 'Submitting…' : 'Submit for Review'}
         </Button>
       )}
-      {status === 'in_review' && (
+      {status === 'in_review' && canApproveReject && (
         <>
           <Button
             size="sm"
@@ -81,7 +94,7 @@ export function WorkflowActions({ objective, onUpdate, onError }: WorkflowAction
           </Button>
         </>
       )}
-      {status === 'rejected' && (
+      {status === 'rejected' && canResubmit && (
         <Button
           size="sm"
           disabled={!!loading}

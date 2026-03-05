@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Chatbot from "@/components/Chatbot";
 import { ViewRoleProvider } from "@/lib/ViewRoleContext";
+import { ViewPreferencesProvider } from "@/lib/useViewPreferences";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,8 +31,10 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ViewRoleProvider>
-          {children}
-          <Chatbot />
+          <ViewPreferencesProvider>
+            {children}
+            <Chatbot />
+          </ViewPreferencesProvider>
         </ViewRoleProvider>
       </body>
     </html>

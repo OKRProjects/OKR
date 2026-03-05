@@ -61,9 +61,9 @@ export default function Home() {
     try {
       const loggedInUser = await loginEmailPassword(email, password);
       setUser(loggedInUser);
-      // Redirect to OKRs (primary focus)
+      // Redirect to Dashboard (primary destination)
       if (typeof window !== 'undefined') {
-        window.location.href = '/okrs';
+        window.location.href = '/dashboard';
       }
     } catch (error: any) {
       const errorMessage = error?.message || 'Login failed';
@@ -81,9 +81,9 @@ export default function Home() {
     try {
       const newUser = await register(email, password, name);
       setUser(newUser);
-      // Redirect to OKRs (primary focus)
+      // Redirect to Dashboard (primary destination)
       if (typeof window !== 'undefined') {
-        window.location.href = '/okrs';
+        window.location.href = '/dashboard';
       }
     } catch (error: any) {
       const errorMessage = error?.message || 'Registration failed';
@@ -120,20 +120,14 @@ export default function Home() {
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link
-                href="/okrs"
+                href="/dashboard"
                 className="inline-block bg-slate-800 text-white px-6 py-3 rounded-lg font-semibold hover:bg-slate-900 transition-colors"
               >
-                Go to OKRs
-              </Link>
-              <Link
-                href="/dashboard"
-                className="inline-block border border-slate-300 text-slate-700 px-6 py-3 rounded-lg font-semibold hover:bg-slate-50 transition-colors"
-              >
-                Dashboard
+                Go to Dashboard
               </Link>
               <Link
                 href="/profile"
-                className="inline-block text-slate-600 px-6 py-3 rounded-lg font-medium hover:text-slate-900 transition-colors"
+                className="inline-block border border-slate-300 text-slate-700 px-6 py-3 rounded-lg font-semibold hover:bg-slate-50 transition-colors"
               >
                 Profile
               </Link>

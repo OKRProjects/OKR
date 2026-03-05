@@ -257,7 +257,8 @@ export default function ObjectiveDetailPage() {
           onKeyResultsUpdate={() => {
             loadKeyResults();
           }}
-          userRole={effectiveRole}
+          user={user}
+          effectiveRole={effectiveRole}
           viewerCount={viewerCount}
         />
       </div>

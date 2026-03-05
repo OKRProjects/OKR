@@ -9,8 +9,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
-import { Settings2, RotateCcw } from 'lucide-react';
 import { OverviewTab } from './tabs/OverviewTab';
 import { ProgressTab } from './tabs/ProgressTab';
 import { UpdatesTab } from './tabs/UpdatesTab';
@@ -18,6 +16,8 @@ import { HistoryTab } from './tabs/HistoryTab';
 import { DependenciesTab } from './tabs/DependenciesTab';
 import { FilesTab } from './tabs/FilesTab';
 import { useViewPreferences } from '@/lib/useViewPreferences';
+import { getOKRPermissions, type OKRPermissions } from '@/lib/permissions';
+import type { User } from '@/lib/auth';
 import type { Objective, KeyResult } from '@/lib/api';
 
 const TAB_IDS = ['overview', 'progress', 'updates', 'history', 'dependencies', 'files'] as const;
@@ -35,8 +35,10 @@ interface OKRDetailViewProps {
   keyResults: KeyResult[];
   onObjectiveUpdate: (updated: Objective) => void;
   onKeyResultsUpdate?: () => void;
-  /** When 'view_only', workflow actions, comment form, and progress save are hidden. */
-  userRole?: string;
+  /** Current user (for permission gating). */
+  user?: User | null;
+  /** effectiveRole from ViewRoleContext (view_only vs developer) for read-only override. */
+  effectiveRole?: string;
   /** Number of current viewers (for presence). Show "N others viewing" when > 1. */
   viewerCount?: number;
 }
@@ -46,17 +48,18 @@ export function OKRDetailView({
   keyResults,
   onObjectiveUpdate,
   onKeyResultsUpdate,
-  userRole,
+  user,
+  effectiveRole,
   viewerCount,
 }: OKRDetailViewProps) {
-  const isViewOnly = userRole === 'view_only';
-  const { preferences, updatePreferences, resetToDefault } = useViewPreferences();
+  const isViewOnly = effectiveRole === 'view_only';
+  const permissions: OKRPermissions = getOKRPermissions(user ?? null, objective, keyResults);
+  const { preferences, updatePreferences } = useViewPreferences();
   const visibleTabIds = TAB_IDS.filter((id) => preferences.visibleTabs[id] !== false);
   const defaultTab = visibleTabIds.includes(preferences.lastDetailTab as (typeof TAB_IDS)[number])
     ? preferences.lastDetailTab
     : visibleTabIds[0] ?? 'overview';
   const [activeTab, setActiveTab] = useState<(typeof TAB_IDS)[number]>(defaultTab as (typeof TAB_IDS)[number]);
-  const [customizeOpen, setCustomizeOpen] = useState(false);
   const touchStartX = useRef<number | null>(null);
 
   // When visible tabs change and current tab is hidden, switch to first visible
@@ -139,47 +142,7 @@ export function OKRDetailView({
             </TabsTrigger>
           ))}
         </TabsList>
-        {/* Customize visible sections + Reset to default */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="shrink-0 min-h-[44px] min-w-[44px]"
-          aria-label="Customize view"
-          aria-expanded={customizeOpen}
-          onClick={() => setCustomizeOpen((o) => !o)}
-        >
-          <Settings2 className="h-4 w-4" />
-        </Button>
       </div>
-      {customizeOpen && (
-        <div className="mt-3 p-3 border rounded-lg bg-muted/50 space-y-3">
-          <p className="text-sm font-medium">Visible sections</p>
-          <div className="flex flex-wrap gap-x-4 gap-y-2">
-            {TAB_IDS.map((id) => (
-              <label
-                key={id}
-                className="flex items-center gap-2 cursor-pointer text-sm"
-              >
-                <input
-                  type="checkbox"
-                  checked={preferences.visibleTabs[id] !== false}
-                  onChange={(e) => {
-                    updatePreferences({
-                      visibleTabs: { [id]: e.target.checked },
-                    });
-                  }}
-                  className="rounded border-input h-4 w-4"
-                />
-                {TAB_LABELS[id]}
-              </label>
-            ))}
-          </div>
-          <Button variant="outline" size="sm" onClick={() => resetToDefault()} className="gap-2">
-            <RotateCcw className="h-4 w-4" />
-            Reset to default
-          </Button>
-        </div>
-      )}
 
       {/* Swipeable content area for mobile */}
       <div
@@ -195,6 +158,9 @@ export function OKRDetailView({
               keyResults={keyResults}
               onObjectiveUpdate={onObjectiveUpdate}
               readOnly={isViewOnly}
+              canSubmit={permissions.canSubmit}
+              canApproveReject={permissions.canApproveReject}
+              canResubmit={permissions.canResubmit}
             />
           </TabsContent>
         )}
@@ -205,12 +171,13 @@ export function OKRDetailView({
               keyResults={keyResults}
               onKeyResultsUpdate={onKeyResultsUpdate}
               readOnly={isViewOnly}
+              canEditKr={permissions.canEditKr}
             />
           </TabsContent>
         )}
         {visibleTabIds.includes('updates') && (
           <TabsContent value="updates" className="mt-0">
-            <UpdatesTab objective={objective} readOnly={isViewOnly} />
+            <UpdatesTab objective={objective} readOnly={isViewOnly || !permissions.canEditObjective} />
           </TabsContent>
         )}
         {visibleTabIds.includes('history') && (
@@ -227,7 +194,7 @@ export function OKRDetailView({
             <DependenciesTab
               objective={objective}
               onObjectiveUpdate={onObjectiveUpdate}
-              readOnly={isViewOnly}
+              readOnly={isViewOnly || !permissions.canEditObjective}
             />
           </TabsContent>
         )}
@@ -236,7 +203,7 @@ export function OKRDetailView({
             <FilesTab
               objective={objective}
               keyResults={keyResults}
-              readOnly={isViewOnly}
+              readOnly={isViewOnly || !permissions.canEditObjective}
             />
           </TabsContent>
         )}

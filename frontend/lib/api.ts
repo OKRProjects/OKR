@@ -204,9 +204,15 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: 'An error occurred' }));
-    const errorMessage = error.message || error.error || `HTTP error! status: ${response.status}`;
-    
-    throw new Error(errorMessage);
+    const backendMessage = error.message || error.error || '';
+    if (response.status === 403) {
+      throw new Error(
+        backendMessage
+          ? `You don't have permission to perform this action. ${backendMessage}`
+          : 'You don\'t have permission to perform this action. Your role or ownership may not allow it. Ask an admin to assign the correct role or permissions.'
+      );
+    }
+    throw new Error(backendMessage || `HTTP error! status: ${response.status}`);
   }
 
   return response.json();
@@ -265,6 +271,21 @@ export const api = {
 
   async getCurrentUser(): Promise<any> {
     return fetchWithAuth('/api/auth/me');
+  },
+
+  async getUsers(): Promise<{ _id: string; role: string; departmentId?: string; name?: string; email?: string }[]> {
+    return fetchWithAuth('/api/auth/users');
+  },
+
+  async updateUser(
+    uid: string,
+    body: { role?: string; departmentId?: string | null }
+  ): Promise<{ _id: string; role: string; departmentId?: string }> {
+    return fetchWithAuth(`/api/auth/users/${encodeURIComponent(uid)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
   },
 
   async getItems(): Promise<Item[]> {
