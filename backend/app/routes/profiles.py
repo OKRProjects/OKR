@@ -196,6 +196,125 @@ def update_profile(user_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# Default view preferences (OKR detail tab, visible sections, dashboard sort/filter)
+DEFAULT_VIEW_PREFERENCES = {
+    'lastDetailTab': 'overview',
+    'visibleTabs': {
+        'overview': True,
+        'progress': True,
+        'updates': True,
+        'history': True,
+        'dependencies': True,
+        'files': True,
+    },
+    'dashboardSort': 'updated',
+    'dashboardSortDirection': 'desc',
+    'dashboardFilterUpdateType': 'all',
+    'historyEventTypeFilter': 'all',
+}
+
+
+@bp.route('/profiles/preferences', methods=['GET'])
+@require_auth
+def get_preferences(user_id):
+    """Get view preferences for the authenticated user. Returns defaults if none saved."""
+    try:
+        db = get_db()
+        profiles_collection = db.profiles
+        profile = profiles_collection.find_one({'userId': user_id})
+        prefs = DEFAULT_VIEW_PREFERENCES.copy()
+        if profile and profile.get('viewPreferences'):
+            # Deep merge: saved prefs override defaults
+            saved = profile['viewPreferences']
+            if isinstance(saved.get('visibleTabs'), dict):
+                prefs['visibleTabs'] = {**prefs['visibleTabs'], **saved['visibleTabs']}
+            for key in ('lastDetailTab', 'dashboardSort', 'dashboardSortDirection',
+                        'dashboardFilterUpdateType', 'historyEventTypeFilter'):
+                if key in saved and saved[key] is not None:
+                    prefs[key] = saved[key]
+        return jsonify(prefs), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/profiles/preferences', methods=['PUT'])
+@require_auth
+def update_preferences(user_id):
+    """Update view preferences. Ensures profile exists, then sets viewPreferences."""
+    try:
+        db = get_db()
+        profiles_collection = db.profiles
+        profile = profiles_collection.find_one({'userId': user_id})
+        if not profile:
+            # Auto-create minimal profile so we can store preferences
+            now = datetime.utcnow()
+            profile = {
+                'userId': user_id,
+                'displayName': 'User',
+                'bio': '',
+                'profileImageUrl': None,
+                'createdAt': now,
+                'updatedAt': now,
+            }
+            try:
+                user_info = get_user_info_from_token()
+                profile['displayName'] = (
+                    user_info.get('name') or user_info.get('nickname') or
+                    (user_info.get('email', '').split('@')[0] if user_info.get('email') else None) or
+                    'User'
+                )
+                profile['profileImageUrl'] = user_info.get('picture') or None
+            except Exception:
+                pass
+            profiles_collection.insert_one(profile)
+            profile = profiles_collection.find_one({'userId': user_id})
+
+        data = request.get_json(silent=True) or {}
+        update_data = {'updatedAt': datetime.utcnow()}
+        # Only allow known preference keys
+        allowed = {
+            'lastDetailTab', 'visibleTabs', 'dashboardSort', 'dashboardSortDirection',
+            'dashboardFilterUpdateType', 'historyEventTypeFilter',
+        }
+        new_prefs = dict(profile.get('viewPreferences') or {})
+        for key in allowed:
+            if key in data:
+                new_prefs[key] = data[key]
+        update_data['viewPreferences'] = new_prefs
+
+        profiles_collection.update_one(
+            {'userId': user_id},
+            {'$set': update_data}
+        )
+        # Return merged preferences (same shape as GET)
+        prefs = DEFAULT_VIEW_PREFERENCES.copy()
+        if isinstance(new_prefs.get('visibleTabs'), dict):
+            prefs['visibleTabs'] = {**prefs['visibleTabs'], **new_prefs['visibleTabs']}
+        for key in ('lastDetailTab', 'dashboardSort', 'dashboardSortDirection',
+                    'dashboardFilterUpdateType', 'historyEventTypeFilter'):
+            if key in new_prefs and new_prefs[key] is not None:
+                prefs[key] = new_prefs[key]
+        return jsonify(prefs), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/profiles/preferences', methods=['DELETE'])
+@require_auth
+def reset_preferences(user_id):
+    """Reset view preferences to defaults and persist."""
+    try:
+        db = get_db()
+        profiles_collection = db.profiles
+        profiles_collection.update_one(
+            {'userId': user_id},
+            {'$set': {'viewPreferences': {}, 'updatedAt': datetime.utcnow()}}
+        )
+        return jsonify(DEFAULT_VIEW_PREFERENCES), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @bp.route('/profiles/image', methods=['POST'])
 @require_auth
 def upload_profile_image(user_id):

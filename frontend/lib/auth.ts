@@ -8,6 +8,9 @@ export interface User {
   email: string;
   picture?: string;
   nickname?: string;
+  /** From backend users collection: admin | leader | standard | view_only */
+  role?: string;
+  departmentId?: string;
 }
 
 let currentUser: User | null = null;

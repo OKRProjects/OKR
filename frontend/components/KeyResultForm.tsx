@@ -2,6 +2,8 @@
 
 import { useState, FormEvent } from 'react';
 import { api, KeyResult } from '@/lib/api';
+import { FieldLabel } from '@/components/shared/FieldLabel';
+import { ErrorMessage } from '@/components/shared/ErrorMessage';
 
 interface KeyResultFormProps {
   objectiveId: string;
@@ -38,11 +40,11 @@ export default function KeyResultForm({ objectiveId, keyResult, onSuccess, onCan
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 rounded-md border border-gray-200 bg-gray-50 p-4">
-      {error && (
-        <div className="rounded-md bg-red-50 p-2 text-sm text-red-700">{error}</div>
-      )}
+      {error && <ErrorMessage message={error} />}
       <div>
-        <label className="block text-sm font-medium text-gray-700">Key Result Title *</label>
+        <FieldLabel tooltip="A measurable outcome that indicates progress toward the objective." required>
+          Key Result Title
+        </FieldLabel>
         <input
           type="text"
           value={title}
@@ -53,7 +55,9 @@ export default function KeyResultForm({ objectiveId, keyResult, onSuccess, onCan
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700">Target</label>
+          <FieldLabel tooltip="The target value to achieve (e.g. 100%, 5 deployments).">
+            Target
+          </FieldLabel>
           <input
             type="text"
             value={target}
@@ -63,7 +67,9 @@ export default function KeyResultForm({ objectiveId, keyResult, onSuccess, onCan
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700">Unit</label>
+          <FieldLabel tooltip="Unit of measure (e.g. %, count, days).">
+            Unit
+          </FieldLabel>
           <input
             type="text"
             value={unit}
@@ -74,7 +80,9 @@ export default function KeyResultForm({ objectiveId, keyResult, onSuccess, onCan
         </div>
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700">Current Value</label>
+        <FieldLabel tooltip="Current progress toward the target; used with score for roll-up.">
+          Current Value
+        </FieldLabel>
         <input
           type="text"
           value={currentValue}

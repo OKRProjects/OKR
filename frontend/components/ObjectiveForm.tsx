@@ -4,6 +4,8 @@ import { useState, useEffect, FormEvent } from 'react';
 import { api, Objective, ObjectiveLevel, ObjectiveTimeline } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { FieldLabel } from '@/components/shared/FieldLabel';
+import { ErrorMessage } from '@/components/shared/ErrorMessage';
 
 interface ObjectiveFormProps {
   objective?: Objective;
@@ -74,12 +76,13 @@ export default function ObjectiveForm({ objective, parentOptions = [], onSuccess
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</div>
-      )}
+      {error && <ErrorMessage message={error} className="mb-4" />}
       <div>
-        <label className="block text-sm font-medium text-slate-700">Title *</label>
+        <FieldLabel tooltip="A clear, outcome-focused statement of what you want to achieve." learnMoreHref="/docs#okrs" required>
+          Title
+        </FieldLabel>
         <input
+          id="objective-title"
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -88,8 +91,11 @@ export default function ObjectiveForm({ objective, parentOptions = [], onSuccess
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-slate-700">Description</label>
+        <FieldLabel htmlFor="objective-description" tooltip="Optional context or success criteria for this objective.">
+          Description
+        </FieldLabel>
         <textarea
+          id="objective-description"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={3}
@@ -98,7 +104,9 @@ export default function ObjectiveForm({ objective, parentOptions = [], onSuccess
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="block text-sm font-medium text-slate-700">Level</label>
+          <FieldLabel tooltip="Strategic = annual org-wide; Functional = annual division; Tactical = quarterly team." learnMoreHref="/docs#okrs">
+            Level
+          </FieldLabel>
           <select
             value={level}
             onChange={(e) => setLevel(e.target.value as ObjectiveLevel)}
@@ -110,7 +118,9 @@ export default function ObjectiveForm({ objective, parentOptions = [], onSuccess
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700">Fiscal Year *</label>
+          <FieldLabel tooltip="The fiscal year this objective applies to (e.g. 2025)." required>
+            Fiscal Year
+          </FieldLabel>
           <input
             type="number"
             min={2020}
@@ -123,7 +133,9 @@ export default function ObjectiveForm({ objective, parentOptions = [], onSuccess
       </div>
       {timeline === 'quarterly' && (
         <div>
-          <label className="block text-sm font-medium text-slate-700">Quarter</label>
+          <FieldLabel tooltip="Quarter (Q1–Q4) for this tactical objective.">
+            Quarter
+          </FieldLabel>
           <select
             value={quarter}
             onChange={(e) => setQuarter(e.target.value)}
@@ -137,7 +149,9 @@ export default function ObjectiveForm({ objective, parentOptions = [], onSuccess
       )}
       {(level === 'functional' || level === 'tactical') && (
         <div>
-          <label className="block text-sm font-medium text-slate-700">Division</label>
+          <FieldLabel tooltip="Division or department (e.g. AI, Data, Ops) for roll-up and filtering.">
+            Division
+          </FieldLabel>
           <input
             type="text"
             value={division}
@@ -149,9 +163,9 @@ export default function ObjectiveForm({ objective, parentOptions = [], onSuccess
       )}
       {showParent && (
         <div>
-          <label className="block text-sm font-medium text-slate-700">
+          <FieldLabel tooltip="Link this objective to a parent for hierarchy and roll-up views.">
             Parent Objective {level === 'functional' ? '(Strategic)' : '(Functional)'}
-          </label>
+          </FieldLabel>
           <select
             value={parentObjectiveId}
             onChange={(e) => setParentObjectiveId(e.target.value)}

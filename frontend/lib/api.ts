@@ -21,8 +21,38 @@ export interface Profile {
   updatedAt?: string;
 }
 
+export type DashboardSortField = 'score' | 'owner' | 'updated';
+export type SortDirection = 'asc' | 'desc';
+
+export interface ViewPreferences {
+  lastDetailTab: string;
+  visibleTabs: Record<string, boolean>;
+  dashboardSort: DashboardSortField;
+  dashboardSortDirection: SortDirection;
+  dashboardFilterUpdateType: string;
+  historyEventTypeFilter: string;
+}
+
+export const DEFAULT_VIEW_PREFERENCES: ViewPreferences = {
+  lastDetailTab: 'overview',
+  visibleTabs: {
+    overview: true,
+    progress: true,
+    updates: true,
+    history: true,
+    dependencies: true,
+    files: true,
+  },
+  dashboardSort: 'updated',
+  dashboardSortDirection: 'desc',
+  dashboardFilterUpdateType: 'all',
+  historyEventTypeFilter: 'all',
+};
+
 export type ObjectiveLevel = 'strategic' | 'functional' | 'tactical';
 export type ObjectiveTimeline = 'annual' | 'quarterly';
+
+export type ObjectiveStatus = 'draft' | 'in_review' | 'approved' | 'rejected';
 
 export interface Objective {
   _id?: string;
@@ -35,6 +65,10 @@ export interface Objective {
   quarter?: string;
   parentObjectiveId?: string | null;
   division?: string;
+  departmentId?: string | null;
+  status?: ObjectiveStatus;
+  relatedObjectiveIds?: string[];
+  averageScore?: number | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -52,10 +86,53 @@ export interface KeyResult {
   target?: string;
   currentValue?: string;
   unit?: string;
+  /** Score 0.0–1.0 (OKR standard) */
   score?: number | null;
+  targetScore?: number;
+  ownerId?: string | null;
   notes?: Array<{ text?: string; createdAt?: string }>;
   createdAt?: string;
   lastUpdatedAt?: string;
+}
+
+export interface WorkflowEvent {
+  _id?: string;
+  objectiveId: string;
+  fromStatus: string;
+  toStatus: string;
+  actorId: string;
+  reason?: string;
+  timestamp: string;
+}
+
+export interface ScoreHistoryEntry {
+  _id?: string;
+  keyResultId: string;
+  score: number;
+  notes?: string;
+  recordedBy: string;
+  recordedAt: string;
+}
+
+export interface Comment {
+  _id?: string;
+  objectiveId: string;
+  authorId: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface Attachment {
+  _id?: string;
+  objectiveId: string;
+  keyResultId?: string | null;
+  fileName: string;
+  fileSize: number;
+  fileType: string;
+  url: string;
+  uploadedBy: string;
+  uploadedAt: string;
+  deletedAt?: string | null;
 }
 
 async function getAccessToken(): Promise<string | null> {
@@ -85,6 +162,18 @@ async function getAccessToken(): Promise<string | null> {
     return null;
   }
   return null;
+}
+
+/** Thrown when PUT key-result returns 409 Conflict (stale lastUpdatedAt). */
+export class ApiConflictError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly body: { current?: KeyResult; error?: string; message?: string }
+  ) {
+    super(message);
+    this.name = 'ApiConflictError';
+  }
 }
 
 async function fetchWithAuth(url: string, options: RequestInit = {}) {
@@ -294,6 +383,22 @@ export const api = {
     });
   },
 
+  /** View preferences (tabs, sort, filter). Saved to user profile. */
+  async getViewPreferences(): Promise<ViewPreferences> {
+    return fetchWithAuth('/api/profiles/preferences');
+  },
+
+  async updateViewPreferences(prefs: Partial<ViewPreferences>): Promise<ViewPreferences> {
+    return fetchWithAuth('/api/profiles/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(prefs),
+    });
+  },
+
+  async resetViewPreferences(): Promise<ViewPreferences> {
+    return fetchWithAuth('/api/profiles/preferences', { method: 'DELETE' });
+  },
+
   // Chat API (public endpoint, no auth required)
   async sendChatMessage(messages: Array<{ role: string; content: string }>, model?: string): Promise<{ message: string; usage?: any }> {
     return fetchPublic('/api/chat', {
@@ -303,18 +408,38 @@ export const api = {
   },
 
   // OKRs API
-  async getObjectives(params?: { fiscalYear?: number; level?: string; division?: string; parentObjectiveId?: string | null }): Promise<Objective[]> {
+  async getObjectives(params?: { fiscalYear?: number; level?: string; division?: string; status?: string; ownerId?: string; parentObjectiveId?: string | null }): Promise<Objective[]> {
     const search = new URLSearchParams();
     if (params?.fiscalYear != null) search.set('fiscalYear', String(params.fiscalYear));
     if (params?.level) search.set('level', params.level);
     if (params?.division) search.set('division', params.division);
+    if (params?.status) search.set('status', params.status);
+    if (params?.ownerId) search.set('ownerId', params.ownerId);
     if (params?.parentObjectiveId !== undefined) search.set('parentObjectiveId', params.parentObjectiveId ?? '');
     const q = search.toString();
     return fetchWithAuth(`/api/objectives${q ? `?${q}` : ''}`);
   },
 
-  async getObjective(id: string): Promise<Objective> {
-    return fetchWithAuth(`/api/objectives/${id}`);
+  async getObjective(id: string, params?: { since?: string }): Promise<Objective | { unchanged: true }> {
+    const url = params?.since
+      ? `/api/objectives/${id}?since=${encodeURIComponent(params.since)}`
+      : `/api/objectives/${id}`;
+    const data = await fetchWithAuth(url);
+    if (data && typeof data === 'object' && 'unchanged' in data && data.unchanged === true) {
+      return { unchanged: true };
+    }
+    return data as Objective;
+  },
+
+  async postView(objectiveId: string, body?: { userName?: string }): Promise<{ viewers: { userId: string; userName: string }[]; count: number }> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/view`, {
+      method: 'POST',
+      body: JSON.stringify(body ?? {}),
+    });
+  },
+
+  async leaveView(objectiveId: string): Promise<void> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/leave`, { method: 'POST' });
   },
 
   async getObjectiveTree(id: string): Promise<ObjectiveTree> {
@@ -355,13 +480,111 @@ export const api = {
   },
 
   async updateKeyResult(id: string, kr: Partial<KeyResult>): Promise<KeyResult> {
-    return fetchWithAuth(`/api/key-results/${id}`, {
+    const token = await getAccessToken();
+    if (!token) throw new Error('Unable to get access token.');
+    const response = await fetch(`${API_URL}/api/key-results/${id}`, {
       method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
       body: JSON.stringify(kr),
     });
+    const data = await response.json().catch(() => ({}));
+    if (response.status === 409) {
+      throw new ApiConflictError(
+        data.message || 'Conflict',
+        409,
+        data as { current?: KeyResult; error?: string; message?: string }
+      );
+    }
+    if (!response.ok) {
+      throw new Error(data.message || data.error || `HTTP ${response.status}`);
+    }
+    return data as KeyResult;
   },
 
   async deleteKeyResult(id: string): Promise<void> {
     return fetchWithAuth(`/api/key-results/${id}`, { method: 'DELETE' });
+  },
+
+  async getKeyResultHistory(keyResultId: string): Promise<ScoreHistoryEntry[]> {
+    return fetchWithAuth(`/api/key-results/${keyResultId}/history`);
+  },
+
+  async getWorkflowHistory(objectiveId: string): Promise<WorkflowEvent[]> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/workflow-history`);
+  },
+
+  async getDependencies(objectiveId: string): Promise<{ upstream: Objective[]; downstream: Objective[] }> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/dependencies`);
+  },
+
+  async submitObjective(objectiveId: string): Promise<Objective> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/submit`, { method: 'POST' });
+  },
+
+  async approveObjective(objectiveId: string): Promise<Objective> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/approve`, { method: 'POST' });
+  },
+
+  async rejectObjective(objectiveId: string, reason?: string): Promise<Objective> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason ?? '' }),
+    });
+  },
+
+  async resubmitObjective(objectiveId: string): Promise<Objective> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/resubmit`, { method: 'POST' });
+  },
+
+  async getComments(objectiveId: string): Promise<Comment[]> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/comments`);
+  },
+
+  async createComment(objectiveId: string, body: string): Promise<Comment> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    });
+  },
+
+  async getAttachments(objectiveId: string): Promise<Attachment[]> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/attachments`);
+  },
+
+  async createAttachment(form: {
+    objectiveId: string;
+    keyResultId?: string | null;
+    file?: File;
+    url?: string;
+    fileName?: string;
+    fileSize?: number;
+    fileType?: string;
+  }): Promise<Attachment> {
+    if (form.file) {
+      const fd = new FormData();
+      fd.append('objectiveId', form.objectiveId);
+      if (form.keyResultId) fd.append('keyResultId', form.keyResultId);
+      fd.append('file', form.file);
+      return fetchWithAuth('/api/attachments', { method: 'POST', body: fd });
+    }
+    return fetchWithAuth('/api/attachments', {
+      method: 'POST',
+      body: JSON.stringify({
+        objectiveId: form.objectiveId,
+        keyResultId: form.keyResultId ?? undefined,
+        url: form.url,
+        fileName: form.fileName,
+        fileSize: form.fileSize,
+        fileType: form.fileType,
+      }),
+    });
+  },
+
+  async deleteAttachment(attachmentId: string): Promise<void> {
+    return fetchWithAuth(`/api/attachments/${attachmentId}`, { method: 'DELETE' });
   },
 };

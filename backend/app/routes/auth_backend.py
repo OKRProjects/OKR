@@ -434,9 +434,21 @@ def logout():
 @bp.route('/auth/me', methods=['GET'])
 @require_auth
 def get_current_user(user_id):
-    """Get current authenticated user"""
+    """Get current authenticated user. Includes role and departmentId from users collection if present."""
     try:
         user_info = get_user_info_from_request()
+        try:
+            from app.db.mongodb import get_db
+            db = get_db()
+            app_user = db.users.find_one({'_id': user_id})
+            if app_user:
+                user_info['role'] = app_user.get('role', 'standard')
+                if app_user.get('departmentId') is not None:
+                    user_info['departmentId'] = str(app_user['departmentId'])
+        except Exception:
+            user_info['role'] = user_info.get('role', 'standard')
+        if 'role' not in user_info:
+            user_info['role'] = 'standard'
         return jsonify(user_info), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 401

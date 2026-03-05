@@ -1,11 +1,16 @@
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 LEVEL_STRATEGIC = 'strategic'
 LEVEL_FUNCTIONAL = 'functional'
 LEVEL_TACTICAL = 'tactical'
 TIMELINE_ANNUAL = 'annual'
 TIMELINE_QUARTERLY = 'quarterly'
+
+STATUS_DRAFT = 'draft'
+STATUS_IN_REVIEW = 'in_review'
+STATUS_APPROVED = 'approved'
+STATUS_REJECTED = 'rejected'
 
 
 class Objective:
@@ -21,11 +26,15 @@ class Objective:
         parent_objective_id: Optional[str] = None,
         division: Optional[str] = None,
         quarter: Optional[str] = None,
+        status: Optional[str] = None,
+        department_id: Optional[str] = None,
+        related_objective_ids: Optional[List[str]] = None,
         created_at: Optional[datetime] = None,
         updated_at: Optional[datetime] = None,
     ):
         self._id = _id
         self.title = title
+        self.related_objective_ids = related_objective_ids or []
         self.description = description or ''
         self.owner_id = owner_id
         self.level = level  # strategic | functional | tactical
@@ -34,6 +43,8 @@ class Objective:
         self.quarter = quarter  # Q1, Q2, Q3, Q4 when timeline is quarterly
         self.parent_objective_id = parent_objective_id
         self.division = division
+        self.status = status or STATUS_DRAFT  # draft | in_review | approved | rejected
+        self.department_id = department_id
         self.created_at = created_at or datetime.utcnow()
         self.updated_at = updated_at or datetime.utcnow()
 
@@ -45,6 +56,7 @@ class Objective:
             'level': self.level,
             'timeline': self.timeline,
             'fiscalYear': self.fiscal_year,
+            'status': self.status,
             'createdAt': self.created_at.isoformat() if isinstance(self.created_at, datetime) else self.created_at,
             'updatedAt': self.updated_at.isoformat() if isinstance(self.updated_at, datetime) else self.updated_at,
         }
@@ -56,6 +68,10 @@ class Objective:
             result['division'] = self.division
         if self.quarter is not None:
             result['quarter'] = self.quarter
+        if self.department_id is not None:
+            result['departmentId'] = self.department_id
+        if self.related_objective_ids:
+            result['relatedObjectiveIds'] = [str(x) for x in self.related_objective_ids]
         return result
 
     @staticmethod
@@ -71,6 +87,9 @@ class Objective:
             parent_objective_id=data.get('parentObjectiveId') or data.get('parent_objective_id'),
             division=data.get('division'),
             quarter=data.get('quarter'),
+            status=data.get('status', STATUS_DRAFT),
+            department_id=data.get('departmentId') or data.get('department_id'),
+            related_objective_ids=data.get('relatedObjectiveIds') or data.get('related_objective_ids'),
         )
         if 'createdAt' in data:
             val = data['createdAt']

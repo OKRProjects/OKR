@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { getCurrentUser, login, User } from '@/lib/auth';
 import { AppLayout } from '@/components/AppLayout';
-import { DashboardView } from '@/components/DashboardView';
+import { OKRDashboard } from '@/components/dashboard/OKRDashboard';
+import { ViewPreferencesProvider } from '@/lib/useViewPreferences';
 
 export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
@@ -31,7 +32,7 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <AppLayout title="Dashboard" description="Overview of your OKR performance">
+      <AppLayout title="Dashboard" description="3-tier OKR hierarchy and progress">
         <div className="text-center text-muted-foreground">Loading...</div>
       </AppLayout>
     );
@@ -40,8 +41,10 @@ export default function Dashboard() {
   if (!user) return null;
 
   return (
-    <AppLayout title="Dashboard" description="Overview of your OKR performance">
-      <DashboardView />
+    <AppLayout title="Dashboard" description="3-tier OKR hierarchy and progress">
+      <ViewPreferencesProvider>
+        <OKRDashboard />
+      </ViewPreferencesProvider>
     </AppLayout>
   );
 }
