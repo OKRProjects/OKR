@@ -77,6 +77,23 @@ export function OKRDetailView({
     setActiveTab(defaultTab as (typeof TAB_IDS)[number]);
   }, [defaultTab, visibleTabIds]);
 
+  // Keyboard shortcuts Alt+1–6 for tabs
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && e.key >= '1' && e.key <= '6') {
+        const index = parseInt(e.key, 10) - 1;
+        if (visibleTabIds[index]) {
+          e.preventDefault();
+          const tab = visibleTabIds[index];
+          setActiveTab(tab);
+          updatePreferences({ lastDetailTab: tab });
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [visibleTabIds, updatePreferences]);
+
   const handleTabChange = useCallback(
     (value: string) => {
       const tab = value as (typeof TAB_IDS)[number];
@@ -136,8 +153,13 @@ export function OKRDetailView({
         </div>
         {/* Desktop: horizontal tabs */}
         <TabsList className="hidden md:flex flex-wrap h-auto gap-1 min-h-[44px] [&>button]:min-h-[44px] [&>button]:px-3 flex-1">
-          {visibleTabIds.map((id) => (
-            <TabsTrigger key={id} value={id} className="min-h-[44px]">
+          {visibleTabIds.map((id, index) => (
+            <TabsTrigger
+              key={id}
+              value={id}
+              className="min-h-[44px]"
+              title={`${TAB_LABELS[id]} (Alt+${index + 1})`}
+            >
               {TAB_LABELS[id]}
             </TabsTrigger>
           ))}
@@ -158,9 +180,6 @@ export function OKRDetailView({
               keyResults={keyResults}
               onObjectiveUpdate={onObjectiveUpdate}
               readOnly={isViewOnly}
-              canSubmit={permissions.canSubmit}
-              canApproveReject={permissions.canApproveReject}
-              canResubmit={permissions.canResubmit}
             />
           </TabsContent>
         )}

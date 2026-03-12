@@ -7,7 +7,7 @@ import { defaultFilters, type DashboardFilters } from './FilterBar';
 import { useFirstTimeTutorial } from '@/lib/tutorial';
 import { useViewPreferences } from '@/lib/useViewPreferences';
 import { useViewRole } from '@/lib/ViewRoleContext';
-import { filterObjective, getDaysLeftInQuarter, type DashboardViewProps } from './dashboardShared';
+import { filterObjective, getDaysLeftInQuarter, getVisibleObjectivesByRole, type DashboardViewProps } from './dashboardShared';
 import { ViewOnlyDashboardView } from './ViewOnlyDashboardView';
 import { StandardDashboardView } from './StandardDashboardView';
 import { LeaderDashboardView } from './LeaderDashboardView';
@@ -31,11 +31,17 @@ export function OKRDashboard() {
   const [exporting, setExporting] = useState(false);
   const [exportingSlides, setExportingSlides] = useState(false);
 
+  // Fetch objectives scoped by role/team: leader and view_only with departmentId see only their department
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const objs = await api.getObjectives({ fiscalYear });
+        const isScopedByDept =
+          (role === 'leader' || role === 'view_only') && user?.departmentId;
+        const objs = await api.getObjectives({
+          fiscalYear,
+          ...(isScopedByDept ? { departmentId: user!.departmentId! } : {}),
+        });
         if (cancelled) return;
         setObjectives(objs);
         const krMap: Record<string, KeyResult[]> = {};
@@ -62,7 +68,7 @@ export function OKRDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [fiscalYear]);
+  }, [fiscalYear, role, user?.departmentId]);
 
   const scoreByObjectiveId = useMemo(() => {
     const out: Record<string, number> = {};
@@ -74,9 +80,15 @@ export function OKRDashboard() {
     return out;
   }, [keyResultsByObjective]);
 
+  const visibleObjectives = useMemo(
+    () =>
+      getVisibleObjectivesByRole(objectives, keyResultsByObjective, user, role ?? ''),
+    [objectives, keyResultsByObjective, user, role]
+  );
+
   const filtered = useMemo(() => {
-    return objectives.filter((o) => filterObjective(o, scoreByObjectiveId, filters));
-  }, [objectives, scoreByObjectiveId, filters]);
+    return visibleObjectives.filter((o) => filterObjective(o, scoreByObjectiveId, filters));
+  }, [visibleObjectives, scoreByObjectiveId, filters]);
 
   const filteredAndSorted = useMemo(() => {
     let list = [...filtered];
@@ -133,26 +145,27 @@ export function OKRDashboard() {
 
   const needsReviewObjectives = useMemo(() => {
     if (role !== 'leader' || !user?.departmentId) return [];
-    return objectives.filter(
+    return visibleObjectives.filter(
       (o) =>
         (o.status ?? 'draft') === 'in_review' &&
         (o.departmentId === user.departmentId || String(o.departmentId) === user.departmentId)
     );
-  }, [objectives, role, user?.departmentId]);
+  }, [visibleObjectives, role, user?.departmentId]);
 
   const myObjectivesCount = useMemo(() => {
     if (!user?.sub) return 0;
-    return objectives.filter((o) => o.ownerId === user.sub).length;
-  }, [objectives, user?.sub]);
+    return visibleObjectives.filter((o) => o.ownerId === user.sub).length;
+  }, [visibleObjectives, user?.sub]);
 
   const myWorkObjectives = useMemo(() => {
-    if (role !== 'standard' || !user?.sub) return [];
+    if (role !== 'standard' && role !== 'developer') return [];
+    if (!user?.sub) return [];
     return filteredAndSorted.filter((o) => o.ownerId === user.sub);
   }, [role, user?.sub, filteredAndSorted]);
 
   const departmentStats = useMemo(() => {
     if (role !== 'leader' || !user?.departmentId) return null;
-    const dept = objectives.filter(
+    const dept = visibleObjectives.filter(
       (o) =>
         o.departmentId === user.departmentId || String(o.departmentId) === user.departmentId
     );
@@ -162,7 +175,7 @@ export function OKRDashboard() {
     ).length;
     const onTrackPct = withScores.length > 0 ? (onTrack / withScores.length) * 100 : 0;
     return { count: dept.length, onTrackPercent: onTrackPct };
-  }, [objectives, role, user?.departmentId, scoreByObjectiveId]);
+  }, [visibleObjectives, role, user?.departmentId, scoreByObjectiveId]);
 
   const handleSortChange = useCallback(
     (sort: 'score' | 'owner' | 'updated', direction: 'asc' | 'desc') => {
@@ -227,15 +240,17 @@ export function OKRDashboard() {
 
   const divisions = useMemo(() => {
     const set = new Set<string>();
-    objectives.forEach((o) => {
+    visibleObjectives.forEach((o) => {
       if (o.division) set.add(o.division);
     });
     return Array.from(set).sort();
-  }, [objectives]);
+  }, [visibleObjectives]);
 
   const stats = useMemo(() => {
-    const allScores = Object.values(scoreByObjectiveId);
-    const total = objectives.length;
+    const total = visibleObjectives.length;
+    const allScores = visibleObjectives
+      .map((o) => (o._id ? scoreByObjectiveId[o._id] : undefined))
+      .filter((s): s is number => s !== undefined);
     const avg =
       allScores.length > 0 ? allScores.reduce((a, b) => a + b, 0) / allScores.length : 0;
     const onTrackCount = allScores.filter((s) => s >= 0.7).length;
@@ -246,7 +261,7 @@ export function OKRDashboard() {
       onTrackPercent: onTrackPct,
       daysLeftInQuarter: getDaysLeftInQuarter(),
     };
-  }, [objectives.length, scoreByObjectiveId]);
+  }, [visibleObjectives, scoreByObjectiveId]);
 
   if (loading) {
     return (
@@ -270,7 +285,7 @@ export function OKRDashboard() {
 
   const baseProps: DashboardViewProps = {
     role: role as DashboardViewProps['role'],
-    objectives,
+    objectives: visibleObjectives,
     strategic,
     divisional,
     tactical,

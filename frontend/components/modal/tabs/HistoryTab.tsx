@@ -12,7 +12,8 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { api, type Objective, type WorkflowEvent } from '@/lib/api';
-import { Search, Filter, ChevronDown, ChevronUp } from 'lucide-react';
+import { toast } from 'sonner';
+import { Search, Filter, ChevronDown, ChevronUp, Download } from 'lucide-react';
 
 const EVENT_TYPE_OPTIONS = [
   { value: 'all', label: 'All types' },
@@ -54,6 +55,8 @@ export function HistoryTab({ objective, eventTypeFilter = 'all', onEventTypeFilt
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const EVENTS_PER_PAGE = 20;
 
   useEffect(() => {
     if (!objectiveId) return;
@@ -91,14 +94,54 @@ export function HistoryTab({ objective, eventTypeFilter = 'all', onEventTypeFilt
     return true;
   });
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / EVENTS_PER_PAGE));
+  const paginated = filtered.slice((page - 1) * EVENTS_PER_PAGE, page * EVENTS_PER_PAGE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [eventTypeFilter, search, actorFilter, fromDate, toDate]);
+
+  const handleExportCSV = () => {
+    const headers = ['Timestamp', 'From', 'To', 'Actor', 'Reason'];
+    const rows = filtered.map((ev) => [
+      new Date(ev.timestamp).toISOString(),
+      ev.fromStatus ?? '',
+      ev.toStatus ?? '',
+      displayActor(ev.actorId ?? ''),
+      (ev.reason ?? '').replace(/"/g, '""'),
+    ]);
+    const csvContent = [
+      headers.join(','),
+      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(',')),
+    ].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `okr-workflow-history-${objectiveId ?? 'export'}-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    toast.success('Export complete', { description: `${filtered.length} events exported to CSV` });
+  };
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>History / Audit Trail</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Workflow status changes. Filter by event type, date range, or actor.
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <CardTitle>Workflow History</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Timeline of status changes with timestamps, actors, and reasons.
+              </p>
+            </div>
+            {filtered.length > 0 && (
+              <Button variant="outline" size="sm" onClick={handleExportCSV} className="shrink-0">
+                <Download className="h-4 w-4 mr-1.5" />
+                Export CSV
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Mobile: collapsible filters to reduce clutter */}
@@ -229,32 +272,59 @@ export function HistoryTab({ objective, eventTypeFilter = 'all', onEventTypeFilt
                 : 'No entries match the current filters.'}
             </p>
           ) : (
-            <div className="overflow-x-auto -mx-2 px-2">
-              <table className="w-full text-sm min-w-[320px]">
-                <thead>
-                  <tr className="border-b text-left text-muted-foreground">
-                    <th className="pb-2 pr-4 font-medium">When</th>
-                    <th className="pb-2 pr-4 font-medium">From</th>
-                    <th className="pb-2 pr-4 font-medium">To</th>
-                    <th className="pb-2 pr-4 font-medium">Actor</th>
-                    <th className="pb-2 font-medium">Reason</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((ev) => (
-                    <tr key={ev._id} className="border-b last:border-0">
-                      <td className="py-3 pr-4 whitespace-nowrap text-muted-foreground">
-                        {formatDateTime(ev.timestamp)}
-                      </td>
-                      <td className="py-3 pr-4 capitalize">{ev.fromStatus}</td>
-                      <td className="py-3 pr-4 capitalize">{ev.toStatus}</td>
-                      <td className="py-3 pr-4 font-mono text-xs">{displayActor(ev.actorId ?? '')}</td>
-                      <td className="py-3">{ev.reason ?? '—'}</td>
+            <>
+              <div className="overflow-x-auto -mx-2 px-2">
+                <table className="w-full text-sm min-w-[320px]">
+                  <thead>
+                    <tr className="border-b text-left text-muted-foreground">
+                      <th className="pb-2 pr-4 font-medium">When</th>
+                      <th className="pb-2 pr-4 font-medium">From</th>
+                      <th className="pb-2 pr-4 font-medium">To</th>
+                      <th className="pb-2 pr-4 font-medium">Actor</th>
+                      <th className="pb-2 font-medium">Reason</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {paginated.map((ev) => (
+                      <tr key={ev._id} className="border-b last:border-0">
+                        <td className="py-3 pr-4 whitespace-nowrap text-muted-foreground">
+                          {formatDateTime(ev.timestamp)}
+                        </td>
+                        <td className="py-3 pr-4 capitalize">{ev.fromStatus}</td>
+                        <td className="py-3 pr-4 capitalize">{ev.toStatus}</td>
+                        <td className="py-3 pr-4 font-mono text-xs">{displayActor(ev.actorId ?? '')}</td>
+                        <td className="py-3">{ev.reason ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                  <span className="text-sm text-muted-foreground">
+                    Page {page} of {totalPages} ({filtered.length} events)
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page <= 1}
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={page >= totalPages}
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

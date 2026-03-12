@@ -51,7 +51,7 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
     { id: 'dashboard', name: 'Dashboard', icon: Home, href: '/dashboard' },
     { id: 'objectives', name: 'Objectives', icon: Target, href: '/okrs' },
     { id: 'analytics', name: 'Analytics', icon: BarChart3, href: '/analytics' },
-    { id: 'divisions', name: 'By Division', icon: Building2, href: '/divisions' },
+    { id: 'divisions', name: 'Divisions', icon: Building2, href: '/divisions' },
   ];
 
   const bottomNavigation = [
@@ -132,22 +132,22 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
   return (
     <div
       className={cn(
-        'relative flex flex-col border-r bg-card transition-all duration-300',
-        collapsed ? 'w-20' : 'w-64'
+        'relative flex flex-col border-r border-border bg-sidebar transition-all duration-300',
+        collapsed ? 'w-[72px]' : 'w-60'
       )}
     >
       {/* Logo / Header */}
-      <div className="flex h-16 items-center border-b px-6">
+      <div className="flex h-14 items-center border-b border-border px-4">
         {!collapsed && (
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <Target className="h-5 w-5" />
             </div>
-            <span className="font-bold">OKR System</span>
+            <span className="font-semibold tracking-tight text-sidebar-foreground">Goals</span>
           </div>
         )}
         {collapsed && (
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground mx-auto">
+          <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <Target className="h-5 w-5" />
           </div>
         )}
@@ -155,20 +155,20 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
 
       {/* New Objective Button (hidden for view_only) */}
       {role !== 'view_only' && (
-        <div className="p-4">
-          <Button 
-            onClick={onNewObjective || (() => window.location.href = '/okrs/new')} 
-            className="w-full"
+        <div className="p-3">
+          <Button
+            onClick={onNewObjective || (() => (window.location.href = '/okrs/new'))}
+            className="w-full rounded-lg"
             size={collapsed ? 'icon' : 'default'}
           >
             <Plus className="h-4 w-4" />
-            {!collapsed && <span className="ml-2">New Objective</span>}
+            {!collapsed && <span className="ml-2">New objective</span>}
           </Button>
         </div>
       )}
 
       {/* Main navigation */}
-      <nav className="flex-1 space-y-1 px-3 pt-2">
+      <nav className="flex-1 space-y-0.5 px-2 pt-2">
         {mainNavigation.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
@@ -177,43 +177,71 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
               key={item.id}
               href={item.href}
               className={cn(
-                'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                 active
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                  : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
               )}
             >
-              <Icon className="h-5 w-5 flex-shrink-0" />
+              <Icon className="h-4.5 w-4.5 flex-shrink-0 opacity-90" />
               {!collapsed && <span>{item.name}</span>}
             </Link>
           );
         })}
       </nav>
 
-      {/* User management (admin only) */}
+      {/* Admin: User management */}
       {role === 'admin' && (
-        <div className="space-y-1 px-3">
+        <div className="border-t border-sidebar-border space-y-0.5 px-2 py-2">
+          {!collapsed && (
+            <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
+              Admin
+            </p>
+          )}
           <Link
             href="/admin/users"
             className={cn(
-              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+              'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
               pathname?.startsWith('/admin/users')
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
             )}
           >
-            <Users className="h-5 w-5 flex-shrink-0" />
+            <Users className="h-4.5 w-4.5 flex-shrink-0 opacity-90" />
             {!collapsed && <span>User management</span>}
           </Link>
         </div>
       )}
 
-      {/* Help & Settings (bottom group) */}
-      <div className="border-t space-y-1 px-3 py-3">
+      {/* Overview stats (hidden for view_only) */}
+      {!collapsed && role !== 'view_only' && (
+        <div className="border-t border-sidebar-border p-3">
+          <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
+            Overview
+          </p>
+          <div className="space-y-1.5">
+            {statsData.map((stat) => {
+              const Icon = stat.icon;
+              return (
+                <div key={stat.label} className="flex items-center justify-between rounded-md px-2 py-1.5 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Icon className={cn('h-3.5 w-3.5', stat.color)} />
+                    <span className="text-sidebar-foreground/70">{stat.label}</span>
+                  </div>
+                  <span className="font-semibold tabular-nums text-sidebar-foreground">{stat.value}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Account: Documentation, Integrations, Settings */}
+      <div className="border-t border-sidebar-border space-y-0.5 px-2 py-3">
         {!collapsed && (
-          <h3 className="mb-2 px-3 text-xs font-semibold uppercase text-muted-foreground">
-            Help & account
-          </h3>
+          <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
+            Account
+          </p>
         )}
         {bottomNavigation.map((item: { id: string; name: string; icon: typeof BookOpen; href: string }) => {
           const Icon = item.icon;
@@ -223,49 +251,26 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
               key={item.id}
               href={item.href}
               className={cn(
-                'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                 active
-                  ? 'bg-primary text-primary-foreground font-medium'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                  : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
               )}
             >
-              <Icon className="h-5 w-5 flex-shrink-0" />
+              <Icon className="h-4.5 w-4.5 flex-shrink-0 opacity-90" />
               {!collapsed && <span>{item.name}</span>}
             </Link>
           );
         })}
       </div>
 
-      {/* Quick Stats (hidden for view_only to reduce clutter) */}
-      {!collapsed && role !== 'view_only' && (
-        <div className="border-t p-4">
-          <h3 className="mb-3 text-xs font-semibold uppercase text-muted-foreground">
-            Quick Stats
-          </h3>
-          <div className="space-y-2">
-            {statsData.map((stat) => {
-              const Icon = stat.icon;
-              return (
-                <div key={stat.label} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Icon className={cn('h-4 w-4', stat.color)} />
-                    <span className="text-sm text-muted-foreground">{stat.label}</span>
-                  </div>
-                  <span className="text-sm font-semibold">{stat.value}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Test role — switch between roles to test UI and permissions */}
       {!collapsed && (
-        <div className="border-t p-4">
-          <h3 className="mb-2 text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1.5">
+        <div className="border-t border-sidebar-border p-3">
+          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
             <Eye className="h-3.5 w-3.5" />
             Test role
-          </h3>
+          </p>
           <Select
             value={rolePreview ?? 'actual'}
             onValueChange={(v) => setRolePreview(v === 'actual' ? null : (v as 'admin' | 'leader' | 'standard' | 'view_only' | 'developer'))}
@@ -288,7 +293,8 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
       {/* Collapse Button */}
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="absolute -right-3 top-20 flex h-6 w-6 items-center justify-center rounded-full border bg-background shadow-sm hover:bg-muted"
+        className="absolute -right-3 top-16 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background shadow-sm hover:bg-muted"
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
         {collapsed ? (
           <ChevronRight className="h-4 w-4" />

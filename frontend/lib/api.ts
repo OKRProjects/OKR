@@ -429,13 +429,14 @@ export const api = {
   },
 
   // OKRs API
-  async getObjectives(params?: { fiscalYear?: number; level?: string; division?: string; status?: string; ownerId?: string; parentObjectiveId?: string | null }): Promise<Objective[]> {
+  async getObjectives(params?: { fiscalYear?: number; level?: string; division?: string; status?: string; ownerId?: string; departmentId?: string; parentObjectiveId?: string | null }): Promise<Objective[]> {
     const search = new URLSearchParams();
     if (params?.fiscalYear != null) search.set('fiscalYear', String(params.fiscalYear));
     if (params?.level) search.set('level', params.level);
     if (params?.division) search.set('division', params.division);
     if (params?.status) search.set('status', params.status);
     if (params?.ownerId) search.set('ownerId', params.ownerId);
+    if (params?.departmentId) search.set('departmentId', params.departmentId);
     if (params?.parentObjectiveId !== undefined) search.set('parentObjectiveId', params.parentObjectiveId ?? '');
     const q = search.toString();
     return fetchWithAuth(`/api/objectives${q ? `?${q}` : ''}`);
@@ -559,6 +560,13 @@ export const api = {
 
   async resubmitObjective(objectiveId: string): Promise<Objective> {
     return fetchWithAuth(`/api/objectives/${objectiveId}/resubmit`, { method: 'POST' });
+  },
+
+  async reopenObjective(objectiveId: string, reason?: string): Promise<Objective> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/reopen`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason ?? '' }),
+    });
   },
 
   async getComments(objectiveId: string): Promise<Comment[]> {

@@ -149,7 +149,6 @@ export function DivisionsView() {
                   endAngle={0}
                 >
                   <RadialBar
-                    minAngle={15}
                     label={{ position: 'insideStart', fill: '#fff', fontSize: 12 }}
                     background
                     dataKey="score"

@@ -92,6 +92,15 @@ def can_resubmit(db, user_id: str, objective: dict) -> bool:
     return objective.get('ownerId') == user_id
 
 
+def can_reopen(db, user_id: str, objective: dict) -> bool:
+    """Reopen (approved/rejected -> draft): admin only."""
+    role = get_user_role(db, user_id)
+    if role != ROLE_ADMIN:
+        return False
+    status = (objective.get('status') or '').lower()
+    return status in ('approved', 'rejected')
+
+
 def can_delete_objective(db, user_id: str, objective: dict) -> bool:
     """Full control: admin or leader in dept."""
     role = get_user_role(db, user_id)

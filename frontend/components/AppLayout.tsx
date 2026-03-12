@@ -27,20 +27,13 @@ export function AppLayout({ children, title, description, showNewObjective = fal
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
+        {/* Header: minimal so dashboard owns its title and cycle */}
         {title && (
-          <header className="flex h-16 items-center justify-between border-b bg-card px-6">
-            <div>
-              <h1 className="text-2xl font-bold">{title}</h1>
-              {description && (
-                <p className="text-sm text-muted-foreground">{description}</p>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">
-                FY {new Date().getFullYear()} Q{Math.floor((new Date().getMonth() + 3) / 3)}
-              </span>
-            </div>
+          <header className="flex h-14 shrink-0 items-center border-b border-border bg-background px-6">
+            <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+            {description && (
+              <span className="ml-3 text-sm text-muted-foreground hidden sm:inline">— {description}</span>
+            )}
           </header>
         )}
 

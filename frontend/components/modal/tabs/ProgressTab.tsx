@@ -14,11 +14,13 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Legend,
 } from 'recharts';
 import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, AlertTriangle, Pencil } from 'lucide-react';
 import { cn } from '@/components/ui/utils';
 import { InlineHelp } from '@/components/shared/InlineHelp';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { toast } from 'sonner';
 
 interface ProgressTabProps {
   objective: Objective;
@@ -33,11 +35,23 @@ function KRProgressRow({
   kr,
   onUpdate,
   readOnly,
+  index = 0,
+  totalCount = 1,
+  onFocusRow = () => {},
+  focusedIndex = 0,
+  objectiveUpdatedAt,
 }: {
   kr: KeyResult;
   onUpdate: () => void;
   readOnly?: boolean;
+  index?: number;
+  totalCount?: number;
+  onFocusRow?: (i: number) => void;
+  focusedIndex?: number;
+  objectiveUpdatedAt?: string;
 }) {
+  const rowRef = useRef<HTMLButtonElement>(null);
+  const sliderContainerRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [score, setScore] = useState(kr.score ?? 0);
   const [notes, setNotes] = useState('');
@@ -77,6 +91,7 @@ function KRProgressRow({
       await api.updateKeyResult(kr._id, payload);
       setNotes('');
       onUpdate();
+      toast.success('Score updated', { description: `Key result score saved.` });
       if (expanded) {
         const next = await api.getKeyResultHistory(kr._id);
         setHistory(next);
@@ -87,7 +102,8 @@ function KRProgressRow({
         setPendingPayload({ score: p.score, notes: p.notes });
         setConflictOpen(true);
       } else {
-        console.error(e);
+        const msg = e instanceof Error ? e.message : 'Failed to save';
+        toast.error('Update failed', { description: msg });
       }
     } finally {
       setLoading(false);
@@ -111,12 +127,13 @@ function KRProgressRow({
           await api.updateKeyResult(kr._id!, payload);
           setNotes('');
           onUpdate();
+          toast.success('Score updated');
           if (expanded) {
             const next = await api.getKeyResultHistory(kr._id!);
             setHistory(next);
           }
         } catch (err) {
-          console.error(err);
+          toast.error(err instanceof Error ? err.message : 'Update failed');
         } finally {
           setLoading(false);
         }
@@ -124,18 +141,32 @@ function KRProgressRow({
     }
   };
 
-  const chartData = history
-    .map((h) => ({
-      date: h.recordedAt ? new Date(h.recordedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '',
-      score: h.score,
-      pct: Math.round(h.score * 100),
-    }))
-    .slice(-20);
-
   const prevScore = history.length >= 2 ? history[history.length - 2].score : null;
   const delta = prevScore != null ? score - prevScore : null;
-  const isBehind = score < 0.4;
+  const daysInQuarter = 90;
+  const quarterStart = objectiveUpdatedAt ? new Date(objectiveUpdatedAt) : new Date(new Date().getFullYear(), 0, 1);
+  const daysPassed = Math.max(0, (Date.now() - quarterStart.getTime()) / (1000 * 60 * 60 * 24));
+  const expectedProgress = Math.min(1, daysPassed / daysInQuarter);
+  const isBehind = score < expectedProgress || score < 0.4;
   const statusLabel = getScoreStatusLabel(score);
+  const velocity = history.length >= 2 && history[0].recordedAt && history[history.length - 1].recordedAt
+    ? (history[history.length - 1].score - history[0].score) / (new Date(history[history.length - 1].recordedAt).getTime() - new Date(history[0].recordedAt).getTime()) * (1000 * 60 * 60 * 24 * 7)
+    : null;
+
+  const quarterStartMs = quarterStart.getTime();
+  const quarterEndMs = quarterStartMs + daysInQuarter * 24 * 60 * 60 * 1000;
+  const chartData = history
+    .map((h) => {
+      const t = h.recordedAt ? new Date(h.recordedAt).getTime() : 0;
+      const expected = Math.min(1, Math.max(0, (t - quarterStartMs) / (quarterEndMs - quarterStartMs)));
+      return {
+        date: h.recordedAt ? new Date(h.recordedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '',
+        score: h.score,
+        expected,
+        pct: Math.round(h.score * 100),
+      };
+    })
+    .slice(-20);
 
   const handleRowKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -149,7 +180,6 @@ function KRProgressRow({
 
   const handleQuickUpdate = () => {
     setExpanded(true);
-    setQuickUpdateFocus(true);
   };
 
   const handleSaveKeyDown = (e: React.KeyboardEvent) => {
@@ -206,8 +236,17 @@ function KRProgressRow({
           {isBehind && (
             <div className="flex items-center gap-2 text-amber-700 bg-amber-50 dark:bg-amber-950/30 rounded-lg px-3 py-2 text-sm">
               <AlertTriangle className="h-4 w-4 shrink-0" />
-              Behind schedule — consider updating target or scope.
+              <span>
+                {score < expectedProgress
+                  ? `Behind schedule — current ${(score * 100).toFixed(0)}% vs expected ${(expectedProgress * 100).toFixed(0)}% at this point.`
+                  : 'Behind schedule — consider updating target or scope.'}
+              </span>
             </div>
+          )}
+          {velocity != null && expanded && (
+            <p className="text-xs text-muted-foreground">
+              Velocity: ~{(velocity * 100).toFixed(1)}% per week (from history).
+            </p>
           )}
           {!readOnly && (
             <>
@@ -219,7 +258,7 @@ function KRProgressRow({
                   <label className="block text-sm font-medium text-muted-foreground mb-1">Score (0–100%)</label>
                   <ScoreSlider value={score} onChange={setScore} disabled={loading} />
                 </div>
-                <Button size="sm" onClick={handleSave} disabled={loading} className="min-h-[44px] min-w-[44px] touch-manipulation" title="Save (Ctrl+Enter)">
+                <Button size="sm" onClick={() => handleSave()} disabled={loading} className="min-h-[44px] min-w-[44px] touch-manipulation" title="Save (Ctrl+Enter)">
                   {loading ? 'Saving…' : 'Save'}
                 </Button>
               </div>
@@ -243,7 +282,9 @@ function KRProgressRow({
                   <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                   <YAxis domain={[0, 1]} tick={{ fontSize: 10 }} tickFormatter={(v) => `${v * 100}%`} width={28} />
                   <Tooltip formatter={(v: number) => `${(Number(v) * 100).toFixed(0)}%`} />
-                  <Line type="monotone" dataKey="score" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="score" name="Actual" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="expected" name="Expected" stroke="var(--muted-foreground)" strokeDasharray="4 4" strokeWidth={1.5} dot={false} />
+                  <Legend />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -283,6 +324,7 @@ export function ProgressTab({
   canEditKr,
 }: ProgressTabProps) {
   const refresh = onKeyResultsUpdate ?? (() => {});
+  const [focusedIndex, setFocusedIndex] = useState(0);
 
   return (
     <div className="space-y-4">
@@ -290,7 +332,7 @@ export function ProgressTab({
         <CardHeader>
           <CardTitle>Key result progress</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Update scores (0.0–1.0), add notes, and view history. Expand a row to see the trend chart.
+            Update scores (0.0–1.0), add notes, and view history. Expand a row to see the trend chart and expected vs actual.
           </p>
         </CardHeader>
       </Card>
@@ -303,12 +345,17 @@ export function ProgressTab({
         />
       ) : (
         <div className="space-y-2">
-          {keyResults.map((kr) => (
+          {keyResults.map((kr, index) => (
             <KRProgressRow
               key={kr._id}
               kr={kr}
               onUpdate={refresh}
               readOnly={readOnly || (canEditKr ? !canEditKr(kr) : false)}
+              index={index}
+              totalCount={keyResults.length}
+              onFocusRow={setFocusedIndex}
+              focusedIndex={focusedIndex}
+              objectiveUpdatedAt={objective.updatedAt ?? undefined}
             />
           ))}
         </div>

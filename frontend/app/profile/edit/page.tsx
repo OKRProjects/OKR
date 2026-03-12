@@ -4,9 +4,12 @@ import { useEffect, useState } from 'react';
 import { getCurrentUser, login, User } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Navbar from '@/components/Navbar';
+import { AppLayout } from '@/components/AppLayout';
 import ProfileForm from '@/components/ProfileForm';
 import { api, Profile } from '@/lib/api';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft } from 'lucide-react';
 
 export default function EditProfilePage() {
   const [user, setUser] = useState<User | null>(null);
@@ -38,7 +41,7 @@ export default function EditProfilePage() {
 
   const loadProfile = async () => {
     if (!user) return;
-    
+
     try {
       const data = await api.getProfile();
       setProfile(data);
@@ -51,14 +54,17 @@ export default function EditProfilePage() {
     }
   };
 
+  useEffect(() => {
+    if (user) {
+      loadProfile();
+    }
+  }, [user]);
+
   if (isLoading || loading || !user) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center">Loading...</div>
-        </div>
-      </div>
+      <AppLayout title="Edit Profile" description="Update your profile information">
+        <div className="text-center text-muted-foreground">Loading...</div>
+      </AppLayout>
     );
   }
 
@@ -75,22 +81,20 @@ export default function EditProfilePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-6">
-          <Link
-            href="/profile"
-            className="text-indigo-600 hover:text-indigo-700 text-sm font-medium mb-4 inline-block"
-          >
-            ← Back to Profile
+    <AppLayout title="Edit Profile" description="Update your profile information">
+      <div className="space-y-6">
+        <Button variant="ghost" size="sm" asChild className="gap-1.5 text-muted-foreground hover:text-foreground">
+          <Link href="/profile">
+            <ArrowLeft className="h-4 w-4" />
+            Back to Profile
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900">Edit Profile</h1>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <ProfileForm profile={profile} onSuccess={handleProfileUpdate} />
-        </div>
+        </Button>
+        <Card>
+          <CardContent className="pt-6">
+            <ProfileForm profile={profile} onSuccess={handleProfileUpdate} />
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </AppLayout>
   );
 }

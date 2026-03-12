@@ -12,6 +12,7 @@ export type OKRPermissions = {
   canSubmit: boolean;
   canApproveReject: boolean;
   canResubmit: boolean;
+  canReopen: boolean;
   canDelete: boolean;
   canCreateShareLink: boolean;
 };
@@ -57,6 +58,11 @@ export function getOKRPermissions(
 
   const canResubmit = role === 'admin' || (role !== 'view_only' && strEq(ownerId, userId));
 
+  const status = (objective.status ?? '').toString().toLowerCase();
+  const canReopen =
+    role === 'admin' &&
+    (status === 'approved' || status === 'rejected');
+
   const canDelete =
     role === 'admin' || (role === 'leader' && objDept && userDept && strEq(objDept, userDept));
 
@@ -72,6 +78,7 @@ export function getOKRPermissions(
     canSubmit,
     canApproveReject,
     canResubmit,
+    canReopen,
     canDelete,
     canCreateShareLink,
   };

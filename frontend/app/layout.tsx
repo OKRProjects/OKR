@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Toaster } from "sonner";
 import Chatbot from "@/components/Chatbot";
 import { ViewRoleProvider } from "@/lib/ViewRoleContext";
 import { ViewPreferencesProvider } from "@/lib/useViewPreferences";
@@ -33,6 +34,7 @@ export default function RootLayout({
         <ViewRoleProvider>
           <ViewPreferencesProvider>
             {children}
+            <Toaster richColors position="top-right" />
             <Chatbot />
           </ViewPreferencesProvider>
         </ViewRoleProvider>

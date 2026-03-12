@@ -75,7 +75,7 @@ export function LeaderDashboardView(props: DashboardViewProps) {
         departmentStats={departmentStats}
       />
       {needsReviewObjectives.length > 0 && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20 p-4">
+        <div className="rounded-xl border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20 p-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-200 mb-3">
             <ClipboardCheck className="h-4 w-4" />
             Needs your review

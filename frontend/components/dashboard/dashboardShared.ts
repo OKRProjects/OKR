@@ -1,7 +1,59 @@
-import type { Objective } from '@/lib/api';
+import type { Objective, KeyResult } from '@/lib/api';
 import type { DashboardFilters } from './FilterBar';
 import type { DashboardRole } from './DashboardHeader';
 import type { PresentationSlide } from '@/components/presentation/PresentationMode';
+
+/** User shape for visibility: sub (id) and optional departmentId, role */
+export interface UserForVisibility {
+  sub?: string;
+  departmentId?: string | null;
+  role?: string;
+}
+
+/**
+ * Returns objectives visible to the user based on role and team.
+ * - view_only: objectives in user's department (if departmentId set); otherwise all (read-only).
+ * - standard: objectives user owns OR where user owns at least one key result.
+ * - leader: objectives in user's department.
+ * - admin: all objectives.
+ */
+export function getVisibleObjectivesByRole(
+  objectives: Objective[],
+  keyResultsByObjective: Record<string, KeyResult[]>,
+  user: UserForVisibility | null,
+  role: string
+): Objective[] {
+  if (!user) return objectives;
+  const userId = user.sub ?? '';
+  const userDept = user.departmentId ?? null;
+  const norm = (s: string | undefined | null) => (s == null ? '' : String(s));
+
+  if (role === 'admin') return objectives;
+
+  if (role === 'leader') {
+    if (!userDept) return objectives;
+    return objectives.filter(
+      (o) => norm(o.departmentId) === norm(userDept)
+    );
+  }
+
+  if (role === 'view_only') {
+    if (!userDept) return objectives;
+    return objectives.filter(
+      (o) => norm(o.departmentId) === norm(userDept)
+    );
+  }
+
+  if (role === 'standard' || role === 'developer') {
+    return objectives.filter((o) => {
+      if (norm(o.ownerId) === userId) return true;
+      const krs = o._id ? keyResultsByObjective[o._id] ?? [] : [];
+      return krs.some((kr) => norm(kr.ownerId) === userId);
+    });
+  }
+
+  return objectives;
+}
 
 export function getDaysLeftInQuarter(): number {
   const now = new Date();
@@ -30,6 +82,11 @@ export function filterObjective(
   }
   if (filters.tier !== 'all' && obj.level !== filters.tier) return false;
   if (filters.division !== 'all' && obj.division !== filters.division) return false;
+  if (filters.owner.trim()) {
+    const ownerQ = filters.owner.toLowerCase().trim();
+    const ownerId = (obj.ownerId ?? '').toLowerCase();
+    if (!ownerId || !ownerId.includes(ownerQ)) return false;
+  }
   if (filters.status !== 'all' && (obj.status ?? 'draft') !== filters.status) return false;
   if (filters.scoreRange !== 'all' && obj._id) {
     const s = scoreMap[obj._id] ?? 0;

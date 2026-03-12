@@ -7,6 +7,7 @@ from app.services.permissions import (
     can_submit_for_review,
     can_approve_reject,
     can_resubmit,
+    can_reopen,
     can_edit_kr,
     can_edit_objective,
     can_delete_objective,
@@ -77,6 +78,9 @@ def list_objectives(user_id):
         owner_id = request.args.get('ownerId')
         if owner_id:
             q['ownerId'] = owner_id
+        department_id = request.args.get('departmentId')
+        if department_id:
+            q['departmentId'] = department_id
         parent_id = request.args.get('parentObjectiveId')
         if parent_id:
             oid = _parse_object_id(parent_id)
@@ -111,6 +115,9 @@ def _build_objectives_query():
     owner_id = request.args.get('ownerId')
     if owner_id:
         q['ownerId'] = owner_id
+    department_id = request.args.get('departmentId')
+    if department_id:
+        q['departmentId'] = department_id
     parent_id = request.args.get('parentObjectiveId')
     if parent_id:
         oid = _parse_object_id(parent_id)
@@ -680,6 +687,30 @@ def resubmit_objective(objective_id, user_id):
         if not can_resubmit(db, user_id, obj):
             return jsonify({'error': 'Not allowed to resubmit'}), 403
         return _workflow_transition(objective_id, user_id, 'rejected', 'in_review')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/objectives/<objective_id>/reopen', methods=['POST'])
+@require_auth
+def reopen_objective(objective_id, user_id):
+    """APPROVED or REJECTED -> DRAFT. Allowed: admin only. Body: { reason? }."""
+    try:
+        oid = _parse_object_id(objective_id)
+        if oid is None:
+            return jsonify({'error': 'Invalid objective ID'}), 400
+        db = get_db()
+        obj = db.objectives.find_one({'_id': oid})
+        if not obj:
+            return jsonify({'error': 'Objective not found'}), 404
+        status = (obj.get('status') or '').lower()
+        if status not in ('approved', 'rejected'):
+            return jsonify({'error': 'Objective can only be reopened from approved or rejected'}), 400
+        if not can_reopen(db, user_id, obj):
+            return jsonify({'error': 'Not allowed to reopen'}), 403
+        data = request.get_json() or {}
+        reason = data.get('reason', '')
+        return _workflow_transition(objective_id, user_id, status, 'draft', reason=reason)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
