@@ -127,26 +127,33 @@ def _google_credentials_config():
     return {'client_id': client_id, 'client_secret': client_secret, 'redirect_uri': redirect_uri}
 
 
+def _google_auth_url_with_state(user_id: str) -> str:
+    """Build Google OAuth2 authorization URL with state=user_id."""
+    cfg = _google_credentials_config()
+    if not cfg:
+        raise ValueError('Google integration not configured')
+    base = 'https://accounts.google.com/o/oauth2/v2/auth'
+    params = {
+        'client_id': cfg['client_id'],
+        'redirect_uri': cfg['redirect_uri'],
+        'response_type': 'code',
+        'scope': 'https://www.googleapis.com/auth/presentations https://www.googleapis.com/auth/drive.file',
+        'access_type': 'offline',
+        'prompt': 'consent',
+        'state': user_id,
+    }
+    return f"{base}?{urllib.parse.urlencode(params)}"
+
+
 @bp.route('/integrations/google/auth-url', methods=['GET'])
 @require_auth
 def google_auth_url(user_id):
     """Return Google OAuth2 authorization URL. Frontend redirects user there."""
     try:
-        cfg = _google_credentials_config()
-        if not cfg:
-            return jsonify({'error': 'Google integration not configured'}), 503
-        base = 'https://accounts.google.com/o/oauth2/v2/auth'
-        params = {
-            'client_id': cfg['client_id'],
-            'redirect_uri': cfg['redirect_uri'],
-            'response_type': 'code',
-            'scope': 'https://www.googleapis.com/auth/presentations https://www.googleapis.com/auth/drive.file',
-            'access_type': 'offline',
-            'prompt': 'consent',
-            'state': user_id,
-        }
-        url = f"{base}?{urllib.parse.urlencode(params)}"
+        url = _google_auth_url_with_state(user_id)
         return jsonify({'url': url}), 200
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 503
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

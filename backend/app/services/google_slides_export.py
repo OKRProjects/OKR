@@ -107,15 +107,27 @@ def create_okr_presentation(user_id, tree_root_id=None, objective_ids=None):
     pres = service.presentations().get(presentationId=presentation_id).execute()
     slides = pres.get('slides', [])
 
+    # Build map of objectId -> current text length (to avoid deleteText on empty shapes; API rejects startIndex=endIndex=0)
+    def _text_length(element):
+        for run in element.get('shape', {}).get('text', {}).get('textElements', []) or []:
+            if 'textRun' in run and run['textRun'].get('content'):
+                return len(run['textRun']['content'])
+        return 0
+
+    text_length_by_id = {}
+    for slide in slides:
+        for el in slide.get('pageElements', []):
+            text_length_by_id[el['objectId']] = _text_length(el)
+
     def set_shape_text(obj_id, text):
+        text = (text or '')[:3000]
+        requests = []
+        if text_length_by_id.get(obj_id, 0) > 0:
+            requests.append({'deleteText': {'objectId': obj_id, 'textRange': {'type': 'ALL'}}})
+        requests.append({'insertText': {'objectId': obj_id, 'text': text, 'insertionIndex': 0}})
         service.presentations().batchUpdate(
             presentationId=presentation_id,
-            body={
-                'requests': [
-                    {'deleteText': {'objectId': obj_id, 'textRange': {'type': 'ALL'}}},
-                    {'insertText': {'objectId': obj_id, 'text': text[:3000], 'insertionIndex': 0}},
-                ],
-            },
+            body={'requests': requests},
         ).execute()
 
     # Title slide (first slide)

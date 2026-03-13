@@ -259,8 +259,8 @@ export function OKRDashboard() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Export failed';
       if (msg.includes('not connected') || msg.includes('not configured')) {
-        alert('Connect your Google account in Integrations first.');
-        window.location.href = '/integrations';
+        alert('Connect your Google account in Settings first.');
+        window.location.href = '/profile';
       } else {
         alert(msg);
       }
@@ -315,8 +315,8 @@ export function OKRDashboard() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Export failed';
       if (msg.includes('not connected') || msg.includes('not configured')) {
-        alert('Connect your Google account in Integrations first.');
-        window.location.href = '/integrations';
+        alert('Connect your Google account in Settings first.');
+        window.location.href = '/profile';
       } else {
         alert(msg);
       }
