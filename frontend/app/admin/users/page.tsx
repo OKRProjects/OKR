@@ -202,9 +202,9 @@ export default function AdminUsersPage() {
         )}
         <Card>
           <CardHeader>
-            <CardTitle>Users</CardTitle>
+            <CardTitle>User management</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Set role and department for each user. Changes apply immediately.
+              Users are loaded from Auth0 (everyone who can sign in). Set role and department here to control access and scope in this app; changes apply immediately.
             </p>
           </CardHeader>
           <CardContent>
@@ -212,7 +212,7 @@ export default function AdminUsersPage() {
               <div className="text-center text-muted-foreground py-8">Loading users...</div>
             ) : users.length === 0 ? (
               <div className="text-center text-muted-foreground py-8">
-                No users in the system yet. Users are added when they log in or when you update their role.
+                No users yet. If Auth0 is connected, anyone who has signed in will appear here. Otherwise add a user by saving a role for them after they log in once.
               </div>
             ) : (
               <div className="space-y-4">

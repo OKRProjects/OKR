@@ -2,7 +2,10 @@
 import os
 import secrets
 import urllib.parse
+import logging
 from flask import Blueprint, request, jsonify, redirect
+
+logger = logging.getLogger(__name__)
 from app.db.mongodb import get_db
 from app.routes.auth_backend import require_auth
 from app.services.permissions import get_user_role, ROLE_VIEW_ONLY
@@ -113,9 +116,12 @@ def get_incoming_webhook_url(user_id):
 # ---- Google Slides ----
 
 def _google_credentials_config():
-    client_id = os.getenv('GOOGLE_CLIENT_ID')
-    client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
-    redirect_uri = os.getenv('GOOGLE_REDIRECT_URI')
+    """Read Google OAuth env vars; strip surrounding quotes so .env quoting works."""
+    def _s(v):
+        return (v or '').strip().strip('"\'').strip() if v else ''
+    client_id = _s(os.getenv('GOOGLE_CLIENT_ID'))
+    client_secret = _s(os.getenv('GOOGLE_CLIENT_SECRET'))
+    redirect_uri = _s(os.getenv('GOOGLE_REDIRECT_URI'))
     if not client_id or not client_secret or not redirect_uri:
         return None
     return {'client_id': client_id, 'client_secret': client_secret, 'redirect_uri': redirect_uri}
@@ -145,21 +151,35 @@ def google_auth_url(user_id):
         return jsonify({'error': str(e)}), 500
 
 
+def _redirect_google_error(frontend: str, reason: str = ''):
+    """Redirect to integrations with google=error; in dev, append reason for debugging."""
+    base = f'{frontend}/integrations?google=error'
+    if reason and os.getenv('FLASK_ENV') == 'development':
+        base += '&reason=' + urllib.parse.quote(reason[:200])
+    return redirect(base)
+
+
 @bp.route('/integrations/google/callback', methods=['GET'])
 def google_callback():
     """OAuth callback: exchange code for tokens, store refresh_token, redirect to frontend."""
     code = request.args.get('code')
     state = request.args.get('state')  # user_id
+    error = request.args.get('error')  # from Google when user denies or config wrong
+    error_description = request.args.get('error_description', '')
+    frontend = (os.getenv('FRONTEND_URL') or 'http://localhost:3000').rstrip('/')
+    if error:
+        logger.warning('Google OAuth error from redirect: %s %s', error, error_description)
+        return _redirect_google_error(frontend, error_description or error)
     if not code or not state:
-        frontend = os.getenv('FRONTEND_URL', 'http://localhost:3000')
-        return redirect(f'{frontend}/integrations?google=error')
+        logger.warning('Google callback missing code or state')
+        return _redirect_google_error(frontend, 'missing_code_or_state')
     try:
         from google.oauth2.credentials import Credentials
         from google_auth_oauthlib.flow import Flow
         cfg = _google_credentials_config()
         if not cfg:
-            frontend = os.getenv('FRONTEND_URL', 'http://localhost:3000')
-            return redirect(f'{frontend}/integrations?google=error')
+            logger.warning('Google integration not configured (missing GOOGLE_* env)')
+            return _redirect_google_error(frontend, 'google_not_configured')
         flow = Flow.from_client_config(
             {
                 'web': {
@@ -177,18 +197,18 @@ def google_callback():
         credentials = flow.credentials
         refresh_token = credentials.refresh_token
         if not refresh_token:
-            frontend = os.getenv('FRONTEND_URL', 'http://localhost:3000')
-            return redirect(f'{frontend}/integrations?google=error')
+            logger.warning('Google OAuth did not return a refresh_token (prompt=consent may be needed)')
+            return _redirect_google_error(frontend, 'no_refresh_token')
         get_db().integration_configs.update_one(
             {'_id': state},
             {'$set': {'googleRefreshToken': refresh_token}},
             upsert=True,
         )
-        frontend = os.getenv('FRONTEND_URL', 'http://localhost:3000')
         return redirect(f'{frontend}/integrations?google=connected')
-    except Exception:
-        frontend = os.getenv('FRONTEND_URL', 'http://localhost:3000')
-        return redirect(f'{frontend}/integrations?google=error')
+    except Exception as e:
+        err_msg = str(e).strip() or type(e).__name__
+        logger.exception('Google OAuth callback failed: %s', e)
+        return _redirect_google_error(frontend, err_msg)
 
 
 @bp.route('/integrations/google/export', methods=['POST'])

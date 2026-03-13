@@ -20,6 +20,75 @@ BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:5001')
 if not AUTH0_AUDIENCE and AUTH0_DOMAIN:
     AUTH0_AUDIENCE = f'https://{AUTH0_DOMAIN}/api/v2/'
 
+# Cache for Auth0 Management API token (short-lived, avoid hitting token endpoint every request)
+_management_token_cache = {'token': None, 'expires': 0}
+
+
+def get_auth0_management_token():
+    """Get an access token for the Auth0 Management API (client_credentials). Requires the Auth0
+    application to be authorized for the Auth0 Management API with read:users scope.
+    In Auth0 Dashboard: APIs -> Auth0 Management API -> Machine to Machine Applications ->
+    Authorize your application and grant read:users."""
+    import time
+    global _management_token_cache
+    now = time.time()
+    if _management_token_cache['token'] and _management_token_cache['expires'] > now + 60:
+        return _management_token_cache['token']
+    if not AUTH0_DOMAIN or not AUTH0_CLIENT_ID or not AUTH0_CLIENT_SECRET:
+        return None
+    url = f'https://{AUTH0_DOMAIN}/oauth/token'
+    data = {
+        'grant_type': 'client_credentials',
+        'client_id': AUTH0_CLIENT_ID,
+        'client_secret': AUTH0_CLIENT_SECRET,
+        'audience': AUTH0_AUDIENCE or f'https://{AUTH0_DOMAIN}/api/v2/',
+    }
+    try:
+        r = requests.post(url, data=data, timeout=10)
+        if not r.ok:
+            return None
+        body = r.json()
+        token = body.get('access_token')
+        expires_in = body.get('expires_in', 86400)
+        if token:
+            _management_token_cache['token'] = token
+            _management_token_cache['expires'] = now + expires_in
+        return token
+    except Exception:
+        return None
+
+
+def list_auth0_users():
+    """Fetch all users from Auth0 Management API. Returns list of dicts with user_id, name, email, picture."""
+    token = get_auth0_management_token()
+    if not token:
+        return None
+    url = f'https://{AUTH0_DOMAIN}/api/v2/users'
+    all_users = []
+    page = 0
+    per_page = 100
+    while True:
+        try:
+            r = requests.get(
+                url,
+                headers={'Authorization': f'Bearer {token}'},
+                params={'per_page': per_page, 'page': page},
+                timeout=15,
+            )
+            if not r.ok:
+                return None
+            data = r.json()
+            if not data:
+                break
+            all_users.extend(data)
+            if len(data) < per_page:
+                break
+            page += 1
+        except Exception:
+            return None
+    return all_users
+
+
 def get_jwks_client():
     """Get JWKS client for Auth0 (uses certifi for SSL on macOS)"""
     if not AUTH0_DOMAIN:
@@ -402,7 +471,7 @@ def callback():
             session['user'] = user_info
             session['access_token'] = access_token
             session.permanent = True
-            
+
             # Redirect to frontend dashboard (AUTH0_BASE_URL is the frontend URL)
             return flask_redirect(f'{AUTH0_BASE_URL}/dashboard')
         except Exception as e:
@@ -472,7 +541,8 @@ def get_token():
 
 
 def require_admin(f):
-    """Decorator to require authenticated admin user."""
+    """Decorator to require authenticated admin user. Matches /auth/me: if user is not in db.users
+    we treat them as admin (demo mode) so they can access user management and assign roles."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         try:
@@ -480,8 +550,12 @@ def require_admin(f):
             from app.db.mongodb import get_db
             from app.services.permissions import get_user_role, ROLE_ADMIN
             db = get_db()
-            if get_user_role(db, user_id) != ROLE_ADMIN:
-                return jsonify({'error': 'Admin access required'}), 403
+            role = get_user_role(db, user_id)
+            # Allow admin if in db with role=admin, or if not in db (demo: first user can manage and assign themselves)
+            if role != ROLE_ADMIN:
+                app_user = db.users.find_one({'_id': user_id})
+                if app_user is not None:
+                    return jsonify({'error': 'Admin access required'}), 403
             kwargs['user_id'] = user_id
             return f(*args, **kwargs)
         except ValueError as e:
@@ -508,10 +582,30 @@ def list_user_names(user_id):
 @bp.route('/auth/users', methods=['GET'])
 @require_admin
 def list_users(user_id):
-    """List all users (admin only). Returns _id, role, departmentId from db.users."""
+    """List all users (admin only). Uses Auth0 Management API when configured so everyone who
+    signs in via Auth0 appears; role and departmentId come from db.users (app-level control)."""
     try:
         from app.db.mongodb import get_db
         db = get_db()
+        auth0_users = list_auth0_users()
+        if auth0_users is not None:
+            # Merge Auth0 users with db.users (role, departmentId)
+            app_users_by_id = {doc['_id']: doc for doc in db.users.find({}, {'_id': 1, 'role': 1, 'departmentId': 1, 'name': 1, 'email': 1})}
+            users = []
+            for au in auth0_users:
+                uid = au.get('user_id') or au.get('sub') or ''
+                app = app_users_by_id.get(uid) or {}
+                u = {
+                    '_id': uid,
+                    'role': app.get('role') or 'standard',
+                    'name': au.get('name') or app.get('name') or au.get('email') or '',
+                    'email': au.get('email') or app.get('email') or '',
+                }
+                if app.get('departmentId') is not None:
+                    u['departmentId'] = str(app['departmentId'])
+                users.append(u)
+            return jsonify(users), 200
+        # Fallback: list only from db.users (e.g. Auth0 Management API not authorized)
         cursor = db.users.find({}, {'_id': 1, 'role': 1, 'departmentId': 1, 'name': 1, 'email': 1})
         users = []
         for doc in cursor:

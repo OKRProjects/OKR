@@ -99,8 +99,7 @@ export function PresentationChoiceDialog({
         {step === 'choice' && (
           <>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Choose how you want to present your OKRs: use the slides as-is to tell the story, or have AI write a
-              coherent narrative for a professional presentation.
+              Present from slides only, or add an AI-generated narrative that turns your OKRs into a clear, presentable story.
             </p>
             {error && (
               <div className="mb-4 rounded-md bg-red-50 dark:bg-red-950/30 px-3 py-2 text-sm text-red-700 dark:text-red-300">
@@ -116,10 +115,10 @@ export function PresentationChoiceDialog({
               >
                 <span className="flex items-center gap-2 font-medium">
                   <FileText className="h-4 w-4" />
-                  Info only — tell the story with slides
+                  Slides only
                 </span>
                 <span className="text-xs font-normal text-muted-foreground">
-                  Use the current slides (title, agenda, objectives, key results) to present. No AI.
+                  Present using the deck as-is: title, agenda, objectives, and key results. No narrative.
                 </span>
               </Button>
               <Button
@@ -130,10 +129,10 @@ export function PresentationChoiceDialog({
               >
                 <span className="flex items-center gap-2 font-medium">
                   <Sparkles className="h-4 w-4" />
-                  Generate professional narrative with AI
+                  AI narrative
                 </span>
                 <span className="text-xs font-normal text-muted-foreground">
-                  Use OpenRouter to turn your OKR data into a coherent, professional story you can read or present.
+                  Generate a concise narrative from your OKRs via AI—ready to read aloud or use as speaker notes.
                 </span>
               </Button>
             </div>
