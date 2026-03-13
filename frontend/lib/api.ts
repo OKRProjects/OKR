@@ -437,6 +437,14 @@ export const api = {
   },
 
   // OKRs API
+  /** Lightweight counts for sidebar; avoids N+1 getKeyResults. */
+  async getObjectivesStats(params?: { fiscalYear?: number; departmentId?: string | null }): Promise<{ strategic: number; functional: number; tactical: number; keyResults: number }> {
+    const search = new URLSearchParams();
+    if (params?.fiscalYear != null) search.set('fiscalYear', String(params.fiscalYear));
+    if (params?.departmentId != null && params.departmentId !== '') search.set('departmentId', params.departmentId);
+    return fetchWithAuth(`/api/objectives/stats?${search.toString()}`);
+  },
+
   async getObjectives(params?: { fiscalYear?: number; level?: string; division?: string; status?: string; ownerId?: string; departmentId?: string; parentObjectiveId?: string | null }): Promise<Objective[]> {
     const search = new URLSearchParams();
     if (params?.fiscalYear != null) search.set('fiscalYear', String(params.fiscalYear));

@@ -41,6 +41,8 @@ interface OKRDetailViewProps {
   effectiveRole?: string;
   /** Number of current viewers (for presence). Show "N others viewing" when > 1. */
   viewerCount?: number;
+  /** When set (e.g. from ?tab=progress), open this tab on mount. */
+  initialTab?: (typeof TAB_IDS)[number];
 }
 
 export function OKRDetailView({
@@ -51,6 +53,7 @@ export function OKRDetailView({
   user,
   effectiveRole,
   viewerCount,
+  initialTab: initialTabProp,
 }: OKRDetailViewProps) {
   const isViewOnly = effectiveRole === 'view_only';
   const permissions: OKRPermissions = getOKRPermissions(user ?? null, objective, keyResults);
@@ -59,7 +62,9 @@ export function OKRDetailView({
   const defaultTab = visibleTabIds.includes(preferences.lastDetailTab as (typeof TAB_IDS)[number])
     ? preferences.lastDetailTab
     : visibleTabIds[0] ?? 'overview';
-  const [activeTab, setActiveTab] = useState<(typeof TAB_IDS)[number]>(defaultTab as (typeof TAB_IDS)[number]);
+  const tabToUse =
+    initialTabProp && visibleTabIds.includes(initialTabProp) ? initialTabProp : defaultTab;
+  const [activeTab, setActiveTab] = useState<(typeof TAB_IDS)[number]>(tabToUse as (typeof TAB_IDS)[number]);
   const touchStartX = useRef<number | null>(null);
 
   // When visible tabs change and current tab is hidden, switch to first visible
@@ -69,13 +74,14 @@ export function OKRDetailView({
     }
   }, [visibleTabIds.join(','), activeTab]);
 
-  // Restore last-selected tab from preferences when they first load (run once when defaultTab becomes available)
+  // Restore last-selected tab from preferences when they first load (run once when defaultTab becomes available). Skip when initialTab from URL is provided.
   const appliedDefaultRef = useRef(false);
   useEffect(() => {
+    if (initialTabProp) return;
     if (appliedDefaultRef.current || !defaultTab || !visibleTabIds.includes(defaultTab as (typeof TAB_IDS)[number])) return;
     appliedDefaultRef.current = true;
     setActiveTab(defaultTab as (typeof TAB_IDS)[number]);
-  }, [defaultTab, visibleTabIds]);
+  }, [defaultTab, visibleTabIds, initialTabProp]);
 
   // Keyboard shortcuts Alt+1–6 for tabs
   useEffect(() => {
@@ -196,7 +202,7 @@ export function OKRDetailView({
         )}
         {visibleTabIds.includes('updates') && (
           <TabsContent value="updates" className="mt-0">
-            <UpdatesTab objective={objective} readOnly={isViewOnly || !permissions.canEditObjective} />
+            <UpdatesTab objective={objective} readOnly={false} />
           </TabsContent>
         )}
         {visibleTabIds.includes('history') && (

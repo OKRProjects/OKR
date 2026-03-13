@@ -36,7 +36,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onNewObjective }: SidebarProps) {
-  const { setRolePreview, roleForUI, rolePreview } = useViewRole();
+  const { setRolePreview, roleForUI, rolePreview, userForPermissions } = useViewRole();
   const role = roleForUI;
   const [collapsed, setCollapsed] = useState(false);
   const [stats, setStats] = useState({
@@ -62,35 +62,19 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
 
   useEffect(() => {
     loadStats();
-  }, []);
+  }, [userForPermissions?.departmentId]);
 
   const loadStats = async () => {
     try {
       const fiscalYear = new Date().getFullYear();
-      const objectives = await api.getObjectives({ fiscalYear });
-      
-      const strategic = objectives.filter((o) => o.level === 'strategic' && !o.parentObjectiveId).length;
-      const functional = objectives.filter((o) => o.level === 'functional' && !o.parentObjectiveId).length;
-      const tactical = objectives.filter((o) => o.level === 'tactical').length;
-      
-      // Count key results
-      let keyResultsCount = 0;
-      for (const obj of objectives) {
-        if (obj._id) {
-          try {
-            const krs = await api.getKeyResults(obj._id);
-            keyResultsCount += krs.length;
-          } catch {
-            // Ignore errors for individual key result fetches
-          }
-        }
-      }
-
+      const isScoped = (role === 'leader' || role === 'view_only') && userForPermissions?.departmentId;
+      const departmentId = isScoped ? userForPermissions!.departmentId! : undefined;
+      const data = await api.getObjectivesStats({ fiscalYear, departmentId: departmentId ?? undefined });
       setStats({
-        strategic,
-        functional,
-        tactical,
-        keyResults: keyResultsCount,
+        strategic: data.strategic,
+        functional: data.functional,
+        tactical: data.tactical,
+        keyResults: data.keyResults,
       });
     } catch {
       // Ignore errors

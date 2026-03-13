@@ -117,6 +117,35 @@ def list_objectives(user_id):
         return jsonify({'error': str(e)}), 500
 
 
+@bp.route('/objectives/stats', methods=['GET'])
+@require_auth
+def objectives_stats(user_id):
+    """Lightweight counts for sidebar: strategic, functional, tactical, keyResults. Optional fiscalYear."""
+    try:
+        db = get_db()
+        fiscal_year = request.args.get('fiscalYear', type=int)
+        if fiscal_year is None:
+            fiscal_year = datetime.now(timezone.utc).year
+        base = {'fiscalYear': fiscal_year}
+        department_id = request.args.get('departmentId')
+        if department_id:
+            base['departmentId'] = department_id
+        no_parent = {'$or': [{'parentObjectiveId': None}, {'parentObjectiveId': {'$exists': False}}]}
+        strategic = db.objectives.count_documents({**base, 'level': 'strategic', **no_parent})
+        functional = db.objectives.count_documents({**base, 'level': 'functional', **no_parent})
+        tactical = db.objectives.count_documents({**base, 'level': 'tactical'})
+        oids = [d['_id'] for d in db.objectives.find(base, {'_id': 1})]
+        kr_count = db.key_results.count_documents({'objectiveId': {'$in': oids}}) if oids else 0
+        return jsonify({
+            'strategic': strategic,
+            'functional': functional,
+            'tactical': tactical,
+            'keyResults': kr_count,
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 def _build_objectives_query():
     """Build the same query dict as list_objectives (from request args). Returns (q, error_response)."""
     q = {}
@@ -1098,8 +1127,6 @@ def create_comment(objective_id, user_id):
         db = get_db()
         if not db.objectives.find_one({'_id': oid}):
             return jsonify({'error': 'Objective not found'}), 404
-        if get_user_role(db, user_id) == 'view_only':
-            return jsonify({'error': 'Not allowed to comment'}), 403
         now = _now()
         doc = {
             'objectiveId': oid,

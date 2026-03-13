@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { getCurrentUser, login, User } from '@/lib/auth';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { AppLayout } from '@/components/AppLayout';
 import { OKRDetailView } from '@/components/modal/OKRDetailView';
 import { ShortcutHelp } from '@/components/shared/ShortcutHelp';
@@ -26,7 +26,10 @@ export default function ObjectiveDetailPage() {
   const loadingRef = useRef(false);
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const id = params.id as string;
+  const tabFromUrl = searchParams.get('tab');
+  const initialTab = tabFromUrl === 'progress' || tabFromUrl === 'updates' ? tabFromUrl : undefined;
 
   useEffect(() => {
     loadUser();
@@ -84,12 +87,12 @@ export default function ObjectiveDetailPage() {
     };
   }, [id, user]);
 
-  // Live polling
+  // Live polling: every 60s, and only when tab is visible (avoid spamming backend in background)
   useEffect(() => {
     if (!id || !objective) return;
     const since = objective.updatedAt ?? undefined;
-    const interval = setInterval(async () => {
-      if (loadingRef.current) return;
+    const poll = async () => {
+      if (loadingRef.current || typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       try {
         const objResult = await api.getObjective(id, since ? { since } : undefined);
         if (objResult && typeof objResult === 'object' && 'unchanged' in objResult) return;
@@ -100,8 +103,14 @@ export default function ObjectiveDetailPage() {
       } catch {
         // ignore
       }
-    }, 15000);
-    return () => clearInterval(interval);
+    };
+    const interval = setInterval(poll, 60000);
+    const onVisible = () => { poll(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [id, objective?.updatedAt]);
 
   useEffect(() => {
@@ -263,6 +272,7 @@ export default function ObjectiveDetailPage() {
           user={userForPermissions ?? user}
           effectiveRole={effectiveRole}
           viewerCount={viewerCount}
+          initialTab={initialTab}
         />
       </div>
     </AppLayout>

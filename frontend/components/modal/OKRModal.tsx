@@ -22,7 +22,7 @@ import {
 } from '@/lib/workflowStatus';
 
 const VIEW_HEARTBEAT_MS = 28000;
-const LIVE_POLL_MS = 15000;
+const LIVE_POLL_MS = 60000;
 
 interface OKRModalProps {
   objectiveId: string;
@@ -94,12 +94,13 @@ export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
     };
   }, [objectiveId]);
 
-  // Live polling: refetch objective + key results every 15s (skip if load in progress)
+  // Live polling: refetch every 60s, only when tab visible (avoid spamming backend)
   useEffect(() => {
     if (!objectiveId || !objective) return;
     const since = objective.updatedAt ?? undefined;
-    const interval = setInterval(async () => {
+    const poll = async () => {
       if (loadingRef.current) return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       try {
         const objResult = await api.getObjective(objectiveId, since ? { since } : undefined);
         if (objResult && typeof objResult === 'object' && 'unchanged' in objResult && objResult.unchanged) return;
@@ -111,8 +112,14 @@ export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
       } catch {
         // ignore poll errors
       }
-    }, LIVE_POLL_MS);
-    return () => clearInterval(interval);
+    };
+    const interval = setInterval(poll, LIVE_POLL_MS);
+    const onVisible = () => { poll(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [objectiveId, objective?.updatedAt]);
 
   // Focus trap: save previous focus on open, focus first focusable, trap Tab, restore on close
