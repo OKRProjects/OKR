@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useViewPreferences } from '@/lib/useViewPreferences';
+import { useViewRole } from '@/lib/ViewRoleContext';
+import { IntegrationsSection } from '@/components/IntegrationsSection';
 import { RotateCcw } from 'lucide-react';
 
 const OKR_TAB_LABELS: Record<string, string> = {
@@ -56,6 +58,7 @@ function ProfileOKRPreferences() {
 }
 
 export default function ProfilePage() {
+  const { roleForUI } = useViewRole();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
@@ -254,6 +257,12 @@ export default function ProfilePage() {
           <div className="border-t pt-6 mt-6">
             <ProfileOKRPreferences />
           </div>
+
+          {roleForUI !== 'view_only' && (
+            <div className="border-t pt-6 mt-6">
+              <IntegrationsSection />
+            </div>
+          )}
 
           <div className="mt-8 flex space-x-4">
             <Button asChild>
