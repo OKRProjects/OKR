@@ -12,8 +12,10 @@ def _get_credentials(user_id):
     doc = db.integration_configs.find_one({'_id': user_id})
     if not doc or not doc.get('googleRefreshToken'):
         raise ValueError('Google account not connected. Connect in Integrations.')
-    client_id = os.getenv('GOOGLE_CLIENT_ID')
-    client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
+    def _s(v):
+        return (v or '').strip().strip('"\'').strip() if v else ''
+    client_id = _s(os.getenv('GOOGLE_CLIENT_ID'))
+    client_secret = _s(os.getenv('GOOGLE_CLIENT_SECRET'))
     if not client_id or not client_secret:
         raise ValueError('Google integration not configured')
     creds = Credentials(

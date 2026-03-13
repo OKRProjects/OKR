@@ -402,8 +402,23 @@ def callback():
             session['user'] = user_info
             session['access_token'] = access_token
             session.permanent = True
-            
-            # Redirect to frontend dashboard (AUTH0_BASE_URL is the frontend URL)
+
+            user_id = user_info.get('sub') or ''
+            # If user signed in with Google and Google Slides is not yet connected, send them
+            # through our Google OAuth once so we can store a refresh token for Slides export.
+            if user_id.startswith('google-oauth2|'):
+                try:
+                    from app.db.mongodb import get_db
+                    _gcid = (os.getenv('GOOGLE_CLIENT_ID') or '').strip().strip('"\'')
+                    _gcs = (os.getenv('GOOGLE_CLIENT_SECRET') or '').strip().strip('"\'')
+                    _gredir = (os.getenv('GOOGLE_REDIRECT_URI') or '').strip().strip('"\'')
+                    if _gcid and _gcs and _gredir:
+                        db = get_db()
+                        doc = db.integration_configs.find_one({'_id': user_id})
+                        if not doc or not doc.get('googleRefreshToken'):
+                            return flask_redirect(f'{BACKEND_URL}/api/integrations/google/auth-url-redirect')
+                except Exception:
+                    pass
             return flask_redirect(f'{AUTH0_BASE_URL}/dashboard')
         except Exception as e:
             error_msg = str(e)

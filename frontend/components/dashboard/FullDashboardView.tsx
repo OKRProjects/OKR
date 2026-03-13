@@ -7,6 +7,7 @@ import { ExportDropdown } from './ExportDropdown';
 import { FilterBar } from './FilterBar';
 import { TierSection } from './TierSection';
 import { Button } from '@/components/ui/button';
+import { UserMenu } from '@/components/UserMenu';
 import { HelpCircle, ClipboardCheck, Users } from 'lucide-react';
 import Link from 'next/link';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -134,6 +135,7 @@ export function FullDashboardView(props: DashboardViewProps) {
                   disabled={filteredAndSorted.length === 0}
                 />
               )}
+              <UserMenu />
             </div>
           </div>
         </div>

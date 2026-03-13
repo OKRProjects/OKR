@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Sidebar } from './Sidebar';
+import { UserMenu } from './UserMenu';
 import { useRouter } from 'next/navigation';
 import { Button } from './ui/button';
 import { Plus } from 'lucide-react';
@@ -11,9 +12,11 @@ interface AppLayoutProps {
   title?: string;
   description?: string;
   showNewObjective?: boolean;
+  /** When true, hide the top header (e.g. dashboard has its own header with user menu). */
+  hideHeader?: boolean;
 }
 
-export function AppLayout({ children, title, description, showNewObjective = false }: AppLayoutProps) {
+export function AppLayout({ children, title, description, showNewObjective = false, hideHeader = false }: AppLayoutProps) {
   const router = useRouter();
 
   const handleNewObjective = () => {
@@ -27,13 +30,22 @@ export function AppLayout({ children, title, description, showNewObjective = fal
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header: minimal so dashboard owns its title and cycle */}
-        {title && (
-          <header className="flex h-14 shrink-0 items-center border-b border-border bg-background px-6">
-            <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
-            {description && (
-              <span className="ml-3 text-sm text-muted-foreground hidden sm:inline">— {description}</span>
-            )}
+        {/* Header: title/description left, user menu right (hidden when hideHeader, e.g. dashboard) */}
+        {!hideHeader && (
+          <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-6">
+            <div className="min-w-0">
+              {title && (
+                <>
+                  <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+                  {description && (
+                    <span className="ml-3 text-sm text-muted-foreground hidden sm:inline">— {description}</span>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="shrink-0">
+              <UserMenu />
+            </div>
           </header>
         )}
 

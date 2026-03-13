@@ -45,8 +45,14 @@ function getStoredRolePreview(): AppRole | null {
 
 export function ViewRoleProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [override, setOverrideState] = useState<ViewRole | null>(() => getStoredViewRole());
-  const [rolePreview, setRolePreviewState] = useState<AppRole | null>(() => getStoredRolePreview());
+  const [override, setOverrideState] = useState<ViewRole | null>(null);
+  const [rolePreview, setRolePreviewState] = useState<AppRole | null>(null);
+
+  // Restore role preview / override from localStorage after mount so server and initial client render match (avoids hydration mismatch).
+  useEffect(() => {
+    setOverrideState(getStoredViewRole());
+    setRolePreviewState(getStoredRolePreview());
+  }, []);
 
   const refetchUser = useCallback(async () => {
     try {
