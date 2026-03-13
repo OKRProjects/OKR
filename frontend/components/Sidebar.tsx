@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   Home,
   Target,
   BarChart3,
@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   BookOpen,
+  Plug,
   Eye,
   Users,
 } from 'lucide-react';
@@ -55,6 +56,7 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
 
   const bottomNavigation = [
     { id: 'docs', name: 'Documentation', icon: BookOpen, href: '/docs' },
+    ...(role !== 'view_only' ? [{ id: 'integrations', name: 'Integrations', icon: Plug, href: '/integrations' }] : []),
     { id: 'profile', name: 'Settings', icon: Settings, href: '/profile' },
   ];
 
@@ -91,6 +93,9 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
     }
     if (href === '/divisions') {
       return pathname === '/divisions';
+    }
+    if (href === '/integrations') {
+      return pathname === '/integrations';
     }
     if (href === '/profile') {
       return pathname === '/profile';
