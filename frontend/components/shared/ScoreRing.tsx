@@ -9,6 +9,13 @@ export function getScoreRingColor(score: number): string {
   return 'stroke-red-500';
 }
 
+/** Hex color for progress bar fill (reference design). */
+export function getScoreBarColorHex(score: number): string {
+  if (score >= 0.7) return '#10B981';
+  if (score >= 0.4) return '#F59E0B';
+  return '#EF4444';
+}
+
 export function getScoreStatusLabel(score: number): 'On Track' | 'At Risk' | 'Off Track' {
   if (score >= 0.7) return 'On Track';
   if (score >= 0.4) return 'At Risk';
@@ -36,8 +43,11 @@ export function ScoreRing({
   const dashOffset = circumference * (1 - value);
   const colorClass = getScoreRingColor(value);
 
+  const labelText = score != null ? `${Math.round(value * 100)}%` : '—';
+  const labelSizeClass = size >= 48 ? 'text-xs' : 'text-[10px]';
+
   return (
-    <div className={cn('inline-flex flex-col items-center', className)}>
+    <div className={cn('relative inline-flex flex-col items-center', className)}>
       <svg width={size} height={size} className="rotate-[-90deg]" aria-hidden="true">
         <circle
           cx={size / 2}
@@ -61,8 +71,11 @@ export function ScoreRing({
         />
       </svg>
       {showLabel && (
-        <span className="text-[10px] font-medium text-muted-foreground mt-0.5">
-          {score != null ? `${Math.round(value * 100)}%` : '—'}
+        <span
+          className={cn('absolute inset-0 flex items-center justify-center font-medium text-muted-foreground pointer-events-none', labelSizeClass)}
+          aria-hidden
+        >
+          {labelText}
         </span>
       )}
     </div>

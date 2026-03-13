@@ -34,10 +34,11 @@ export function getOKRPermissions(
   const objDept = objective.departmentId ?? null;
   const ownerId = objective.ownerId ?? null;
 
-  const canEditObjective =
+  const canEditObjective = Boolean(
     role === 'admin' ||
     (role !== 'view_only' && strEq(ownerId, userId)) ||
-    (role === 'leader' && objDept && userDept && strEq(objDept, userDept));
+    (role === 'leader' && objDept && userDept && strEq(objDept, userDept))
+  );
 
   const canEditKr = (kr: KeyResult): boolean => {
     if (role === 'admin') return true;
@@ -53,8 +54,9 @@ export function getOKRPermissions(
     role === 'leader' ||
     (role !== 'view_only' && strEq(ownerId, userId));
 
-  const canApproveReject =
-    role === 'admin' || (role === 'leader' && objDept && userDept && strEq(objDept, userDept));
+  const canApproveReject = Boolean(
+    role === 'admin' || (role === 'leader' && objDept && userDept && strEq(objDept, userDept))
+  );
 
   const canResubmit = role === 'admin' || (role !== 'view_only' && strEq(ownerId, userId));
 
@@ -63,14 +65,16 @@ export function getOKRPermissions(
     role === 'admin' &&
     (status === 'approved' || status === 'rejected');
 
-  const canDelete =
-    role === 'admin' || (role === 'leader' && objDept && userDept && strEq(objDept, userDept));
+  const canDelete = Boolean(
+    role === 'admin' || (role === 'leader' && objDept && userDept && strEq(objDept, userDept))
+  );
 
-  const canCreateShareLink =
+  const canCreateShareLink = Boolean(
     role !== 'view_only' &&
     (role === 'admin' ||
       strEq(ownerId, userId) ||
-      (role === 'leader' && objDept && userDept && strEq(objDept, userDept)));
+      (role === 'leader' && objDept && userDept && strEq(objDept, userDept)))
+  );
 
   return {
     canEditObjective,

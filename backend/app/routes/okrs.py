@@ -53,6 +53,26 @@ def _parse_object_id(value, param_name='id'):
         return None
 
 
+# ---- Departments (for dashboard display: name, color) ----
+
+@bp.route('/departments', methods=['GET'])
+@require_auth
+def list_departments(user_id):
+    """List all departments (id, name, color) for dashboard and cards."""
+    try:
+        db = get_db()
+        cursor = db.departments.find({}, {'_id': 1, 'name': 1, 'color': 1})
+        items = []
+        for doc in cursor:
+            d = {'_id': str(doc['_id']), 'name': doc.get('name', '')}
+            if doc.get('color'):
+                d['color'] = doc['color']
+            items.append(d)
+        return jsonify(items), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 # ---- Objectives ----
 
 @bp.route('/objectives', methods=['GET'])
@@ -204,6 +224,134 @@ def export_objectives(user_id):
             buf.seek(0)
             return send_file(buf, mimetype='application/pdf', as_attachment=True, download_name='okrs_export.pdf')
         return jsonify({'error': 'Unsupported format. Use json, xlsx, or pdf'}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/objectives/export-pptx', methods=['POST'])
+@require_auth
+def export_objectives_pptx(user_id):
+    """Export selected objectives as a PowerPoint file. Body: { objectiveIds: string[] }. view_only cannot export."""
+    try:
+        from flask import send_file
+        import io
+        db = get_db()
+        if get_user_role(db, user_id) == ROLE_VIEW_ONLY:
+            return jsonify({'error': 'View-only users cannot export'}), 403
+        data = request.get_json() or {}
+        objective_ids = data.get('objectiveIds') or []
+        if not isinstance(objective_ids, list):
+            objective_ids = []
+        narrative = data.get('narrative')
+        if narrative is not None and not isinstance(narrative, str):
+            narrative = None
+        try:
+            from app.services.export_pptx import build_okr_pptx
+        except ImportError:
+            return jsonify({'error': 'PowerPoint export not available'}), 501
+        buf = io.BytesIO()
+        build_okr_pptx(db, objective_ids, buf, narrative=narrative)
+        buf.seek(0)
+        return send_file(
+            buf,
+            mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            as_attachment=True,
+            download_name='okr_presentation.pptx',
+        )
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/objectives/generate-presentation-story', methods=['POST'])
+@require_auth
+def generate_presentation_story(user_id):
+    """Generate a professional OKR presentation narrative using OpenRouter. Body: { objectiveIds: string[] }."""
+    try:
+        import requests
+        db = get_db()
+        if get_user_role(db, user_id) == ROLE_VIEW_ONLY:
+            return jsonify({'error': 'View-only users cannot use this feature'}), 403
+        data = request.get_json() or {}
+        objective_ids = data.get('objectiveIds') or []
+        if not isinstance(objective_ids, list):
+            objective_ids = []
+        api_key = os.getenv('OPENROUTER_API_KEY')
+        if not api_key:
+            return jsonify({
+                'error': 'OpenRouter API key is not configured. Set OPENROUTER_API_KEY to generate AI narratives.'
+            }), 503
+
+        # Build OKR summary text for the model
+        parts = []
+        for oid_str in objective_ids[:30]:  # cap for token safety
+            oid = _parse_object_id(oid_str)
+            if not oid:
+                continue
+            obj = db.objectives.find_one({'_id': oid})
+            if not obj:
+                continue
+            krs = list(db.key_results.find({'objectiveId': oid}))
+            title = (obj.get('title') or 'Untitled')[:500]
+            desc = (obj.get('description') or '')[:300]
+            status = obj.get('status') or 'draft'
+            level = obj.get('level') or ''
+            parts.append(f"Objective: {title}")
+            if desc:
+                parts.append(f"  Description: {desc}")
+            parts.append(f"  Level: {level} | Status: {status}")
+            for kr in krs[:8]:
+                kr_title = (kr.get('title') or '')[:200]
+                score = kr.get('score')
+                pct = f" {int((score or 0) * 100)}%" if score is not None else " no score"
+                parts.append(f"  - {kr_title}{pct}")
+            parts.append('')
+
+        if not parts:
+            return jsonify({'error': 'No valid objectives found to summarize'}), 400
+
+        summary = '\n'.join(parts).strip()
+        system_prompt = (
+            "You are an executive communications expert. Your task is to write a short, professional narrative "
+            "for an OKR review presentation. Use the provided objectives and key results to tell a coherent story: "
+            "highlight progress, themes, and outcomes in 2–4 concise paragraphs. Tone: confident, clear, and "
+            "business-appropriate. Do not use bullet points; write flowing prose suitable for speaking or reading aloud."
+        )
+        payload = {
+            'model': 'openai/gpt-4o-mini',
+            'messages': [
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': f"Write the OKR presentation narrative based on this summary:\n\n{summary}"},
+            ],
+        }
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {api_key}',
+            'HTTP-Referer': request.headers.get('Origin', ''),
+            'X-Title': 'OKR Presentation Story',
+        }
+        response = requests.post(
+            'https://openrouter.ai/api/v1/chat/completions',
+            headers=headers,
+            json=payload,
+            timeout=45,
+        )
+        if not response.ok:
+            err = response.json() if response.content else {}
+            err_obj = err.get('error')
+            if isinstance(err_obj, dict):
+                msg = err_obj.get('message', response.reason)
+            else:
+                msg = str(err_obj) if err_obj else response.reason
+            return jsonify({'error': f'AI service error: {msg}'}), response.status_code
+        result = response.json()
+        if 'choices' not in result or not result['choices']:
+            return jsonify({'error': 'No response from AI service'}), 502
+        story = (result['choices'][0].get('message', {}) or {}).get('content', '').strip()
+        if not story:
+            return jsonify({'error': 'Empty narrative from AI'}), 502
+        return jsonify({'story': story}), 200
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': f'Network error: {str(e)}'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

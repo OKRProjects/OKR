@@ -277,6 +277,14 @@ export const api = {
     return fetchWithAuth('/api/auth/users');
   },
 
+  async getUserNames(): Promise<{ _id: string; name: string }[]> {
+    return fetchWithAuth('/api/auth/users/names');
+  },
+
+  async getDepartments(): Promise<{ _id: string; name: string; color?: string }[]> {
+    return fetchWithAuth('/api/departments');
+  },
+
   async updateUser(
     uid: string,
     body: { role?: string; departmentId?: string | null }
@@ -668,6 +676,39 @@ export const api = {
     return fetchWithAuth('/api/integrations/google/export', {
       method: 'POST',
       body: JSON.stringify(body),
+    });
+  },
+
+  /** Export selected objectives as PowerPoint (.pptx) and trigger download. Optional narrative is added as a script slide. */
+  async exportToPowerPoint(objectiveIds: string[], narrative?: string | null): Promise<void> {
+    const token = await getAccessToken();
+    if (!token) throw new Error('Unable to get access token.');
+    const response = await fetch(`${API_URL}/api/objectives/export-pptx`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({ objectiveIds, narrative: narrative ?? undefined }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || err.message || 'PowerPoint export failed');
+    }
+    const blob = await response.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'okr_presentation.pptx';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  },
+
+  /** Generate a professional OKR presentation narrative using AI (OpenRouter). */
+  async generatePresentationStory(objectiveIds: string[]): Promise<{ story: string }> {
+    return fetchWithAuth('/api/objectives/generate-presentation-story', {
+      method: 'POST',
+      body: JSON.stringify({ objectiveIds }),
     });
   },
 

@@ -1,6 +1,5 @@
 'use client';
 
-import { OKRModal } from '@/components/modal/OKRModal';
 import { PresentationMode } from '@/components/presentation/PresentationMode';
 import { DashboardHeader } from './DashboardHeader';
 import { FilterBar } from './FilterBar';
@@ -23,20 +22,17 @@ export function ViewOnlyDashboardView(props: DashboardViewProps) {
     filters,
     setFilters,
     divisions,
-    modalObjectiveId,
-    setModalObjectiveId,
     presentationSlides,
     presentationActive,
     setPresentationActive,
     presentationIndex,
     setPresentationIndex,
+    onExportPresentationPowerPoint,
+    onExportPresentationGoogleSlides,
   } = props;
 
   return (
     <div className="space-y-6">
-      {modalObjectiveId && (
-        <OKRModal objectiveId={modalObjectiveId} onClose={() => setModalObjectiveId(null)} />
-      )}
       {presentationActive && presentationSlides.length > 0 && (
         <PresentationMode
           slides={presentationSlides}
@@ -50,6 +46,8 @@ export function ViewOnlyDashboardView(props: DashboardViewProps) {
             setPresentationIndex((i) => Math.min(presentationSlides.length - 1, i + 1))
           }
           onGoToSlide={setPresentationIndex}
+          onExportPowerPoint={onExportPresentationPowerPoint}
+          onExportGoogleSlides={onExportPresentationGoogleSlides}
         />
       )}
       <DashboardHeader
@@ -85,21 +83,18 @@ export function ViewOnlyDashboardView(props: DashboardViewProps) {
           objectives={strategic}
           scoreByObjectiveId={scoreByObjectiveId}
           defaultExpanded
-          onOpenModal={setModalObjectiveId}
         />
         <TierSection
           title="Divisional (Annual)"
           objectives={divisional}
           scoreByObjectiveId={scoreByObjectiveId}
           defaultExpanded
-          onOpenModal={setModalObjectiveId}
         />
         <TierSection
           title="Tactical (Quarterly)"
           objectives={tactical}
           scoreByObjectiveId={scoreByObjectiveId}
           defaultExpanded
-          onOpenModal={setModalObjectiveId}
         />
       </div>
       {filteredAndSorted.length === 0 && (

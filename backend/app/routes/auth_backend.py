@@ -434,7 +434,8 @@ def logout():
 @bp.route('/auth/me', methods=['GET'])
 @require_auth
 def get_current_user(user_id):
-    """Get current authenticated user. Includes role and departmentId from users collection if present."""
+    """Get current authenticated user. Includes role and departmentId from users collection if present.
+    Demo mode: if user is not in users collection, return role=admin so they can see all seed data."""
     try:
         user_info = get_user_info_from_request()
         try:
@@ -445,6 +446,9 @@ def get_current_user(user_id):
                 user_info['role'] = app_user.get('role', 'developer')
                 if app_user.get('departmentId') is not None:
                     user_info['departmentId'] = str(app_user['departmentId'])
+            else:
+                # Demo mode: any authenticated user not in users table sees all data (as admin)
+                user_info['role'] = 'admin'
         except Exception:
             user_info['role'] = user_info.get('role', 'developer')
         if 'role' not in user_info:
@@ -485,6 +489,20 @@ def require_admin(f):
         except Exception as e:
             return jsonify({'error': 'Authentication failed'}), 401
     return decorated_function
+
+
+@bp.route('/auth/users/names', methods=['GET'])
+@require_auth
+def list_user_names(user_id):
+    """List all users' _id and name for dashboard display (any authenticated user)."""
+    try:
+        from app.db.mongodb import get_db
+        db = get_db()
+        cursor = db.users.find({}, {'_id': 1, 'name': 1})
+        users = [{'_id': doc['_id'], 'name': doc.get('name', doc.get('email', str(doc['_id'])))} for doc in cursor]
+        return jsonify(users), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @bp.route('/auth/users', methods=['GET'])

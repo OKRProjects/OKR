@@ -9,7 +9,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Search, RotateCcw } from 'lucide-react';
+import { Search, RotateCcw, Filter } from 'lucide-react';
 import type { DashboardSortField, SortDirection } from '@/lib/api';
 
 export interface DashboardFilters {
@@ -43,28 +43,45 @@ interface FilterBarProps {
   filters: DashboardFilters;
   onFiltersChange: (f: DashboardFilters) => void;
   divisions: string[];
+  /** When provided, department dropdown uses id/name; division filter uses these ids */
+  departments?: { _id: string; name: string }[];
   /** When provided, show sort, update-type filter, and Reset to default (saved to profile) */
   viewPreferences?: ViewPreferencesBarProps;
   /** When true, only show search (e.g. view-only role) */
   minimal?: boolean;
+  /** Reference design: white card with "Filter by:" label */
+  variant?: 'default' | 'reference';
 }
 
-export function FilterBar({ filters, onFiltersChange, divisions, viewPreferences, minimal }: FilterBarProps) {
+export function FilterBar({ filters, onFiltersChange, divisions, departments, viewPreferences, minimal, variant = 'default' }: FilterBarProps) {
   const set = (key: keyof DashboardFilters, value: string) => {
     onFiltersChange({ ...filters, [key]: value });
   };
 
+  const isReference = variant === 'reference';
+  const wrapperClass = isReference
+    ? 'bg-white rounded-lg border border-gray-200 p-4 mb-6'
+    : 'flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card/50 px-4 py-3';
+  const departmentOptions = departments?.length ? departments : divisions.map((d) => ({ _id: d, name: d }));
+
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card/50 px-4 py-3">
-      <div className="relative flex-1 min-w-[180px] max-w-xs">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search objectives..."
-          value={filters.search}
-          onChange={(e) => set('search', e.target.value)}
-          className="h-9 border-0 bg-muted/50 pl-9 focus-visible:ring-2"
-        />
-      </div>
+    <div className={wrapperClass}>
+      <div className={isReference ? 'flex flex-wrap items-center gap-4' : 'flex flex-wrap items-center gap-3'}>
+        {isReference && (
+          <div className="flex items-center gap-2 text-gray-700">
+            <Filter className="w-4 h-4" />
+            <span className="text-sm font-medium">Filter by:</span>
+          </div>
+        )}
+        <div className={`relative flex-1 min-w-[180px] ${isReference ? 'max-w-xs' : 'max-w-xs'}`}>
+          <Search className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${isReference ? 'text-gray-400' : 'text-muted-foreground'}`} />
+          <Input
+            placeholder="Search objectives..."
+            value={filters.search}
+            onChange={(e) => set('search', e.target.value)}
+            className={isReference ? 'w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500' : 'h-9 border-0 bg-muted/50 pl-9 focus-visible:ring-2'}
+          />
+        </div>
       {!minimal && (
         <>
           <div className="h-6 w-px bg-border" aria-hidden />
@@ -87,14 +104,14 @@ export function FilterBar({ filters, onFiltersChange, divisions, viewPreferences
             </SelectContent>
           </Select>
           <Select value={filters.division} onValueChange={(v) => set('division', v)}>
-            <SelectTrigger className="h-9 w-[130px] border-0 bg-transparent shadow-none focus:ring-0">
+            <SelectTrigger className={isReference ? 'w-[140px] border border-gray-300 rounded-lg' : 'h-9 w-[130px] border-0 bg-transparent shadow-none focus:ring-0'}>
               <SelectValue placeholder="Department" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Departments</SelectItem>
-              {divisions.map((d) => (
-                <SelectItem key={d} value={d}>
-                  {d}
+              {departmentOptions.map((d) => (
+                <SelectItem key={d._id} value={d._id}>
+                  {d.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -171,6 +188,7 @@ export function FilterBar({ filters, onFiltersChange, divisions, viewPreferences
           )}
         </>
       )}
+      </div>
     </div>
   );
 }

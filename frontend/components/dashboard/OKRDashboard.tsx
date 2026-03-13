@@ -2,15 +2,12 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { api, Objective, KeyResult } from '@/lib/api';
-import { type PresentationSlide } from '@/components/presentation/PresentationMode';
+import { type PresentationSlide, type ObjectiveSlide, type NarrativeSlide } from '@/components/presentation/PresentationMode';
 import { defaultFilters, type DashboardFilters } from './FilterBar';
 import { useFirstTimeTutorial } from '@/lib/tutorial';
 import { useViewPreferences } from '@/lib/useViewPreferences';
 import { useViewRole } from '@/lib/ViewRoleContext';
 import { filterObjective, getDaysLeftInQuarter, getVisibleObjectivesByRole, type DashboardViewProps } from './dashboardShared';
-import { ViewOnlyDashboardView } from './ViewOnlyDashboardView';
-import { StandardDashboardView } from './StandardDashboardView';
-import { LeaderDashboardView } from './LeaderDashboardView';
 import { FullDashboardView } from './FullDashboardView';
 
 export function OKRDashboard() {
@@ -22,14 +19,30 @@ export function OKRDashboard() {
   const [keyResultsByObjective, setKeyResultsByObjective] = useState<Record<string, KeyResult[]>>({});
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<DashboardFilters>(defaultFilters);
-  const [modalObjectiveId, setModalObjectiveId] = useState<string | null>(null);
   const [presentationActive, setPresentationActive] = useState(false);
   const [presentationIndex, setPresentationIndex] = useState(0);
+  const [presentationChoiceOpen, setPresentationChoiceOpen] = useState(false);
+  const [presentationNarrative, setPresentationNarrative] = useState<string | null>(null);
   const { preferences, updatePreferences, resetToDefault } = useViewPreferences();
   const { shouldShowTutorial, dismissTutorial } = useFirstTimeTutorial('dashboard');
   const [showTutorial, setShowTutorial] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportingSlides, setExportingSlides] = useState(false);
+  const [departments, setDepartments] = useState<{ _id: string; name: string; color?: string }[]>([]);
+  const [userNames, setUserNames] = useState<{ _id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([api.getDepartments().catch(() => []), api.getUserNames().catch(() => [])]).then(
+      ([depts, names]) => {
+        if (!cancelled) {
+          setDepartments(depts);
+          setUserNames(names);
+        }
+      }
+    );
+    return () => { cancelled = true; };
+  }, []);
 
   // Fetch objectives scoped by role/team: leader and view_only with departmentId see only their department
   useEffect(() => {
@@ -186,12 +199,30 @@ export function OKRDashboard() {
 
   const presentationSlides = useMemo<PresentationSlide[]>(() => {
     const list = [...strategic, ...divisional, ...tactical];
-    return list.map((objective) => ({
+    const quarter = Math.ceil((new Date().getMonth() + 1) / 3);
+    const year = new Date().getFullYear();
+    const titleSlide: PresentationSlide = {
+      type: 'title',
+      title: 'OKR Presentation',
+      subtitle: `Q${quarter} ${year} • ${list.length} objective${list.length !== 1 ? 's' : ''}`,
+    };
+    const agendaSlide: PresentationSlide = {
+      type: 'agenda',
+      title: 'Stories we\'ll cover',
+      items: list.map((o) => ({ title: o.title ?? 'Untitled' })),
+    };
+    const objectiveSlides: PresentationSlide[] = list.map((objective) => ({
+      type: 'objective' as const,
       objective,
       score: objective._id ? (scoreByObjectiveId[objective._id] ?? null) : null,
       keyResults: objective._id ? (keyResultsByObjective[objective._id] ?? []) : [],
     }));
-  }, [strategic, divisional, tactical, scoreByObjectiveId, keyResultsByObjective]);
+    const narrativeSlide: NarrativeSlide | null =
+      presentationNarrative?.trim() ? { type: 'narrative', content: presentationNarrative.trim() } : null;
+    return narrativeSlide
+      ? [titleSlide, agendaSlide, narrativeSlide, ...objectiveSlides]
+      : [titleSlide, agendaSlide, ...objectiveSlides];
+  }, [strategic, divisional, tactical, scoreByObjectiveId, keyResultsByObjective, presentationNarrative]);
 
   const handleExport = useCallback(
     async (format: 'json' | 'xlsx' | 'pdf') => {
@@ -237,6 +268,60 @@ export function OKRDashboard() {
       setExportingSlides(false);
     }
   }, [filteredAndSorted]);
+
+  const objectiveIdsFromPresentation = useMemo(() => {
+    return presentationSlides.filter((s): s is ObjectiveSlide => s.type === 'objective').map((s) => s.objective._id).filter(Boolean) as string[];
+  }, [presentationSlides]);
+
+  const handleOpenPresentationChoice = useCallback(() => {
+    setPresentationIndex(0);
+    setPresentationChoiceOpen(true);
+  }, []);
+
+  const handlePresentationInfoOnly = useCallback(() => {
+    setPresentationNarrative(null);
+    setPresentationIndex(0);
+    setPresentationActive(true);
+    setPresentationChoiceOpen(false);
+  }, []);
+
+  const handleStartWithNarrative = useCallback((story: string) => {
+    setPresentationNarrative(story);
+    setPresentationIndex(0);
+    setPresentationActive(true);
+    setPresentationChoiceOpen(false);
+  }, []);
+
+  const generatePresentationStory = useCallback(async () => {
+    const { api } = await import('@/lib/api');
+    const res = await api.generatePresentationStory(objectiveIdsFromPresentation);
+    return res.story ?? '';
+  }, [objectiveIdsFromPresentation]);
+
+  const handleExportPresentationPowerPoint = useCallback(async () => {
+    if (objectiveIdsFromPresentation.length === 0) return;
+    try {
+      await api.exportToPowerPoint(objectiveIdsFromPresentation, presentationNarrative);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'PowerPoint export failed');
+    }
+  }, [objectiveIdsFromPresentation, presentationNarrative]);
+
+  const handleExportPresentationGoogleSlides = useCallback(async () => {
+    if (objectiveIdsFromPresentation.length === 0) return;
+    try {
+      const result = await api.exportToGoogleSlides({ objectiveIds: objectiveIdsFromPresentation });
+      if (result?.link) window.open(result.link, '_blank');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Export failed';
+      if (msg.includes('not connected') || msg.includes('not configured')) {
+        alert('Connect your Google account in Integrations first.');
+        window.location.href = '/integrations';
+      } else {
+        alert(msg);
+      }
+    }
+  }, [objectiveIdsFromPresentation]);
 
   const divisions = useMemo(() => {
     const set = new Set<string>();
@@ -291,17 +376,25 @@ export function OKRDashboard() {
     tactical,
     filteredAndSorted,
     scoreByObjectiveId,
+    keyResultsByObjective,
     stats,
     filters,
     setFilters,
     divisions,
-    modalObjectiveId,
-    setModalObjectiveId,
+    departments,
+    userNames,
     presentationSlides,
     presentationActive,
     setPresentationActive,
     presentationIndex,
     setPresentationIndex,
+    presentationChoiceOpen,
+    onClosePresentationChoice: () => setPresentationChoiceOpen(false),
+    onSelectInfoOnly: handlePresentationInfoOnly,
+    onStartWithNarrative: handleStartWithNarrative,
+    generatePresentationStory,
+    presentationNarrative,
+    setPresentationNarrative,
     needsReviewObjectives: role === 'leader' ? needsReviewObjectives : undefined,
     myObjectivesCount: role === 'standard' ? myObjectivesCount : undefined,
     myWorkObjectives: role === 'standard' ? myWorkObjectives : undefined,
@@ -309,6 +402,9 @@ export function OKRDashboard() {
     viewPreferences,
     onExport: role !== 'view_only' ? handleExport : undefined,
     onExportGoogleSlides: role !== 'view_only' ? handleExportGoogleSlides : undefined,
+    onExportPresentationPowerPoint: role !== 'view_only' ? handleExportPresentationPowerPoint : undefined,
+    onExportPresentationGoogleSlides: role !== 'view_only' ? handleExportPresentationGoogleSlides : undefined,
+    onPresentationMode: handleOpenPresentationChoice,
     exporting,
     exportingSlides,
     onShowTutorial: role !== 'view_only' ? () => {} : undefined,
@@ -316,16 +412,9 @@ export function OKRDashboard() {
     onDismissTutorial: dismissTutorial,
     showTutorial,
     setShowTutorial,
+    currentUserName: user?.name ?? user?.email ?? 'User',
   };
 
-  if (role === 'view_only') {
-    return <ViewOnlyDashboardView {...baseProps} />;
-  }
-  if (role === 'standard') {
-    return <StandardDashboardView {...baseProps} />;
-  }
-  if (role === 'leader') {
-    return <LeaderDashboardView {...baseProps} />;
-  }
+  // Use admin (FullDashboardView) layout for all roles so design is consistent; filtering handles role-specific data.
   return <FullDashboardView {...baseProps} />;
 }

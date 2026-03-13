@@ -1,12 +1,12 @@
 'use client';
 
-import { OKRModal } from '@/components/modal/OKRModal';
 import { PresentationMode } from '@/components/presentation/PresentationMode';
 import { DashboardHeader } from './DashboardHeader';
+import { ExportDropdown } from './ExportDropdown';
 import { FilterBar } from './FilterBar';
 import { TierSection } from './TierSection';
 import { Button } from '@/components/ui/button';
-import { Presentation, HelpCircle, Download, ClipboardCheck } from 'lucide-react';
+import { HelpCircle, ClipboardCheck } from 'lucide-react';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { TutorialOverlay } from '@/components/shared/TutorialOverlay';
 import { getDashboardTutorialSteps } from '@/lib/tutorial';
@@ -25,13 +25,13 @@ export function LeaderDashboardView(props: DashboardViewProps) {
     filters,
     setFilters,
     divisions,
-    modalObjectiveId,
-    setModalObjectiveId,
     presentationSlides,
     presentationActive,
     setPresentationActive,
     presentationIndex,
     setPresentationIndex,
+    onExportPresentationPowerPoint,
+    onExportPresentationGoogleSlides,
     needsReviewObjectives = [],
     departmentStats,
     viewPreferences,
@@ -48,9 +48,6 @@ export function LeaderDashboardView(props: DashboardViewProps) {
 
   return (
     <div className="space-y-6">
-      {modalObjectiveId && (
-        <OKRModal objectiveId={modalObjectiveId} onClose={() => setModalObjectiveId(null)} />
-      )}
       {presentationActive && presentationSlides.length > 0 && (
         <PresentationMode
           slides={presentationSlides}
@@ -64,6 +61,8 @@ export function LeaderDashboardView(props: DashboardViewProps) {
             setPresentationIndex((i) => Math.min(presentationSlides.length - 1, i + 1))
           }
           onGoToSlide={setPresentationIndex}
+          onExportPowerPoint={onExportPresentationPowerPoint}
+          onExportGoogleSlides={onExportPresentationGoogleSlides}
         />
       )}
       <DashboardHeader
@@ -85,7 +84,6 @@ export function LeaderDashboardView(props: DashboardViewProps) {
             objectives={needsReviewObjectives}
             scoreByObjectiveId={scoreByObjectiveId}
             defaultExpanded
-            onOpenModal={setModalObjectiveId}
           />
         </div>
       )}
@@ -108,62 +106,16 @@ export function LeaderDashboardView(props: DashboardViewProps) {
           </Button>
         )}
         {onExport && (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onExport('json')}
-              disabled={exporting || filteredAndSorted.length === 0}
-              className="shrink-0"
-              title="Download as JSON (API dump)"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              JSON
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onExport('xlsx')}
-              disabled={exporting || filteredAndSorted.length === 0}
-              className="shrink-0"
-              title="Download as Excel"
-            >
-              Excel
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onExport('pdf')}
-              disabled={exporting || filteredAndSorted.length === 0}
-              className="shrink-0"
-              title="Download as PDF"
-            >
-              PDF
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onExportGoogleSlides}
-              disabled={exportingSlides || filteredAndSorted.length === 0}
-              className="shrink-0"
-              title="Export to Google Slides"
-            >
-              Google Slides
-            </Button>
-          </>
+          <ExportDropdown
+            onExport={onExport}
+            onExportGoogleSlides={onExportGoogleSlides}
+            onPresentationMode={() => { setPresentationIndex(0); setPresentationActive(true); }}
+            exporting={exporting}
+            exportingSlides={exportingSlides}
+            disabled={filteredAndSorted.length === 0}
+            showDownloadIcon
+          />
         )}
-        <Button
-          variant="outline"
-          onClick={() => {
-            setPresentationIndex(0);
-            setPresentationActive(true);
-          }}
-          disabled={filteredAndSorted.length === 0}
-          className="shrink-0"
-        >
-          <Presentation className="mr-2 h-4 w-4" />
-          Present
-        </Button>
       </div>
       <div className="space-y-4">
         <TierSection
@@ -171,21 +123,18 @@ export function LeaderDashboardView(props: DashboardViewProps) {
           objectives={strategic}
           scoreByObjectiveId={scoreByObjectiveId}
           defaultExpanded
-          onOpenModal={setModalObjectiveId}
         />
         <TierSection
           title="Divisional (Annual)"
           objectives={divisional}
           scoreByObjectiveId={scoreByObjectiveId}
           defaultExpanded
-          onOpenModal={setModalObjectiveId}
         />
         <TierSection
           title="Tactical (Quarterly)"
           objectives={tactical}
           scoreByObjectiveId={scoreByObjectiveId}
           defaultExpanded
-          onOpenModal={setModalObjectiveId}
         />
       </div>
       {filteredAndSorted.length === 0 && (
@@ -212,7 +161,7 @@ export function LeaderDashboardView(props: DashboardViewProps) {
         />
       )}
       {((showTutorial ?? false) ||
-        (shouldShowTutorial && !modalObjectiveId && filteredAndSorted.length > 0)) &&
+        (shouldShowTutorial && filteredAndSorted.length > 0)) &&
         onDismissTutorial && (
           <TutorialOverlay
             steps={getDashboardTutorialSteps()}

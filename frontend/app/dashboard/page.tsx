@@ -30,7 +30,7 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <AppLayout title="Dashboard" description="3-tier OKR hierarchy and progress">
+      <AppLayout>
         <div className="text-center text-muted-foreground">Loading...</div>
       </AppLayout>
     );
@@ -39,7 +39,7 @@ export default function Dashboard() {
   if (!user) return null;
 
   return (
-    <AppLayout title="Dashboard" description="3-tier OKR hierarchy and progress">
+    <AppLayout>
       <OKRDashboard />
     </AppLayout>
   );

@@ -32,5 +32,5 @@ export const auth0 = new Auth0Client({
     profile: '/api/auth/profile',
     accessToken: '/api/auth/token',
     backchannelLogout: '/api/auth/backchannel-logout',
-  },
+  } as Record<string, string>,
 });

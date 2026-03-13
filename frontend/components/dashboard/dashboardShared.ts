@@ -81,7 +81,7 @@ export function filterObjective(
     }
   }
   if (filters.tier !== 'all' && obj.level !== filters.tier) return false;
-  if (filters.division !== 'all' && obj.division !== filters.division) return false;
+  if (filters.division !== 'all' && obj.division !== filters.division && obj.departmentId !== filters.division) return false;
   if (filters.owner.trim()) {
     const ownerQ = filters.owner.toLowerCase().trim();
     const ownerId = (obj.ownerId ?? '').toLowerCase();
@@ -104,6 +104,17 @@ export interface DashboardStats {
   daysLeftInQuarter: number;
 }
 
+export interface DepartmentInfo {
+  _id: string;
+  name: string;
+  color?: string;
+}
+
+export interface UserNameInfo {
+  _id: string;
+  name: string;
+}
+
 export interface DashboardViewProps {
   role: DashboardRole;
   objectives: Objective[];
@@ -112,17 +123,27 @@ export interface DashboardViewProps {
   tactical: Objective[];
   filteredAndSorted: Objective[];
   scoreByObjectiveId: Record<string, number>;
+  keyResultsByObjective?: Record<string, { _id?: string }[]>;
   stats: DashboardStats;
   filters: DashboardFilters;
   setFilters: (f: DashboardFilters) => void;
   divisions: string[];
-  modalObjectiveId: string | null;
-  setModalObjectiveId: (id: string | null) => void;
+  departments?: DepartmentInfo[];
+  userNames?: UserNameInfo[];
   presentationSlides: PresentationSlide[];
   presentationActive: boolean;
   setPresentationActive: (v: boolean) => void;
   presentationIndex: number;
   setPresentationIndex: (value: number | ((prev: number) => number)) => void;
+  /** When true, show the presentation choice popout (info only vs AI story). */
+  presentationChoiceOpen?: boolean;
+  onClosePresentationChoice?: () => void;
+  onSelectInfoOnly?: () => void;
+  onStartWithNarrative?: (story: string) => void;
+  generatePresentationStory?: () => Promise<string>;
+  /** AI-generated narrative for presentation (when user chose "Generate with AI"). */
+  presentationNarrative?: string | null;
+  setPresentationNarrative?: (v: string | null) => void;
   /** Leader: objectives in_review in user's department */
   needsReviewObjectives?: Objective[];
   /** Standard: count of objectives owned by user */
@@ -142,9 +163,17 @@ export interface DashboardViewProps {
   };
   onExport?: (format: 'json' | 'xlsx' | 'pdf') => Promise<void>;
   onExportGoogleSlides?: () => Promise<void>;
+  /** Export current presentation (story slides) to PowerPoint. */
+  onExportPresentationPowerPoint?: () => Promise<void>;
+  /** Export current presentation to Google Slides. */
+  onExportPresentationGoogleSlides?: () => Promise<void>;
+  /** When user clicks Presentation in export menu, call this (e.g. open choice dialog). */
+  onPresentationMode?: () => void;
   exporting?: boolean;
   exportingSlides?: boolean;
   onShowTutorial?: () => void;
+  /** Current user display name for reference-style header */
+  currentUserName?: string;
   shouldShowTutorial?: boolean;
   onDismissTutorial?: () => void;
   showTutorial?: boolean;

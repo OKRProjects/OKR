@@ -1,0 +1,169 @@
+'use client';
+
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { X, FileText, Sparkles, Loader2 } from 'lucide-react';
+
+export interface PresentationChoiceDialogProps {
+  open: boolean;
+  onClose: () => void;
+  objectiveIds: string[];
+  /** Start presentation using slides only (info to tell the story). */
+  onInfoOnly: () => void;
+  /** Called when user has generated a story and clicks "Start presentation with story". */
+  onStartWithNarrative: (story: string) => void;
+  /** Call this to generate the story (dialog will call and show result). */
+  generateStory: () => Promise<string>;
+  disabled?: boolean;
+}
+
+export function PresentationChoiceDialog({
+  open,
+  onClose,
+  objectiveIds,
+  onInfoOnly,
+  onStartWithNarrative,
+  generateStory,
+  disabled = false,
+}: PresentationChoiceDialogProps) {
+  const [step, setStep] = useState<'choice' | 'generating' | 'story'>('choice');
+  const [story, setStory] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!open) return null;
+
+  const handleInfoOnly = () => {
+    setStep('choice');
+    setStory(null);
+    setError(null);
+    onInfoOnly();
+    onClose();
+  };
+
+  const handleGenerateClick = async () => {
+    setError(null);
+    setStep('generating');
+    try {
+      const text = await generateStory();
+      setStory(text);
+      setStep('story');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate story');
+      setStep('choice');
+    }
+  };
+
+  const handleStartWithStory = () => {
+    if (story) {
+      setStep('choice');
+      setStory(null);
+      setError(null);
+      onClose();
+      onStartWithNarrative(story);
+    }
+  };
+
+  const handleBack = () => {
+    setStep('choice');
+    setStory(null);
+    setError(null);
+  };
+
+  const canGenerate = objectiveIds.length > 0 && !disabled;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="presentation-choice-title"
+    >
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={step === 'choice' ? onClose : undefined}
+        aria-hidden="true"
+      />
+      <div
+        className="relative z-10 w-full max-w-lg rounded-xl border bg-white p-6 shadow-xl dark:bg-gray-900 dark:border-gray-700"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 id="presentation-choice-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            OKR presentation
+          </h2>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
+
+        {step === 'choice' && (
+          <>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Choose how you want to present your OKRs: use the slides as-is to tell the story, or have AI write a
+              coherent narrative for a professional presentation.
+            </p>
+            {error && (
+              <div className="mb-4 rounded-md bg-red-50 dark:bg-red-950/30 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+                {error}
+              </div>
+            )}
+            <div className="flex flex-col gap-3">
+              <Button
+                variant="outline"
+                className="h-auto flex-col items-start gap-2 py-3 text-left"
+                onClick={handleInfoOnly}
+                disabled={disabled}
+              >
+                <span className="flex items-center gap-2 font-medium">
+                  <FileText className="h-4 w-4" />
+                  Info only — tell the story with slides
+                </span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  Use the current slides (title, agenda, objectives, key results) to present. No AI.
+                </span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-auto flex-col items-start gap-2 py-3 text-left"
+                onClick={handleGenerateClick}
+                disabled={!canGenerate}
+              >
+                <span className="flex items-center gap-2 font-medium">
+                  <Sparkles className="h-4 w-4" />
+                  Generate professional narrative with AI
+                </span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  Use OpenRouter to turn your OKR data into a coherent, professional story you can read or present.
+                </span>
+              </Button>
+            </div>
+          </>
+        )}
+
+        {step === 'generating' && (
+          <div className="flex flex-col items-center justify-center py-8 gap-4">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">Generating your OKR narrative…</p>
+          </div>
+        )}
+
+        {step === 'story' && story && (
+          <>
+            <p className="text-sm text-muted-foreground mb-3">Your professional OKR narrative:</p>
+            <div className="max-h-64 overflow-y-auto rounded-lg border bg-gray-50 dark:bg-gray-800/50 p-4 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap mb-4">
+              {story}
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={handleBack}>
+                Back
+              </Button>
+              <Button onClick={handleStartWithStory}>
+                Start presentation with story
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

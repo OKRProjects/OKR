@@ -1,6 +1,6 @@
 'use client';
 
-import { Target, TrendingUp, Calendar, CheckCircle2, Users, Briefcase } from 'lucide-react';
+import { Target, TrendingUp, Calendar, CheckCircle2, Users, Briefcase, AlertCircle } from 'lucide-react';
 
 export type DashboardRole = 'view_only' | 'standard' | 'leader' | 'admin' | 'developer' | undefined;
 
@@ -12,6 +12,8 @@ interface DashboardHeaderProps {
   role?: DashboardRole;
   myObjectivesCount?: number;
   departmentStats?: { count: number; onTrackPercent: number };
+  /** Reference design: 4 stat cards with colored icon boxes */
+  variant?: 'default' | 'reference';
 }
 
 function StatBlock({
@@ -45,6 +47,34 @@ function StatBlock({
   );
 }
 
+function ReferenceStatCard({
+  label,
+  value,
+  icon: Icon,
+  iconBg,
+  iconColor,
+}: {
+  label: string;
+  value: string | number;
+  icon: React.ElementType;
+  iconBg: string;
+  iconColor: string;
+}) {
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-5">
+      <div className="flex items-center gap-3">
+        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${iconBg}`}>
+          <Icon className={`w-5 h-5 ${iconColor}`} />
+        </div>
+        <div>
+          <p className="text-sm text-gray-600">{label}</p>
+          <p className="text-2xl font-bold text-gray-900">{value}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function DashboardHeader({
   totalObjectives,
   averageScore,
@@ -53,7 +83,43 @@ export function DashboardHeader({
   role,
   myObjectivesCount,
   departmentStats,
+  variant = 'default',
 }: DashboardHeaderProps) {
+  if (variant === 'reference') {
+    return (
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        <ReferenceStatCard
+          label="Total Objectives"
+          value={totalObjectives}
+          icon={Target}
+          iconBg="bg-blue-100"
+          iconColor="text-blue-600"
+        />
+        <ReferenceStatCard
+          label="Average Score"
+          value={averageScore.toFixed(2)}
+          icon={TrendingUp}
+          iconBg="bg-green-100"
+          iconColor="text-green-600"
+        />
+        <ReferenceStatCard
+          label="On Track"
+          value={`${Math.round(onTrackPercent)}%`}
+          icon={AlertCircle}
+          iconBg="bg-purple-100"
+          iconColor="text-purple-600"
+        />
+        <ReferenceStatCard
+          label={`Days Left in Q${Math.ceil((new Date().getMonth() + 1) / 3)}`}
+          value={daysLeftInQuarter}
+          icon={Calendar}
+          iconBg="bg-orange-100"
+          iconColor="text-orange-600"
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-end gap-3">
