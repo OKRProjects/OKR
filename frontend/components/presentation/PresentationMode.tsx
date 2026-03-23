@@ -1,12 +1,30 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { ScoreRing, getScoreStatusLabel } from '@/components/shared/ScoreRing';
+import { useEffect, useState, useRef, useCallback, type ComponentType } from 'react';
+import { ScoreRing, getScoreStatusLabel, getScoreBarColorHex } from '@/components/shared/ScoreRing';
 import { StatusPill } from '@/components/shared/StatusPill';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, X, FileDown, Presentation as PresentationIcon, FileText } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  X,
+  FileDown,
+  Presentation as PresentationIcon,
+  FileText,
+  Maximize2,
+  Minimize2,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  AlertTriangle,
+  Link2,
+  GitBranch,
+  ArrowUp,
+  ArrowDown,
+} from 'lucide-react';
 import type { Objective, KeyResult } from '@/lib/api';
+import { cn } from '@/components/ui/utils';
 
 /** Title slide (story opening) */
 export interface TitleSlide {
@@ -22,10 +40,18 @@ export interface AgendaSlide {
   items: { title: string }[];
 }
 
-/** AI-generated narrative / script slide (shown when user chose "Generate with AI") */
+/** AI-generated narrative / script slide */
 export interface NarrativeSlide {
   type: 'narrative';
   content: string;
+}
+
+/** Slide indices in the same deck for related OKRs (objective slides only). */
+export interface ObjectiveSlideNavigation {
+  parentSlideIndex?: number;
+  childSlideIndices: number[];
+  upstreamSlideIndices: number[];
+  downstreamSlideIndices: number[];
 }
 
 /** Single objective slide */
@@ -34,12 +60,25 @@ export interface ObjectiveSlide {
   objective: Objective;
   score: number | null;
   keyResults: KeyResult[];
+  navigation?: ObjectiveSlideNavigation;
 }
 
 export type PresentationSlide = TitleSlide | AgendaSlide | NarrativeSlide | ObjectiveSlide;
 
 export function isObjectiveSlide(s: PresentationSlide): s is ObjectiveSlide {
   return s.type === 'objective';
+}
+
+export interface PresentationDeckStats {
+  daysLeftInQuarter: number;
+  /** Average OKR score 0–1 → display as % */
+  portfolioAvgCompletionPct: number;
+  /** % of key results at 100% */
+  krsAtTargetPct: number;
+  krsUpdatedThisWeek: number;
+  krsTotal: number;
+  /** Share of KRs with any update in the last 7 days (simple velocity signal). */
+  weeklyTouchVelocityPct: number;
 }
 
 interface PresentationModeProps {
@@ -49,12 +88,34 @@ interface PresentationModeProps {
   onPrev: () => void;
   onNext: () => void;
   onGoToSlide?: (index: number) => void;
-  /** Export current presentation to PowerPoint (objectives in slides). */
   onExportPowerPoint?: () => Promise<void>;
-  /** Export current presentation to Google Slides. */
   onExportGoogleSlides?: () => Promise<void>;
-  /** Optional AI-generated narrative; when set, show a "Story" button that opens a popout. */
   narrative?: string | null;
+  departments?: { _id: string; name: string }[];
+  userNames?: { _id: string; name: string }[];
+  deckStats?: PresentationDeckStats | null;
+}
+
+function deptName(deptId: string | null | undefined, departments: { _id: string; name: string }[]): string {
+  if (!deptId) return '—';
+  return departments.find((d) => d._id === deptId)?.name ?? deptId;
+}
+
+function ownerDisplay(ownerId: string | null | undefined, userNames: { _id: string; name: string }[]): string {
+  if (!ownerId) return '—';
+  return userNames.find((u) => u._id === ownerId)?.name ?? ownerId;
+}
+
+function krTrendIcon(score: number) {
+  if (score >= 0.7) return <TrendingUp className="h-5 w-5 text-green-600 shrink-0" aria-hidden />;
+  if (score >= 0.4) return <Minus className="h-5 w-5 text-amber-600 shrink-0" aria-hidden />;
+  return <TrendingDown className="h-5 w-5 text-red-600 shrink-0" aria-hidden />;
+}
+
+function krRiskLevel(score: number): 'ok' | 'at_risk' | 'off' {
+  if (score < 0.4) return 'off';
+  if (score < 0.7) return 'at_risk';
+  return 'ok';
 }
 
 export function PresentationMode({
@@ -67,10 +128,16 @@ export function PresentationMode({
   onExportPowerPoint,
   onExportGoogleSlides,
   narrative,
+  departments = [],
+  userNames = [],
+  deckStats = null,
 }: PresentationModeProps) {
   const [exportingPptx, setExportingPptx] = useState(false);
   const [exportingSlides, setExportingSlides] = useState(false);
   const [storyPopoutOpen, setStoryPopoutOpen] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const shellRef = useRef<HTMLDivElement>(null);
+
   const slide = slides[currentIndex];
   const total = slides.length;
   const hasPrev = currentIndex > 0;
@@ -78,18 +145,60 @@ export function PresentationMode({
   const objectiveIds = slides.filter(isObjectiveSlide).map((s) => s.objective._id).filter(Boolean) as string[];
   const canExport = objectiveIds.length > 0;
 
+  const syncFullscreen = useCallback(() => {
+    setFullscreen(!!document.fullscreenElement);
+  }, []);
+
+  useEffect(() => {
+    document.addEventListener('fullscreenchange', syncFullscreen);
+    return () => document.removeEventListener('fullscreenchange', syncFullscreen);
+  }, [syncFullscreen]);
+
+  const toggleFullscreen = async () => {
+    const el = shellRef.current;
+    if (!el) return;
+    try {
+      if (!document.fullscreenElement) {
+        await el.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (storyPopoutOpen) setStoryPopoutOpen(false);
-        else onClose();
+        if (storyPopoutOpen) {
+          setStoryPopoutOpen(false);
+          return;
+        }
+        if (document.fullscreenElement) {
+          void document.exitFullscreen();
+          return;
+        }
+        onClose();
       }
       if (e.key === 'ArrowLeft') hasPrev && onPrev();
       if (e.key === 'ArrowRight') hasNext && onNext();
+      if ((e.key === 'f' || e.key === 'F') && !e.ctrlKey && !e.metaKey) {
+        const t = e.target as HTMLElement;
+        if (t.tagName !== 'INPUT' && t.tagName !== 'TEXTAREA') void toggleFullscreen();
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose, onPrev, onNext, hasPrev, hasNext, storyPopoutOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (document.fullscreenElement === shellRef.current) {
+        void document.exitFullscreen().catch(() => {});
+      }
+    };
+  }, []);
 
   if (total === 0) return null;
 
@@ -113,28 +222,57 @@ export function PresentationMode({
     }
   };
 
+  const NavChip = ({
+    label,
+    index,
+    icon: Icon,
+  }: {
+    label: string;
+    index: number;
+    icon?: ComponentType<{ className?: string }>;
+  }) => (
+    <Button
+      type="button"
+      variant="secondary"
+      size="sm"
+      className="h-9 gap-1.5 text-xs sm:text-sm"
+      onClick={() => onGoToSlide?.(index)}
+    >
+      {Icon && <Icon className="h-3.5 w-3.5" />}
+      {label}
+    </Button>
+  );
+
   return (
     <div
-      className="fixed inset-0 z-50 bg-background flex flex-col"
+      ref={shellRef}
+      className="fixed inset-0 z-50 bg-gradient-to-b from-background via-background to-muted/30 flex flex-col text-foreground"
       role="presentation"
       aria-label="Executive presentation mode"
     >
-      <div className="flex items-center justify-between shrink-0 px-6 py-3 border-b flex-wrap gap-2">
-        <Button variant="ghost" size="icon" onClick={onClose} aria-label="Exit presentation">
-          <X className="h-5 w-5" />
-        </Button>
-        <span className="text-sm text-muted-foreground">
-          {currentIndex + 1} / {total}
-        </span>
+      <div className="flex items-center justify-between shrink-0 px-4 sm:px-6 py-3 border-b bg-card/80 backdrop-blur-sm flex-wrap gap-2">
         <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Exit presentation (dashboard filters unchanged)" title="Close">
+            <X className="h-5 w-5" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 h-9"
+            onClick={() => void toggleFullscreen()}
+            aria-label={fullscreen ? 'Exit full screen' : 'Full screen'}
+            title="Full screen (F)"
+          >
+            {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            <span className="hidden sm:inline">{fullscreen ? 'Exit full screen' : 'Full screen'}</span>
+          </Button>
+        </div>
+        <span className="text-sm font-medium tabular-nums">
+          Slide {currentIndex + 1} / {total}
+        </span>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           {narrative && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setStoryPopoutOpen(true)}
-              className="gap-1.5"
-              aria-label="Show narrative story"
-            >
+            <Button variant="outline" size="sm" onClick={() => setStoryPopoutOpen(true)} className="gap-1.5 h-9">
               <FileText className="h-4 w-4" />
               Story
             </Button>
@@ -145,10 +283,10 @@ export function PresentationMode({
               size="sm"
               onClick={handleExportPptx}
               disabled={!canExport || exportingPptx}
-              className="gap-1.5"
+              className="gap-1.5 h-9 hidden sm:inline-flex"
             >
               <FileDown className="h-4 w-4" />
-              {exportingPptx ? 'Exporting…' : 'PowerPoint'}
+              {exportingPptx ? '…' : 'PowerPoint'}
             </Button>
           )}
           {onExportGoogleSlides && (
@@ -157,51 +295,66 @@ export function PresentationMode({
               size="sm"
               onClick={handleExportGoogle}
               disabled={!canExport || exportingSlides}
-              className="gap-1.5"
+              className="gap-1.5 h-9 hidden sm:inline-flex"
             >
               <PresentationIcon className="h-4 w-4" />
-              {exportingSlides ? 'Exporting…' : 'Google Slides'}
+              {exportingSlides ? '…' : 'Slides'}
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={onPrev}
-            disabled={!hasPrev}
-            aria-label="Previous"
-          >
+          <Button variant="outline" size="icon" onClick={onPrev} disabled={!hasPrev} aria-label="Previous slide" className="h-9 w-9">
             <ChevronLeft className="h-5 w-5" />
           </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={onNext}
-            disabled={!hasNext}
-            aria-label="Next"
-          >
+          <Button variant="outline" size="icon" onClick={onNext} disabled={!hasNext} aria-label="Next slide" className="h-9 w-9">
             <ChevronRight className="h-5 w-5" />
           </Button>
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center overflow-auto">
+      {deckStats && (
+        <div className="shrink-0 px-4 sm:px-6 py-2 border-b bg-muted/40 flex flex-wrap gap-4 sm:gap-8 text-sm justify-center sm:justify-start">
+          <span>
+            <span className="text-muted-foreground">Portfolio avg </span>
+            <strong className="tabular-nums">{deckStats.portfolioAvgCompletionPct}%</strong>
+          </span>
+          <span>
+            <span className="text-muted-foreground">Days left (Q) </span>
+            <strong className="tabular-nums">{deckStats.daysLeftInQuarter}</strong>
+          </span>
+          <span>
+            <span className="text-muted-foreground">KRs at 100% </span>
+            <strong className="tabular-nums">{deckStats.krsAtTargetPct}%</strong>
+          </span>
+          <span>
+            <span className="text-muted-foreground">KRs touched (7d) </span>
+            <strong className="tabular-nums">
+              {deckStats.krsUpdatedThisWeek}/{deckStats.krsTotal}
+            </strong>
+          </span>
+          <span>
+            <span className="text-muted-foreground">Velocity (7d touch) </span>
+            <strong className="tabular-nums">{deckStats.weeklyTouchVelocityPct}%</strong>
+          </span>
+        </div>
+      )}
+
+      <div className="flex-1 flex flex-col items-center justify-start sm:justify-center p-4 sm:p-8 overflow-auto">
         {slide.type === 'title' && (
-          <div className="max-w-2xl w-full space-y-4">
-            <h1 className="text-4xl md:text-5xl font-bold">{slide.title}</h1>
-            {slide.subtitle && (
-              <p className="text-xl text-muted-foreground">{slide.subtitle}</p>
-            )}
+          <div className="max-w-3xl w-full space-y-4 text-center">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight">{slide.title}</h1>
+            {slide.subtitle && <p className="text-xl sm:text-2xl text-muted-foreground">{slide.subtitle}</p>}
+            <p className="text-sm text-muted-foreground pt-4">Use arrow keys to navigate · F for full screen · Esc to exit</p>
           </div>
         )}
 
         {slide.type === 'agenda' && (
-          <div className="max-w-2xl w-full space-y-6">
-            <h2 className="text-2xl font-semibold text-muted-foreground">Today&apos;s stories</h2>
-            <h1 className="text-3xl md:text-4xl font-bold">{slide.title}</h1>
-            <ul className="text-left space-y-3 list-disc list-inside">
+          <div className="max-w-3xl w-full space-y-6">
+            <h2 className="text-xl font-semibold text-muted-foreground text-center">Agenda</h2>
+            <h1 className="text-3xl sm:text-4xl font-bold text-center">{slide.title}</h1>
+            <ul className="text-left space-y-3 list-none p-0">
               {slide.items.map((item, i) => (
-                <li key={i} className="text-lg">
-                  {item.title}
+                <li key={i} className="text-lg sm:text-xl flex gap-3 items-start border-b border-border/50 pb-3">
+                  <span className="font-mono text-muted-foreground w-8 shrink-0">{i + 1}.</span>
+                  <span>{item.title}</span>
                 </li>
               ))}
             </ul>
@@ -211,79 +364,162 @@ export function PresentationMode({
         {slide.type === 'narrative' && (
           <div className="max-w-3xl w-full text-left space-y-4">
             <h2 className="text-xl font-semibold text-muted-foreground">Presentation script</h2>
-            <div className="text-lg leading-relaxed whitespace-pre-wrap text-gray-800 dark:text-gray-200">
-              {slide.content}
-            </div>
+            <div className="text-base sm:text-lg leading-relaxed whitespace-pre-wrap">{slide.content}</div>
           </div>
         )}
 
         {slide.type === 'objective' && (() => {
+          const o = slide.objective;
           const score = slide.score ?? 0;
-          const isAtRisk = score < 0.7 && score >= 0.4;
-          const isOffTrack = score < 0.4;
-          const statusLabel = getScoreStatusLabel(score);
+          const hasScore = slide.score != null;
+          const pct = hasScore ? Math.round(Math.min(1, Math.max(0, score)) * 100) : null;
+          const isAtRisk = hasScore && score < 0.7 && score >= 0.4;
+          const isOffTrack = hasScore && score < 0.4;
+          const rejected = o.status === 'rejected';
+          const statusLabel = hasScore ? getScoreStatusLabel(score) : 'No score';
+          const nav = slide.navigation;
+
           return (
             <div
-              className="max-w-2xl w-full space-y-6"
-              style={{
-                ...(isAtRisk && { borderLeft: '4px solid rgb(245 158 11)' }),
-                ...(isOffTrack && { borderLeft: '4px solid rgb(239 68 68)' }),
-              }}
+              className={cn(
+                'max-w-4xl w-full space-y-5 sm:space-y-6 rounded-2xl border-2 p-5 sm:p-8 shadow-lg bg-card',
+                rejected && 'border-red-500 ring-2 ring-red-500/30',
+                !rejected && isOffTrack && 'border-red-500/80 bg-red-500/5',
+                !rejected && isAtRisk && !isOffTrack && 'border-amber-500 bg-amber-500/5',
+                !rejected && !isAtRisk && !isOffTrack && 'border-border'
+              )}
             >
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                <StatusPill status={slide.objective.status ?? 'draft'} />
-                <span className="text-sm text-muted-foreground capitalize">
-                  {slide.objective.level}
-                </span>
-                {slide.objective.division && (
-                  <span className="text-sm text-muted-foreground">
-                    {slide.objective.division}
-                  </span>
-                )}
-              </div>
-              <h1 className="text-3xl md:text-4xl font-bold">
-                {slide.objective.title}
-              </h1>
-              {slide.objective.ownerId && (
-                <p className="text-muted-foreground">Owner: {slide.objective.ownerId}</p>
+              {(rejected || isOffTrack || isAtRisk) && (
+                <div
+                  className={cn(
+                    'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold',
+                    rejected || isOffTrack ? 'bg-red-600 text-white' : 'bg-amber-500 text-amber-950'
+                  )}
+                  role="status"
+                >
+                  <AlertTriangle className="h-5 w-5 shrink-0" aria-hidden />
+                  {rejected ? 'Objective rejected — needs attention' : isOffTrack ? 'Off track' : 'At risk'}
+                </div>
               )}
 
-              <div className="flex justify-center">
-                <ScoreRing score={score} size={120} strokeWidth={8} showLabel />
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                <div className="min-w-0 flex-1 space-y-3 text-left">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusPill status={o.status ?? 'draft'} />
+                    <span className="text-sm font-medium capitalize px-2 py-0.5 rounded-md bg-muted">{o.level}</span>
+                    {o.division && (
+                      <span className="text-sm text-muted-foreground border border-border px-2 py-0.5 rounded-md">{o.division}</span>
+                    )}
+                  </div>
+                  <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold leading-tight">{o.title}</h1>
+                  <div className="grid sm:grid-cols-2 gap-2 text-base sm:text-lg">
+                    <p>
+                      <span className="text-muted-foreground font-medium">Department </span>
+                      <span className="font-semibold">{deptName(o.departmentId, departments)}</span>
+                    </p>
+                    <p>
+                      <span className="text-muted-foreground font-medium">Owner </span>
+                      <span className="font-semibold">{ownerDisplay(o.ownerId, userNames)}</span>
+                    </p>
+                  </div>
+                  {o.quarter && (
+                    <p className="text-sm text-muted-foreground">
+                      {o.quarter} · FY{o.fiscalYear}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-col items-center gap-2 shrink-0">
+                  <ScoreRing score={hasScore ? score : null} size={140} strokeWidth={10} showLabel />
+                  {hasScore && pct != null && (
+                    <>
+                      <p className="text-3xl font-bold tabular-nums">{pct}%</p>
+                      <p
+                        className={cn(
+                          'text-lg font-semibold',
+                          score >= 0.7 ? 'text-green-600' : score >= 0.4 ? 'text-amber-600' : 'text-red-600'
+                        )}
+                      >
+                        {statusLabel}
+                      </p>
+                    </>
+                  )}
+                  {!hasScore && <p className="text-muted-foreground text-sm">No key result scores yet</p>}
+                </div>
               </div>
-              <p
-                className={`text-lg font-semibold ${
-                  score >= 0.7 ? 'text-green-600' : score >= 0.4 ? 'text-amber-600' : 'text-red-600'
-                }`}
-              >
-                {statusLabel}
-              </p>
-              {slide.objective.quarter && (
-                <p className="text-sm text-muted-foreground">
-                  {slide.objective.quarter} · FY{slide.objective.fiscalYear}
-                </p>
+
+              {hasScore && pct != null && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Overall progress</span>
+                    <span>{pct}%</span>
+                  </div>
+                  <div className="h-4 w-full rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${pct}%`, backgroundColor: getScoreBarColorHex(score) }}
+                    />
+                  </div>
+                </div>
               )}
+
+              {nav &&
+                (nav.parentSlideIndex != null ||
+                  nav.childSlideIndices.length > 0 ||
+                  nav.upstreamSlideIndices.length > 0 ||
+                  nav.downstreamSlideIndices.length > 0) && (
+                  <div className="rounded-xl border bg-muted/30 p-4 space-y-2">
+                    <p className="text-sm font-semibold flex items-center gap-2">
+                      <Link2 className="h-4 w-4" />
+                      Related OKRs in this deck
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {nav.parentSlideIndex != null && (
+                        <NavChip label="Parent objective" index={nav.parentSlideIndex} icon={ArrowUp} />
+                      )}
+                      {nav.childSlideIndices.map((idx, i) => (
+                        <NavChip key={`c-${i}`} label={`Child ${i + 1}`} index={idx} icon={GitBranch} />
+                      ))}
+                      {nav.upstreamSlideIndices.map((idx, i) => (
+                        <NavChip key={`u-${i}`} label={`Upstream ${i + 1}`} index={idx} icon={Link2} />
+                      ))}
+                      {nav.downstreamSlideIndices.map((idx, i) => (
+                        <NavChip key={`d-${i}`} label={`Downstream ${i + 1}`} index={idx} icon={ArrowDown} />
+                      ))}
+                    </div>
+                  </div>
+                )}
 
               {slide.keyResults.length > 0 && (
-                <div className="mt-8 text-left space-y-4">
-                  <h2 className="text-lg font-semibold text-center">Key results</h2>
-                  <ul className="space-y-3">
+                <div className="mt-2 text-left space-y-3">
+                  <h2 className="text-lg sm:text-xl font-semibold border-b pb-2">Key results</h2>
+                  <ul className="space-y-3 list-none p-0 m-0">
                     {slide.keyResults.map((kr) => {
                       const krScore = kr.score ?? 0;
-                      const pct = Math.round(krScore * 100);
-                      const krAtRisk = krScore < 0.7;
+                      const krPct = Math.round(krScore * 100);
+                      const risk = krRiskLevel(krScore);
                       return (
                         <li
                           key={kr._id}
-                          className={`p-3 rounded-lg border ${
-                            krAtRisk ? 'border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20' : ''
-                          }`}
+                          className={cn(
+                            'p-4 rounded-xl border-2 flex flex-col gap-2',
+                            risk === 'off' && 'border-red-500 bg-red-500/10',
+                            risk === 'at_risk' && 'border-amber-500 bg-amber-500/10',
+                            risk === 'ok' && 'border-border bg-background/50'
+                          )}
                         >
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className="font-medium text-sm">{kr.title}</span>
-                            <span className="text-sm font-semibold">{pct}%</span>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-3 min-w-0">
+                              {krTrendIcon(krScore)}
+                              <div className="min-w-0">
+                                <span className="font-semibold text-base block">{kr.title}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {risk === 'ok' ? 'On track' : risk === 'at_risk' ? 'At risk' : 'Off track'}
+                                </span>
+                              </div>
+                            </div>
+                            <span className="text-xl font-bold tabular-nums shrink-0">{krPct}%</span>
                           </div>
-                          <Progress value={pct} className="h-2" />
+                          <Progress value={krPct} className="h-3" />
                         </li>
                       );
                     })}
@@ -304,32 +540,32 @@ export function PresentationMode({
           onClick={() => setStoryPopoutOpen(false)}
         >
           <div
-            className="relative z-10 max-w-2xl w-full max-h-[80vh] overflow-hidden rounded-xl border bg-white dark:bg-gray-900 shadow-xl flex flex-col"
+            className="relative z-10 max-w-2xl w-full max-h-[80vh] overflow-hidden rounded-xl border bg-card shadow-xl flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between shrink-0 px-4 py-3 border-b">
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100">OKR narrative</h3>
+              <h3 className="font-semibold">OKR narrative</h3>
               <Button variant="ghost" size="icon" onClick={() => setStoryPopoutOpen(false)} aria-label="Close">
                 <X className="h-5 w-5" />
               </Button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 text-gray-800 dark:text-gray-200 whitespace-pre-wrap text-sm leading-relaxed">
-              {narrative}
-            </div>
+            <div className="flex-1 overflow-y-auto p-4 whitespace-pre-wrap text-sm leading-relaxed">{narrative}</div>
           </div>
         </div>
       )}
 
-      <div className="shrink-0 px-6 py-2 border-t flex justify-center gap-2 flex-wrap">
+      <div className="shrink-0 px-4 py-2 border-t bg-card/80 flex justify-center gap-1.5 flex-wrap">
         {slides.map((_, i) => (
           <button
             key={i}
             type="button"
             onClick={() => onGoToSlide?.(i)}
-            className={`w-2 h-2 rounded-full transition-colors ${
-              i === currentIndex ? 'bg-primary' : 'bg-muted-foreground/30 hover:bg-muted-foreground/50'
-            }`}
-            aria-label={`Slide ${i + 1}`}
+            className={cn(
+              'w-2.5 h-2.5 rounded-full transition-colors',
+              i === currentIndex ? 'bg-primary scale-125' : 'bg-muted-foreground/30 hover:bg-muted-foreground/50'
+            )}
+            aria-label={`Go to slide ${i + 1}`}
+            aria-current={i === currentIndex ? 'true' : undefined}
           />
         ))}
       </div>

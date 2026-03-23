@@ -1,7 +1,7 @@
 import type { Objective, KeyResult } from '@/lib/api';
 import type { DashboardFilters } from './FilterBar';
 import type { DashboardRole } from './DashboardHeader';
-import type { PresentationSlide } from '@/components/presentation/PresentationMode';
+import type { PresentationSlide, PresentationDeckStats } from '@/components/presentation/PresentationMode';
 
 /** User shape for visibility: sub (id) and optional departmentId, role */
 export interface UserForVisibility {
@@ -131,6 +131,8 @@ export interface DashboardViewProps {
   departments?: DepartmentInfo[];
   userNames?: UserNameInfo[];
   presentationSlides: PresentationSlide[];
+  /** Metrics strip in presentation mode (portfolio completion, days left, velocity). */
+  presentationDeckStats?: PresentationDeckStats | null;
   presentationActive: boolean;
   setPresentationActive: (v: boolean) => void;
   presentationIndex: number;

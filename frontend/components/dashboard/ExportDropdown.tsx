@@ -7,7 +7,7 @@ import { ChevronDown, Download, Presentation } from 'lucide-react';
 interface ExportDropdownProps {
   onExport: (format: 'json' | 'xlsx' | 'pdf') => Promise<void>;
   onExportGoogleSlides?: () => Promise<void>;
-  /** When provided, adds "Presentation Mode" to the dropdown */
+  /** When provided, adds "Present / Slide view" to the dropdown */
   onPresentationMode?: () => void;
   exporting?: boolean;
   exportingSlides?: boolean;
@@ -116,7 +116,7 @@ export function ExportDropdown({
                 role="menuitem"
               >
                 <Presentation className="h-4 w-4" />
-                Presentation Mode
+                Present / Slide view
               </button>
             </>
           )}

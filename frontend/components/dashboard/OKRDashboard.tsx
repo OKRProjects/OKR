@@ -2,7 +2,12 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { api, Objective, KeyResult } from '@/lib/api';
-import { type PresentationSlide, type ObjectiveSlide, type NarrativeSlide } from '@/components/presentation/PresentationMode';
+import {
+  type PresentationSlide,
+  type ObjectiveSlide,
+  type NarrativeSlide,
+  type PresentationDeckStats,
+} from '@/components/presentation/PresentationMode';
 import { defaultFilters, type DashboardFilters } from './FilterBar';
 import { useFirstTimeTutorial } from '@/lib/tutorial';
 import { useViewPreferences } from '@/lib/useViewPreferences';
@@ -204,25 +209,109 @@ export function OKRDashboard() {
     const titleSlide: PresentationSlide = {
       type: 'title',
       title: 'OKR Presentation',
-      subtitle: `Q${quarter} ${year} • ${list.length} objective${list.length !== 1 ? 's' : ''}`,
+      subtitle: `Q${quarter} ${year} • Executive review • ${list.length} objective${list.length !== 1 ? 's' : ''}`,
     };
     const agendaSlide: PresentationSlide = {
       type: 'agenda',
-      title: 'Stories we\'ll cover',
+      title: "Today's OKRs",
       items: list.map((o) => ({ title: o.title ?? 'Untitled' })),
     };
-    const objectiveSlides: PresentationSlide[] = list.map((objective) => ({
-      type: 'objective' as const,
-      objective,
-      score: objective._id ? (scoreByObjectiveId[objective._id] ?? null) : null,
-      keyResults: objective._id ? (keyResultsByObjective[objective._id] ?? []) : [],
-    }));
     const narrativeSlide: NarrativeSlide | null =
       presentationNarrative?.trim() ? { type: 'narrative', content: presentationNarrative.trim() } : null;
+    const baseObjectiveSlideIndex = narrativeSlide ? 3 : 2;
+    const idToIndex = new Map<string, number>();
+    list.forEach((obj, i) => {
+      if (obj._id) idToIndex.set(String(obj._id), baseObjectiveSlideIndex + i);
+    });
+    const objectiveSlides: PresentationSlide[] = list.map((objective) => {
+      const oid = objective._id;
+      const navigation =
+        oid != null
+          ? {
+              parentSlideIndex:
+                objective.parentObjectiveId != null
+                  ? idToIndex.get(String(objective.parentObjectiveId))
+                  : undefined,
+              childSlideIndices: [
+                ...new Set(
+                  list
+                    .filter(
+                      (c) =>
+                        c.parentObjectiveId != null && String(c.parentObjectiveId) === String(oid)
+                    )
+                    .map((c) => (c._id ? idToIndex.get(String(c._id)) : undefined))
+                    .filter((x): x is number => x !== undefined)
+                ),
+              ],
+              upstreamSlideIndices: [
+                ...new Set(
+                  (objective.relatedObjectiveIds ?? [])
+                    .map((rid) => idToIndex.get(String(rid)))
+                    .filter((x): x is number => x !== undefined)
+                ),
+              ],
+              downstreamSlideIndices: [
+                ...new Set(
+                  list
+                    .filter((c) =>
+                      (c.relatedObjectiveIds ?? []).some((r) => String(r) === String(oid))
+                    )
+                    .map((c) => (c._id ? idToIndex.get(String(c._id)) : undefined))
+                    .filter((x): x is number => x !== undefined)
+                ),
+              ],
+            }
+          : undefined;
+      return {
+        type: 'objective' as const,
+        objective,
+        score: oid ? (scoreByObjectiveId[oid] ?? null) : null,
+        keyResults: oid ? (keyResultsByObjective[oid] ?? []) : [],
+        navigation,
+      };
+    });
     return narrativeSlide
       ? [titleSlide, agendaSlide, narrativeSlide, ...objectiveSlides]
       : [titleSlide, agendaSlide, ...objectiveSlides];
   }, [strategic, divisional, tactical, scoreByObjectiveId, keyResultsByObjective, presentationNarrative]);
+
+  const presentationDeckStats = useMemo((): PresentationDeckStats | null => {
+    const list = [...strategic, ...divisional, ...tactical];
+    if (list.length === 0) return null;
+    const scores = list
+      .map((o) => (o._id ? scoreByObjectiveId[o._id] : undefined))
+      .filter((s): s is number => s !== undefined);
+    const portfolioAvgCompletionPct =
+      scores.length > 0
+        ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 100)
+        : 0;
+    let krsTotal = 0;
+    let krsAtTarget = 0;
+    let krsUpdated7d = 0;
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    for (const o of list) {
+      if (!o._id) continue;
+      const krs = keyResultsByObjective[o._id] ?? [];
+      for (const kr of krs) {
+        krsTotal++;
+        const sc = kr.score ?? 0;
+        if (sc >= 0.999) krsAtTarget++;
+        const lu = kr.lastUpdatedAt ? new Date(kr.lastUpdatedAt).getTime() : 0;
+        if (lu >= weekAgo) krsUpdated7d++;
+      }
+    }
+    const krsAtTargetPct = krsTotal > 0 ? Math.round((krsAtTarget / krsTotal) * 100) : 0;
+    const weeklyTouchVelocityPct =
+      krsTotal > 0 ? Math.round((krsUpdated7d / krsTotal) * 100) : 0;
+    return {
+      daysLeftInQuarter: getDaysLeftInQuarter(),
+      portfolioAvgCompletionPct,
+      krsAtTargetPct,
+      krsUpdatedThisWeek: krsUpdated7d,
+      krsTotal,
+      weeklyTouchVelocityPct,
+    };
+  }, [strategic, divisional, tactical, scoreByObjectiveId, keyResultsByObjective]);
 
   const handleExport = useCallback(
     async (format: 'json' | 'xlsx' | 'pdf') => {
@@ -384,6 +473,7 @@ export function OKRDashboard() {
     departments,
     userNames,
     presentationSlides,
+    presentationDeckStats,
     presentationActive,
     setPresentationActive,
     presentationIndex,

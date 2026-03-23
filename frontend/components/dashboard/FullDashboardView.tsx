@@ -1,6 +1,6 @@
 'use client';
 
-import { PresentationMode } from '@/components/presentation/PresentationMode';
+import { PresentationMode, type ObjectiveSlide } from '@/components/presentation/PresentationMode';
 import { PresentationChoiceDialog } from '@/components/presentation/PresentationChoiceDialog';
 import { DashboardHeader } from './DashboardHeader';
 import { ExportDropdown } from './ExportDropdown';
@@ -8,7 +8,7 @@ import { FilterBar } from './FilterBar';
 import { TierSection } from './TierSection';
 import { Button } from '@/components/ui/button';
 import { UserMenu } from '@/components/UserMenu';
-import { HelpCircle, ClipboardCheck, Users } from 'lucide-react';
+import { HelpCircle, ClipboardCheck, Users, Presentation } from 'lucide-react';
 import Link from 'next/link';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { TutorialOverlay } from '@/components/shared/TutorialOverlay';
@@ -29,6 +29,7 @@ export function FullDashboardView(props: DashboardViewProps) {
     departments,
     userNames,
     presentationSlides,
+    presentationDeckStats,
     presentationActive,
     setPresentationActive,
     presentationIndex,
@@ -67,7 +68,7 @@ export function FullDashboardView(props: DashboardViewProps) {
           open={presentationChoiceOpen}
           onClose={onClosePresentationChoice ?? (() => {})}
           objectiveIds={presentationSlides
-            .filter((s): s is { type: 'objective'; objective: { _id?: string } } => s.type === 'objective')
+            .filter((s): s is ObjectiveSlide => s.type === 'objective')
             .map((s) => s.objective._id)
             .filter((id): id is string => Boolean(id))}
           onInfoOnly={onSelectInfoOnly}
@@ -82,8 +83,6 @@ export function FullDashboardView(props: DashboardViewProps) {
           currentIndex={Math.min(presentationIndex, presentationSlides.length - 1)}
           onClose={() => {
             setPresentationActive(false);
-            setPresentationIndex(0);
-            setPresentationNarrative?.(null);
           }}
           onPrev={() => setPresentationIndex((i) => Math.max(0, i - 1))}
           onNext={() =>
@@ -93,6 +92,9 @@ export function FullDashboardView(props: DashboardViewProps) {
           onExportPowerPoint={onExportPresentationPowerPoint}
           onExportGoogleSlides={onExportPresentationGoogleSlides}
           narrative={presentationNarrative ?? undefined}
+          departments={departments}
+          userNames={userNames}
+          deckStats={presentationDeckStats ?? null}
         />
       )}
 
@@ -125,11 +127,25 @@ export function FullDashboardView(props: DashboardViewProps) {
                   Tour
                 </Button>
               )}
+              {onPresentationMode && (
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  className="h-9 gap-1.5 bg-gray-900 text-white hover:bg-gray-800"
+                  onClick={onPresentationMode}
+                  disabled={filteredAndSorted.length === 0}
+                  aria-label="Open presentation or slide view"
+                >
+                  <Presentation className="h-4 w-4" />
+                  Present / Slide view
+                </Button>
+              )}
               {onExport && (
                 <ExportDropdown
                   onExport={onExport}
                   onExportGoogleSlides={onExportGoogleSlides}
-                  onPresentationMode={onPresentationMode ?? (() => { setPresentationIndex(0); setPresentationActive(true); })}
+                  onPresentationMode={onPresentationMode}
                   exporting={exporting}
                   exportingSlides={exportingSlides}
                   disabled={filteredAndSorted.length === 0}
