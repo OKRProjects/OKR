@@ -5,6 +5,7 @@
 
 import type { User } from '@/lib/auth';
 import type { Objective, KeyResult } from '@/lib/api';
+import { isDeptScopedLeaderRole } from '@/lib/roles';
 
 export type OKRPermissions = {
   canEditObjective: boolean;
@@ -37,7 +38,7 @@ export function getOKRPermissions(
   const canEditObjective = Boolean(
     role === 'admin' ||
     (role !== 'view_only' && strEq(ownerId, userId)) ||
-    (role === 'leader' && objDept && userDept && strEq(objDept, userDept))
+    (isDeptScopedLeaderRole(role) && objDept && userDept && strEq(objDept, userDept))
   );
 
   const canEditKr = (kr: KeyResult): boolean => {
@@ -45,17 +46,18 @@ export function getOKRPermissions(
     if (role === 'view_only') return false;
     if (strEq(kr.ownerId, userId)) return true;
     if (strEq(ownerId, userId)) return true;
-    if (role === 'leader' && objDept && userDept && strEq(objDept, userDept)) return true;
+    if (isDeptScopedLeaderRole(role) && objDept && userDept && strEq(objDept, userDept)) return true;
     return false;
   };
 
   const canSubmit =
     role === 'admin' ||
-    role === 'leader' ||
+    isDeptScopedLeaderRole(role) ||
     (role !== 'view_only' && strEq(ownerId, userId));
 
   const canApproveReject = Boolean(
-    role === 'admin' || (role === 'leader' && objDept && userDept && strEq(objDept, userDept))
+    role === 'admin' ||
+    (isDeptScopedLeaderRole(role) && objDept && userDept && strEq(objDept, userDept))
   );
 
   const canResubmit = role === 'admin' || (role !== 'view_only' && strEq(ownerId, userId));
@@ -66,14 +68,15 @@ export function getOKRPermissions(
     (status === 'approved' || status === 'rejected');
 
   const canDelete = Boolean(
-    role === 'admin' || (role === 'leader' && objDept && userDept && strEq(objDept, userDept))
+    role === 'admin' ||
+    (isDeptScopedLeaderRole(role) && objDept && userDept && strEq(objDept, userDept))
   );
 
   const canCreateShareLink = Boolean(
     role !== 'view_only' &&
     (role === 'admin' ||
       strEq(ownerId, userId) ||
-      (role === 'leader' && objDept && userDept && strEq(objDept, userDept)))
+      (isDeptScopedLeaderRole(role) && objDept && userDept && strEq(objDept, userDept)))
   );
 
   return {

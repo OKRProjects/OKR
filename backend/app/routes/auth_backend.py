@@ -512,7 +512,7 @@ def get_current_user(user_id):
             db = get_db()
             app_user = db.users.find_one({'_id': user_id})
             if app_user:
-                user_info['role'] = app_user.get('role', 'developer')
+                user_info['role'] = app_user.get('role', 'view_only')
                 if app_user.get('departmentId') is not None:
                     user_info['departmentId'] = str(app_user['departmentId'])
             else:
@@ -597,7 +597,7 @@ def list_users(user_id):
                 app = app_users_by_id.get(uid) or {}
                 u = {
                     '_id': uid,
-                    'role': app.get('role') or 'standard',
+                    'role': app.get('role') or 'view_only',
                     'name': au.get('name') or app.get('name') or au.get('email') or '',
                     'email': au.get('email') or app.get('email') or '',
                 }
@@ -609,7 +609,7 @@ def list_users(user_id):
         cursor = db.users.find({}, {'_id': 1, 'role': 1, 'departmentId': 1, 'name': 1, 'email': 1})
         users = []
         for doc in cursor:
-            u = {'_id': doc['_id'], 'role': doc.get('role', 'developer')}
+            u = {'_id': doc['_id'], 'role': doc.get('role', 'view_only')}
             if doc.get('departmentId') is not None:
                 u['departmentId'] = str(doc['departmentId'])
             if doc.get('name'):
@@ -631,7 +631,8 @@ def update_user(user_id, uid):
         db = get_db()
         data = request.get_json() or {}
         update = {}
-        if 'role' in data and data['role'] in ('admin', 'leader', 'standard', 'view_only', 'developer'):
+        from app.services.permissions import USER_APP_ROLES
+        if 'role' in data and data['role'] in USER_APP_ROLES:
             update['role'] = data['role']
         if 'departmentId' in data:
             update['departmentId'] = data['departmentId'] if data['departmentId'] else None
@@ -646,7 +647,7 @@ def update_user(user_id, uid):
         if result.matched_count == 0 and not result.upserted_count:
             return jsonify({'error': 'User not found'}), 404
         updated = db.users.find_one({'_id': uid}, {'_id': 1, 'role': 1, 'departmentId': 1})
-        out = {'_id': updated['_id'], 'role': updated.get('role', 'developer')}
+        out = {'_id': updated['_id'], 'role': updated.get('role', 'view_only')}
         if updated.get('departmentId') is not None:
             out['departmentId'] = str(updated['departmentId'])
         return jsonify(out), 200

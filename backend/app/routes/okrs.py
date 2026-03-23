@@ -12,6 +12,7 @@ from app.services.permissions import (
     can_edit_objective,
     can_delete_objective,
     can_create_share_link,
+    can_create_objective,
 )
 from datetime import datetime, timezone, timedelta
 from bson import ObjectId
@@ -484,6 +485,11 @@ def post_leave(objective_id, user_id):
 def create_objective(user_id):
     """Create a new objective."""
     try:
+        db = get_db()
+        if not can_create_objective(db, user_id):
+            return jsonify({
+                'error': 'Only leadership roles (admin, manager, director, VP, executive, org owner, or department leader) can create objectives. Ask an admin to assign the right role.'
+            }), 403
         data = request.get_json() or {}
         title = data.get('title')
         if not title:
@@ -521,7 +527,6 @@ def create_objective(user_id):
         if data.get('relatedObjectiveIds'):
             oids = [_parse_object_id(x) for x in data['relatedObjectiveIds'] if _parse_object_id(x)]
             doc['relatedObjectiveIds'] = oids
-        db = get_db()
         result = db.objectives.insert_one(doc)
         doc['_id'] = result.inserted_id
         return jsonify(_serialize_doc(doc)), 201

@@ -17,10 +17,11 @@ import {
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ASSIGNABLE_APP_ROLES } from '@/lib/roles';
 
 type UserRecord = { _id: string; role: string; departmentId?: string; name?: string; email?: string };
 
-const ROLES = ['admin', 'leader', 'standard', 'view_only', 'developer'] as const;
+const ROLES = ASSIGNABLE_APP_ROLES as unknown as readonly string[];
 
 function UserRow({
   user: u,

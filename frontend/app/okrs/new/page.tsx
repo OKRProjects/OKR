@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { getCurrentUser, login, User } from '@/lib/auth';
 import { AppLayout } from '@/components/AppLayout';
 import ObjectiveForm from '@/components/ObjectiveForm';
+import { userCanCreateObjectives } from '@/lib/roles';
 import { api, Objective } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { TutorialOverlay } from '@/components/shared/TutorialOverlay';
@@ -56,6 +58,40 @@ export default function NewObjectivePage() {
     return (
       <AppLayout title="Create Objective" description="Create a new objective">
         <div className="text-center text-muted-foreground">Loading...</div>
+      </AppLayout>
+    );
+  }
+
+  if (!userCanCreateObjectives(user.role)) {
+    return (
+      <AppLayout
+        title="Create objective"
+        description="Restricted to leadership roles"
+      >
+        <Card className="max-w-xl">
+          <CardContent className="space-y-4 pt-6 text-muted-foreground">
+            <p>
+              OKRs are owned starting at the <strong className="text-foreground">manager</strong> level. Your account is
+              not assigned a role that can create objectives (for example viewer or individual contributor).
+            </p>
+            <p>
+              Ask an admin to assign a leadership role if you should own OKRs, or browse{' '}
+              <Link href="/divisions" className="text-primary underline underline-offset-4">
+                Organization
+              </Link>{' '}
+              and{' '}
+              <Link href="/my-okrs" className="text-primary underline underline-offset-4">
+                My OKRs
+              </Link>{' '}
+              to follow progress.
+            </p>
+            <p>
+              <Link href="/docs#ownership" className="text-primary font-medium">
+                Who owns and edits OKRs →
+              </Link>
+            </p>
+          </CardContent>
+        </Card>
       </AppLayout>
     );
   }

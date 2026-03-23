@@ -8,7 +8,17 @@ const ROLE_PREVIEW_KEY = 'okrRolePreview';
 
 export type ViewRole = 'developer' | 'view_only';
 
-export type AppRole = 'admin' | 'leader' | 'standard' | 'view_only' | 'developer';
+export type AppRole =
+  | 'admin'
+  | 'leader'
+  | 'standard'
+  | 'view_only'
+  | 'developer'
+  | 'manager'
+  | 'director'
+  | 'vp'
+  | 'executive'
+  | 'org_owner';
 
 type ViewRoleContextValue = {
   effectiveRole: ViewRole;
@@ -39,7 +49,19 @@ function getStoredViewRole(): ViewRole | null {
 function getStoredRolePreview(): AppRole | null {
   if (typeof window === 'undefined') return null;
   const v = localStorage.getItem(ROLE_PREVIEW_KEY);
-  if (v === 'admin' || v === 'leader' || v === 'standard' || v === 'view_only' || v === 'developer') return v;
+  if (
+    v === 'admin' ||
+    v === 'leader' ||
+    v === 'standard' ||
+    v === 'view_only' ||
+    v === 'developer' ||
+    v === 'manager' ||
+    v === 'director' ||
+    v === 'vp' ||
+    v === 'executive' ||
+    v === 'org_owner'
+  )
+    return v;
   return null;
 }
 

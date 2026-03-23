@@ -46,9 +46,9 @@ def seed_data():
         {"_id": "auth0|demo_u1", "name": "Sarah Chen", "email": "sarah@company.com", "role": "admin", "departmentId": "d1"},
         {"_id": "auth0|demo_u2", "name": "Marcus Rodriguez", "email": "marcus@company.com", "role": "leader", "departmentId": "d2"},
         {"_id": "auth0|demo_u3", "name": "Emily Watson", "email": "emily@company.com", "role": "leader", "departmentId": "d3"},
-        {"_id": "auth0|demo_u4", "name": "David Kim", "email": "david@company.com", "role": "standard", "departmentId": "d1"},
+        {"_id": "auth0|demo_u4", "name": "David Kim", "email": "david@company.com", "role": "manager", "departmentId": "d1"},
         {"_id": "auth0|demo_u5", "name": "Lisa Anderson", "email": "lisa@company.com", "role": "leader", "departmentId": "d4"},
-        {"_id": "auth0|demo_u6", "name": "James Wilson", "email": "james@company.com", "role": "standard", "departmentId": "d2"},
+        {"_id": "auth0|demo_u6", "name": "James Wilson", "email": "james@company.com", "role": "manager", "departmentId": "d2"},
     ]
     db.users.insert_many(users)
     print(f"Created {len(users)} users")
