@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -88,6 +88,23 @@ interface ObjectivesViewProps {
   onUpdateProgress?: (objective: Objective) => void;
 }
 
+const ROOT_PAGE_SIZE = 6;
+
+function ObjectivesTreeSkeleton() {
+  return (
+    <div className="space-y-3 animate-pulse" aria-hidden="true">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="rounded-lg border bg-card p-4 space-y-3">
+          <div className="h-5 bg-muted rounded w-2/3" />
+          <div className="h-3 bg-muted rounded w-full" />
+          <div className="h-3 bg-muted rounded w-4/5" />
+          <div className="h-2 bg-muted rounded w-full mt-4" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function ObjectivesView({ onUpdateProgress }: ObjectivesViewProps) {
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,7 +112,47 @@ export function ObjectivesView({ onUpdateProgress }: ObjectivesViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [levelFilter, setLevelFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [rootPage, setRootPage] = useState(1);
   const fiscalYear = new Date().getFullYear();
+
+  const filteredRoots = useMemo(() => {
+    let list = objectives;
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (o) =>
+          o.title.toLowerCase().includes(q) ||
+          o.description.toLowerCase().includes(q) ||
+          o.owner.toLowerCase().includes(q)
+      );
+    }
+    if (levelFilter !== 'all') {
+      list = list.filter((o) => o.level === levelFilter);
+    }
+    if (statusFilter !== 'all') {
+      list = list.filter((o) => {
+        if (statusFilter === 'on-track') return o.progress >= 80;
+        if (statusFilter === 'at-risk') return o.progress >= 60 && o.progress < 80;
+        if (statusFilter === 'behind') return o.progress < 60;
+        return true;
+      });
+    }
+    return list;
+  }, [objectives, searchQuery, levelFilter, statusFilter]);
+
+  const rootTotalPages = Math.max(1, Math.ceil(filteredRoots.length / ROOT_PAGE_SIZE));
+  const pagedRoots = useMemo(() => {
+    const start = (rootPage - 1) * ROOT_PAGE_SIZE;
+    return filteredRoots.slice(start, start + ROOT_PAGE_SIZE);
+  }, [filteredRoots, rootPage]);
+
+  useEffect(() => {
+    setRootPage(1);
+  }, [searchQuery, levelFilter, statusFilter]);
+
+  useEffect(() => {
+    if (rootPage > rootTotalPages) setRootPage(rootTotalPages);
+  }, [rootPage, rootTotalPages]);
 
   useEffect(() => {
     loadData();
@@ -169,9 +226,10 @@ export function ObjectivesView({ onUpdateProgress }: ObjectivesViewProps) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 w-6 p-0 mt-1"
+                  className="h-11 w-11 min-h-[44px] min-w-[44px] p-0 mt-0 touch-manipulation shrink-0"
                   onClick={() => toggleNode(objective.id)}
                   disabled={!hasChildren}
+                  aria-label={hasChildren ? (isExpanded ? 'Collapse' : 'Expand') : 'No children'}
                 >
                   {hasChildren ? (
                     isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />
@@ -212,16 +270,18 @@ export function ObjectivesView({ onUpdateProgress }: ObjectivesViewProps) {
               </div>
               <div className="flex gap-1">
                 {onUpdateProgress && (
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     size="sm"
+                    className="min-h-[44px] min-w-[44px] touch-manipulation"
                     onClick={() => onUpdateProgress(objective)}
                     title="Update Progress"
+                    aria-label="Update progress"
                   >
                     <RefreshCw className="h-4 w-4" />
                   </Button>
                 )}
-                <Button variant="ghost" size="sm" title="Edit Objective">
+                <Button variant="ghost" size="sm" className="min-h-[44px] min-w-[44px] touch-manipulation" title="Edit Objective" aria-label="Edit objective">
                   <Edit className="h-4 w-4" />
                 </Button>
               </div>
@@ -325,17 +385,60 @@ export function ObjectivesView({ onUpdateProgress }: ObjectivesViewProps) {
 
       {/* Objectives Tree */}
       {loading ? (
-        <div className="text-center text-muted-foreground py-8">Loading...</div>
+        <div className="space-y-2">
+          <p className="sr-only" aria-live="polite">
+            Loading objectives…
+          </p>
+          <ObjectivesTreeSkeleton />
+        </div>
       ) : objectives.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
             No objectives found. Create one with "New Objective" button.
           </CardContent>
         </Card>
+      ) : filteredRoots.length === 0 ? (
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            No objectives match your filters. Try clearing search or filters.
+          </CardContent>
+        </Card>
       ) : (
-        <div className="space-y-3">
-          {objectives.map(obj => renderObjectiveTree(obj))}
-        </div>
+        <>
+          <div className="space-y-3">
+            {pagedRoots.map((obj) => renderObjectiveTree(obj))}
+          </div>
+          {filteredRoots.length > ROOT_PAGE_SIZE && (
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t">
+              <p className="text-sm text-muted-foreground">
+                Page {rootPage} of {rootTotalPages} · {filteredRoots.length} root objective
+                {filteredRoots.length !== 1 ? 's' : ''}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-[44px] touch-manipulation"
+                  disabled={rootPage <= 1}
+                  onClick={() => setRootPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-[44px] touch-manipulation"
+                  disabled={rootPage >= rootTotalPages}
+                  onClick={() => setRootPage((p) => Math.min(rootTotalPages, p + 1))}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

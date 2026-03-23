@@ -118,6 +118,14 @@ export interface ScoreHistoryEntry {
   recordedAt: string;
 }
 
+/** Short TTL cache for objective list fetches (reduces duplicate requests). */
+const OBJECTIVES_LIST_CACHE_MS = 45_000;
+const objectivesListCache = new Map<string, { storedAt: number; data: Objective[] }>();
+
+export function invalidateObjectivesListCache(): void {
+  objectivesListCache.clear();
+}
+
 export interface Comment {
   _id?: string;
   objectiveId: string;
@@ -476,7 +484,15 @@ export const api = {
     if (params?.departmentId) search.set('departmentId', params.departmentId);
     if (params?.parentObjectiveId !== undefined) search.set('parentObjectiveId', params.parentObjectiveId ?? '');
     const q = search.toString();
-    return fetchWithAuth(`/api/objectives${q ? `?${q}` : ''}`);
+    const cacheKey = q || 'default';
+    const now = Date.now();
+    const hit = objectivesListCache.get(cacheKey);
+    if (hit && now - hit.storedAt < OBJECTIVES_LIST_CACHE_MS) {
+      return hit.data;
+    }
+    const data = (await fetchWithAuth(`/api/objectives${q ? `?${q}` : ''}`)) as Objective[];
+    objectivesListCache.set(cacheKey, { storedAt: now, data });
+    return data;
   },
 
   async getObjective(id: string, params?: { since?: string }): Promise<Objective | { unchanged: true }> {
@@ -506,21 +522,26 @@ export const api = {
   },
 
   async createObjective(obj: Partial<Objective> & { title: string; fiscalYear: number }): Promise<Objective> {
-    return fetchWithAuth('/api/objectives', {
+    const out = await fetchWithAuth('/api/objectives', {
       method: 'POST',
       body: JSON.stringify(obj),
     });
+    invalidateObjectivesListCache();
+    return out as Objective;
   },
 
   async updateObjective(id: string, obj: Partial<Objective>): Promise<Objective> {
-    return fetchWithAuth(`/api/objectives/${id}`, {
+    const out = await fetchWithAuth(`/api/objectives/${id}`, {
       method: 'PUT',
       body: JSON.stringify(obj),
     });
+    invalidateObjectivesListCache();
+    return out as Objective;
   },
 
   async deleteObjective(id: string): Promise<void> {
-    return fetchWithAuth(`/api/objectives/${id}`, { method: 'DELETE' });
+    await fetchWithAuth(`/api/objectives/${id}`, { method: 'DELETE' });
+    invalidateObjectivesListCache();
   },
 
   async getKeyResults(objectiveId: string): Promise<KeyResult[]> {

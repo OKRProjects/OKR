@@ -38,7 +38,12 @@ export default function OKRsPage() {
   if (isLoading || !user) {
     return (
       <AppLayout title="Objectives" description="Manage strategic, functional, and tactical objectives" showNewObjective>
-        <div className="text-center text-muted-foreground">Loading...</div>
+        <div className="space-y-3 animate-pulse" aria-hidden>
+          <p className="sr-only">Loading objectives…</p>
+          <div className="h-10 bg-muted rounded-lg max-w-md" />
+          <div className="h-32 bg-muted rounded-lg" />
+          <div className="h-32 bg-muted rounded-lg" />
+        </div>
       </AppLayout>
     );
   }
