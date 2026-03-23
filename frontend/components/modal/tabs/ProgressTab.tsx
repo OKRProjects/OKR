@@ -16,7 +16,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, AlertTriangle, Pencil } from 'lucide-react';
+import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, AlertTriangle, Pencil, ListChecks } from 'lucide-react';
 import { cn } from '@/components/ui/utils';
 import { InlineHelp } from '@/components/shared/InlineHelp';
 import { FieldLabel } from '@/components/shared/FieldLabel';
@@ -42,6 +42,9 @@ function KRProgressRow({
   focusedIndex = 0,
   objectiveUpdatedAt,
   rowButtonRef,
+  bulkSelectMode,
+  bulkSelected,
+  onBulkToggle,
 }: {
   kr: KeyResult;
   onUpdate: () => void;
@@ -53,6 +56,9 @@ function KRProgressRow({
   objectiveUpdatedAt?: string;
   /** Parent registers row button for arrow-key focus management */
   rowButtonRef?: (el: HTMLButtonElement | null) => void;
+  bulkSelectMode?: boolean;
+  bulkSelected?: boolean;
+  onBulkToggle?: (keyResultId: string, selected: boolean) => void;
 }) {
   const rowRef = useRef<HTMLButtonElement | null>(null);
   const sliderContainerRef = useRef<HTMLDivElement>(null);
@@ -156,6 +162,8 @@ function KRProgressRow({
   const velocity = history.length >= 2 && history[0].recordedAt && history[history.length - 1].recordedAt
     ? (history[history.length - 1].score - history[0].score) / (new Date(history[history.length - 1].recordedAt).getTime() - new Date(history[0].recordedAt).getTime()) * (1000 * 60 * 60 * 24 * 7)
     : null;
+  const weeksToFull =
+    velocity != null && velocity > 0.001 && score < 0.995 ? Math.ceil((1 - score) / velocity) : null;
 
   const quarterStartMs = quarterStart.getTime();
   const quarterEndMs = quarterStartMs + daysInQuarter * 24 * 60 * 60 * 1000;
@@ -184,9 +192,22 @@ function KRProgressRow({
     [rowButtonRef]
   );
 
+  const krId = kr._id ?? '';
+
   return (
     <Card className="overflow-hidden">
       <div className="w-full flex items-center gap-2 px-4 py-3 min-h-[44px]">
+        {bulkSelectMode && krId && onBulkToggle && (
+          <label className="flex shrink-0 items-center justify-center min-h-[44px] min-w-[44px] cursor-pointer touch-manipulation">
+            <input
+              type="checkbox"
+              checked={!!bulkSelected}
+              onChange={(e) => onBulkToggle(krId, e.target.checked)}
+              className="h-5 w-5 rounded border-input"
+              aria-label={`Select ${kr.title ?? 'key result'} for bulk update`}
+            />
+          </label>
+        )}
         <button
           type="button"
           ref={setRowButtonRef}
@@ -253,8 +274,21 @@ function KRProgressRow({
           {velocity != null && expanded && (
             <p className="text-xs text-muted-foreground">
               Velocity: ~{(velocity * 100).toFixed(1)}% per week (from history).
+              {weeksToFull != null && weeksToFull > 0 && weeksToFull < 520 && (
+                <span className="block mt-1">
+                  If pace holds, ~{weeksToFull} week{weeksToFull !== 1 ? 's' : ''} to 100% (illustrative).
+                </span>
+              )}
             </p>
           )}
+          {(kr.target != null && kr.target !== '') || (kr.currentValue != null && kr.currentValue !== '') || kr.unit ? (
+            <p className="text-xs text-muted-foreground rounded-md bg-muted/50 px-2 py-1.5">
+              <span className="font-medium text-foreground">Measure: </span>
+              Current {kr.currentValue ?? '—'}
+              {kr.unit ? ` ${kr.unit}` : ''} · Target {kr.target ?? '—'}
+              {kr.unit ? ` ${kr.unit}` : ''} · Score {Math.round(score * 100)}% of completion scale
+            </p>
+          ) : null}
           {!readOnly && (
             <>
               <InlineHelp learnMoreHref="/docs#scoring" className="mb-3">
@@ -348,6 +382,62 @@ export function ProgressTab({
   const [focusedIndex, setFocusedIndex] = useState(0);
   const progressNavRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [bulkSelectMode, setBulkSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkScore, setBulkScore] = useState(0.7);
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [lastFailedIds, setLastFailedIds] = useState<string[]>([]);
+
+  const rowEditable = (kr: KeyResult) =>
+    !readOnly && (!canEditKr || !!canEditKr(kr));
+
+  const editableKrs = keyResults.filter((kr) => rowEditable(kr) && kr._id);
+
+  const toggleBulk = (id: string, on: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const runBulkApply = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    setBulkRunning(true);
+    setLastFailedIds([]);
+    const failed: string[] = [];
+    const results = await Promise.allSettled(
+      ids.map(async (id) => {
+        const kr = keyResults.find((k) => k._id === id);
+        const payload: { score: number; lastUpdatedAt?: string } = { score: bulkScore };
+        if (kr?.lastUpdatedAt) payload.lastUpdatedAt = kr.lastUpdatedAt;
+        await api.updateKeyResult(id, payload);
+      })
+    );
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') failed.push(ids[i]!);
+    });
+    setBulkRunning(false);
+    setBulkConfirmOpen(false);
+    const ok = ids.length - failed.length;
+    if (ok > 0) {
+      toast.success(`Updated ${ok} of ${ids.length} key results`, {
+        description: failed.length ? `${failed.length} failed — you can retry them.` : undefined,
+      });
+      refresh();
+    } else {
+      toast.error('Bulk update failed', { description: 'None of the selected key results could be updated.' });
+    }
+    if (failed.length) {
+      setLastFailedIds(failed);
+      setSelectedIds(new Set(failed));
+    } else {
+      setSelectedIds(new Set());
+      setBulkSelectMode(false);
+    }
+  };
 
   useEffect(() => {
     rowRefs.current.length = keyResults.length;
@@ -382,12 +472,138 @@ export function ProgressTab({
     <div className="space-y-4" ref={progressNavRef}>
       <Card>
         <CardHeader>
-          <CardTitle>Key result progress</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Update scores (0.0–1.0), add notes, and view history. Expand a row to see the trend chart and expected vs actual.
-          </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>Key result progress</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Update scores (0.0–1.0), add notes, and view history. Expand a row to see the trend chart and expected vs
+                actual. Use bulk mode to set the same score on multiple KRs you can edit.
+              </p>
+            </div>
+            {editableKrs.length > 0 && (
+              <Button
+                type="button"
+                variant={bulkSelectMode ? 'secondary' : 'outline'}
+                size="sm"
+                className="min-h-[44px] shrink-0 touch-manipulation gap-2"
+                onClick={() => {
+                  setBulkSelectMode((v) => !v);
+                  if (bulkSelectMode) setSelectedIds(new Set());
+                }}
+              >
+                <ListChecks className="h-4 w-4" />
+                {bulkSelectMode ? 'Exit bulk' : 'Bulk update'}
+              </Button>
+            )}
+          </div>
         </CardHeader>
       </Card>
+      {bulkSelectMode && editableKrs.length > 0 && (
+        <Card className="border-primary/30 bg-muted/30">
+          <CardContent className="pt-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="min-h-[44px] touch-manipulation"
+                onClick={() => setSelectedIds(new Set(editableKrs.map((k) => k._id!)))}
+              >
+                Select all ({editableKrs.length})
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="min-h-[44px] touch-manipulation"
+                onClick={() => setSelectedIds(new Set())}
+              >
+                Clear
+              </Button>
+              {lastFailedIds.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-[44px] touch-manipulation"
+                  onClick={() => {
+                    setSelectedIds(new Set(lastFailedIds));
+                    setBulkConfirmOpen(true);
+                  }}
+                >
+                  Retry failed ({lastFailedIds.length})
+                </Button>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {selectedIds.size} selected · choose a score then confirm to apply to all selected.
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="min-w-0 flex-1 max-w-md">
+                <FieldLabel className="text-muted-foreground mb-1">Bulk score (0–100%)</FieldLabel>
+                <ScoreSlider value={bulkScore} onChange={setBulkScore} disabled={bulkRunning} />
+              </div>
+              <Button
+                type="button"
+                className="min-h-[44px] touch-manipulation"
+                disabled={selectedIds.size === 0 || bulkRunning}
+                onClick={() => setBulkConfirmOpen(true)}
+              >
+                Review &amp; apply…
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      {bulkConfirmOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bulk-confirm-title"
+        >
+          <div className="bg-card border rounded-lg shadow-lg max-w-lg w-full max-h-[min(80vh,520px)] flex flex-col">
+            <div className="p-4 border-b space-y-2">
+              <h3 id="bulk-confirm-title" className="font-semibold text-lg">
+                Confirm bulk score update
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Set score to <strong>{Math.round(bulkScore * 100)}%</strong> for {selectedIds.size} key result
+                {selectedIds.size !== 1 ? 's' : ''}:
+              </p>
+            </div>
+            <ul className="p-4 overflow-y-auto text-sm space-y-1 border-b max-h-[40vh] list-disc pl-5">
+              {[...selectedIds].map((id) => {
+                const kr = keyResults.find((k) => k._id === id);
+                return (
+                  <li key={id}>
+                    {kr?.title ?? id}
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="p-4 flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-[44px] touch-manipulation"
+                disabled={bulkRunning}
+                onClick={() => setBulkConfirmOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="min-h-[44px] touch-manipulation"
+                disabled={bulkRunning}
+                onClick={() => runBulkApply([...selectedIds])}
+              >
+                {bulkRunning ? 'Applying…' : 'Apply to all'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {keyResults.length === 0 ? (
         <EmptyState
           icon="target"
@@ -411,6 +627,9 @@ export function ProgressTab({
               rowButtonRef={(el) => {
                 rowRefs.current[index] = el;
               }}
+              bulkSelectMode={bulkSelectMode && rowEditable(kr) && !!kr._id}
+              bulkSelected={kr._id ? selectedIds.has(kr._id) : false}
+              onBulkToggle={toggleBulk}
             />
           ))}
         </div>
