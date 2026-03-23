@@ -27,6 +27,7 @@ import {
   Line
 } from 'recharts';
 import { api, Objective, KeyResult } from '@/lib/api';
+import { ChartAccessible } from '@/components/shared/ChartAccessible';
 
 interface KeyResultStatus {
   id: string;
@@ -286,6 +287,9 @@ export function AnalyticsView() {
             <CardDescription>Key results status over the past 4 weeks</CardDescription>
           </CardHeader>
           <CardContent>
+            <ChartAccessible
+              summary={`Stacked bar chart of key results by week: ${weeklyProgressData.map((w) => `${w.week}: ${w.completed} completed, ${w.inProgress} in progress, ${w.planned} planned`).join('; ')}.`}
+            >
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={weeklyProgressData}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -298,6 +302,7 @@ export function AnalyticsView() {
                 <Bar dataKey="planned" stackId="a" fill="#94a3b8" name="Planned" />
               </BarChart>
             </ResponsiveContainer>
+            </ChartAccessible>
           </CardContent>
         </Card>
 
@@ -308,6 +313,9 @@ export function AnalyticsView() {
             <CardDescription>Planned vs actual completion rate</CardDescription>
           </CardHeader>
           <CardContent>
+            <ChartAccessible
+              summary={`Delivery velocity chart by month: ${velocityData.map((v) => `${v.month} planned ${v.planned}, actual ${v.actual}, velocity ${v.velocity}%`).join('; ')}.`}
+            >
             <ResponsiveContainer width="100%" height={300}>
               <ComposedChart data={velocityData}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -321,6 +329,7 @@ export function AnalyticsView() {
                 <Line yAxisId="right" type="monotone" dataKey="velocity" stroke="#22c55e" strokeWidth={2} name="Velocity %" />
               </ComposedChart>
             </ResponsiveContainer>
+            </ChartAccessible>
           </CardContent>
         </Card>
       </div>

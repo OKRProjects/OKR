@@ -133,6 +133,23 @@ export interface Attachment {
   uploadedBy: string;
   uploadedAt: string;
   deletedAt?: string | null;
+  storagePublicId?: string | null;
+}
+
+/** Audit entry when an attachment is deleted (immutable log). */
+export interface AttachmentDeletionAudit {
+  _id?: string;
+  objectiveId: string;
+  keyResultId?: string | null;
+  attachmentId: string;
+  fileName: string;
+  fileSize: number;
+  fileType?: string;
+  uploadedBy?: string;
+  uploadedAt?: string;
+  storageUrl?: string;
+  deletedBy: string;
+  deletedAt: string;
 }
 
 async function getAccessToken(): Promise<string | null> {
@@ -631,6 +648,19 @@ export const api = {
 
   async deleteAttachment(attachmentId: string): Promise<void> {
     return fetchWithAuth(`/api/attachments/${attachmentId}`, { method: 'DELETE' });
+  },
+
+  /** Authenticated clients receive the storage URL for preview/download (checks session). */
+  async getAttachmentAccess(attachmentId: string): Promise<{
+    url: string;
+    fileName: string;
+    fileType: string;
+  }> {
+    return fetchWithAuth(`/api/attachments/${attachmentId}/access`);
+  },
+
+  async getAttachmentDeletions(objectiveId: string): Promise<AttachmentDeletionAudit[]> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/attachment-deletions`);
   },
 
   /** Create shareable link for an objective. Returns { token, url, expiresAt }. */

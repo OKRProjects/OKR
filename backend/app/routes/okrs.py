@@ -37,7 +37,7 @@ def _serialize_doc(doc, date_fields=None):
     if '_id' in out:
         out['_id'] = str(out['_id'])
     for k in list(out.keys()):
-        if k in ('parentObjectiveId', 'objectiveId', 'departmentId', 'keyResultId') and out.get(k) is not None:
+        if k in ('parentObjectiveId', 'objectiveId', 'departmentId', 'keyResultId', 'attachmentId') and out.get(k) is not None:
             out[k] = str(out[k])
         elif k == 'relatedObjectiveIds' and out.get(k) is not None:
             out[k] = [str(x) for x in out[k]]
@@ -1143,6 +1143,84 @@ def create_comment(objective_id, user_id):
 
 # ---- Attachments ----
 
+MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024  # 25 MB
+
+# MIME types and extensions we accept (upload validation).
+_ALLOWED_ATTACHMENT_MIMES = frozenset({
+    'application/pdf',
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+    'text/plain', 'text/csv',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+})
+
+_ALLOWED_ATTACHMENT_EXTS = frozenset({
+    '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.txt', '.csv',
+    '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+})
+
+
+def _file_ext(name):
+    if not name or '.' not in name:
+        return ''
+    return '.' + name.rsplit('.', 1)[-1].lower()
+
+
+def _validate_upload_file(file_storage, filename: str):
+    """Returns (ok: bool, error_message or None)."""
+    if not file_storage:
+        return False, 'No file provided'
+    ext = _file_ext(filename or '')
+    ext_ok = ext in _ALLOWED_ATTACHMENT_EXTS if ext else False
+    mime = (getattr(file_storage, 'content_type', None) or '').split(';')[0].strip().lower()
+    mime_ok = mime in _ALLOWED_ATTACHMENT_MIMES if mime else False
+    if not ext_ok and not mime_ok:
+        return False, 'File type not allowed (allowed: PDF, images, Word, Excel, PowerPoint, CSV, TXT)'
+    try:
+        pos = file_storage.tell()
+        file_storage.seek(0, 2)
+        size = file_storage.tell()
+        file_storage.seek(pos)
+    except Exception:
+        return False, 'Could not read file size'
+    if size <= 0:
+        return False, 'File is empty'
+    if size > MAX_ATTACHMENT_BYTES:
+        return False, f'File too large (max {MAX_ATTACHMENT_BYTES // (1024 * 1024)} MB)'
+    return True, None
+
+
+def _validate_attachment_json_meta(file_name: str, file_size: int, file_type: str):
+    ext = _file_ext(file_name or '')
+    ext_ok = ext in _ALLOWED_ATTACHMENT_EXTS if ext else False
+    mime = (file_type or '').split(';')[0].strip().lower()
+    mime_ok = mime in _ALLOWED_ATTACHMENT_MIMES if mime else False
+    if not ext_ok and not mime_ok:
+        return False, 'File type not allowed'
+    try:
+        sz = int(file_size)
+    except (TypeError, ValueError):
+        return False, 'Invalid file size'
+    if sz <= 0 or sz > MAX_ATTACHMENT_BYTES:
+        return False, f'Invalid file size (max {MAX_ATTACHMENT_BYTES // (1024 * 1024)} MB)'
+    return True, None
+
+
+def _key_result_belongs_to_objective(db, kr_oid, objective_oid):
+    if kr_oid is None:
+        return True, None
+    kr = db.key_results.find_one({'_id': kr_oid})
+    if not kr:
+        return False, 'Key result not found'
+    if kr.get('objectiveId') != objective_oid:
+        return False, 'Key result does not belong to this objective'
+    return True, None
+
+
 @bp.route('/objectives/<objective_id>/attachments', methods=['GET'])
 @require_auth
 def list_attachments(objective_id, user_id):
@@ -1172,6 +1250,7 @@ def create_attachment(user_id):
         file_size = 0
         file_type = ''
 
+        storage_public_id = None
         if request.content_type and 'multipart/form-data' in request.content_type:
             objective_id = request.form.get('objectiveId')
             key_result_id = request.form.get('keyResultId') or None
@@ -1185,6 +1264,15 @@ def create_attachment(user_id):
                 return jsonify({'error': 'Objective not found'}), 404
             if get_user_role(db, user_id) == 'view_only':
                 return jsonify({'error': 'Not allowed to upload'}), 403
+            kr_oid = _parse_object_id(key_result_id) if key_result_id else None
+            if key_result_id and kr_oid is None:
+                return jsonify({'error': 'Invalid keyResultId'}), 400
+            ok_kr, kr_err = _key_result_belongs_to_objective(db, kr_oid, oid)
+            if not ok_kr:
+                return jsonify({'error': kr_err}), 400
+            ok_f, err_f = _validate_upload_file(file, file.filename or '')
+            if not ok_f:
+                return jsonify({'error': err_f}), 400
             try:
                 from app.config.cloudinary_config import upload_file as cloudinary_upload
                 result = cloudinary_upload(file, folder='okr_attachments')
@@ -1192,9 +1280,9 @@ def create_attachment(user_id):
                 file_name = file.filename or 'upload'
                 file_size = result.get('bytes') or 0
                 file_type = (file.content_type or 'application/octet-stream')
+                storage_public_id = result.get('public_id')
             except Exception as e:
                 return jsonify({'error': f'Upload failed: {str(e)}'}), 500
-            kr_oid = _parse_object_id(key_result_id) if key_result_id else None
         else:
             data = request.get_json() or {}
             objective_id = data.get('objectiveId')
@@ -1213,8 +1301,16 @@ def create_attachment(user_id):
             file_type = data.get('fileType', '') or 'application/octet-stream'
             key_result_id = data.get('keyResultId')
             kr_oid = _parse_object_id(key_result_id) if key_result_id else None
+            if key_result_id and kr_oid is None:
+                return jsonify({'error': 'Invalid keyResultId'}), 400
+            ok_kr, kr_err = _key_result_belongs_to_objective(db, kr_oid, oid)
+            if not ok_kr:
+                return jsonify({'error': kr_err}), 400
             if not url or not file_name:
                 return jsonify({'error': 'url and fileName are required'}), 400
+            ok_m, err_m = _validate_attachment_json_meta(file_name, file_size, file_type)
+            if not ok_m:
+                return jsonify({'error': err_m}), 400
 
         now = _now()
         doc = {
@@ -1228,9 +1324,53 @@ def create_attachment(user_id):
             'uploadedAt': now,
             'deletedAt': None,
         }
+        if storage_public_id:
+            doc['storagePublicId'] = storage_public_id
         result = db.attachments.insert_one(doc)
         doc['_id'] = result.inserted_id
         return jsonify(_serialize_doc(doc)), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/attachments/<attachment_id>/access', methods=['GET'])
+@require_auth
+def attachment_access(attachment_id, user_id):
+    """Return storage URL for download/preview after auth (do not expose URLs without a session)."""
+    try:
+        aid = _parse_object_id(attachment_id)
+        if aid is None:
+            return jsonify({'error': 'Invalid attachment ID'}), 400
+        db = get_db()
+        att = db.attachments.find_one({'_id': aid, 'deletedAt': None})
+        if not att:
+            return jsonify({'error': 'Attachment not found'}), 404
+        oid = att.get('objectiveId')
+        if not oid or not db.objectives.find_one({'_id': oid}):
+            return jsonify({'error': 'Objective not found'}), 404
+        return jsonify({
+            'url': att.get('url'),
+            'fileName': att.get('fileName', ''),
+            'fileType': att.get('fileType', ''),
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/objectives/<objective_id>/attachment-deletions', methods=['GET'])
+@require_auth
+def list_attachment_deletions(objective_id, user_id):
+    """Audit trail: file deletions for this objective."""
+    try:
+        oid = _parse_object_id(objective_id)
+        if oid is None:
+            return jsonify({'error': 'Invalid objective ID'}), 400
+        db = get_db()
+        if not db.objectives.find_one({'_id': oid}):
+            return jsonify({'error': 'Objective not found'}), 404
+        cursor = db.attachment_deletion_audit.find({'objectiveId': oid}).sort('deletedAt', -1).limit(200)
+        items = [_serialize_doc(d) for d in cursor]
+        return jsonify(items), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1253,6 +1393,20 @@ def delete_attachment(attachment_id, user_id):
         if not can_edit_objective(db, user_id, obj) and get_user_role(db, user_id) != 'admin':
             return jsonify({'error': 'Not allowed to delete this attachment'}), 403
         now = _now()
+        audit_doc = {
+            'objectiveId': existing['objectiveId'],
+            'keyResultId': existing.get('keyResultId'),
+            'attachmentId': aid,
+            'fileName': existing.get('fileName'),
+            'fileSize': existing.get('fileSize', 0),
+            'fileType': existing.get('fileType'),
+            'uploadedBy': existing.get('uploadedBy'),
+            'uploadedAt': existing.get('uploadedAt'),
+            'storageUrl': existing.get('url'),
+            'deletedBy': user_id,
+            'deletedAt': now,
+        }
+        db.attachment_deletion_audit.insert_one(audit_doc)
         db.attachments.update_one({'_id': aid}, {'$set': {'deletedAt': now}})
         return jsonify({'message': 'Attachment deleted'}), 200
     except Exception as e:

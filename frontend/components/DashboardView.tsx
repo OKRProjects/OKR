@@ -33,6 +33,7 @@ import {
   Radar
 } from 'recharts';
 import { api, Objective, KeyResult } from '@/lib/api';
+import { ChartAccessible } from '@/components/shared/ChartAccessible';
 
 export function DashboardView() {
   const [objectives, setObjectives] = useState<Objective[]>([]);
@@ -232,6 +233,9 @@ export function DashboardView() {
             <CardDescription>OKR completion trends by level (2026)</CardDescription>
           </CardHeader>
           <CardContent>
+            <ChartAccessible
+              summary={`Area chart of OKR completion trends by month for fiscal year ${fiscalYear}. Strategic level from ${progressOverTimeData[0]?.strategic}% to ${progressOverTimeData[progressOverTimeData.length - 1]?.strategic}%, functional from ${progressOverTimeData[0]?.functional}% to ${progressOverTimeData[progressOverTimeData.length - 1]?.functional}%, tactical from ${progressOverTimeData[0]?.tactical}% to ${progressOverTimeData[progressOverTimeData.length - 1]?.tactical}%.`}
+            >
             <ResponsiveContainer width="100%" height={300}>
               <AreaChart data={progressOverTimeData}>
                 <defs>
@@ -258,6 +262,7 @@ export function DashboardView() {
                 <Area type="monotone" dataKey="tactical" stroke="#22c55e" fillOpacity={1} fill="url(#colorTactical)" />
               </AreaChart>
             </ResponsiveContainer>
+            </ChartAccessible>
           </CardContent>
         </Card>
 
@@ -268,6 +273,9 @@ export function DashboardView() {
             <CardDescription>Distribution across all objectives</CardDescription>
           </CardHeader>
           <CardContent>
+            <ChartAccessible
+              summary={`Pie chart of key results status: ${statusDistribution.map((s) => `${s.name} ${s.value}`).join(', ')}.`}
+            >
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
@@ -287,6 +295,7 @@ export function DashboardView() {
                 <Tooltip />
               </PieChart>
             </ResponsiveContainer>
+            </ChartAccessible>
             <div className="mt-4 grid grid-cols-2 gap-2">
               {statusDistribution.map((status) => (
                 <div key={status.name} className="flex items-center gap-2">
@@ -310,6 +319,9 @@ export function DashboardView() {
             <CardDescription>Average score and objective count by division</CardDescription>
           </CardHeader>
           <CardContent>
+            <ChartAccessible
+              summary={`Bar chart by division: ${divisionPerformanceData.map((d) => `${d.division} average score ${d.score}%, ${d.keyResults} key results`).join('; ')}.`}
+            >
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={divisionPerformanceData}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -321,6 +333,7 @@ export function DashboardView() {
                 <Bar dataKey="keyResults" fill="#22c55e" name="Key Results" />
               </BarChart>
             </ResponsiveContainer>
+            </ChartAccessible>
           </CardContent>
         </Card>
 
@@ -331,6 +344,9 @@ export function DashboardView() {
             <CardDescription>How each OKR level is performing against targets</CardDescription>
           </CardHeader>
           <CardContent>
+            <ChartAccessible
+              summary={`Horizontal bar chart comparing progress to target by level: ${levelComparisonData.map((l) => `${l.level} progress ${l.progress}% versus target ${l.target}%`).join('; ')}.`}
+            >
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={levelComparisonData} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -342,6 +358,7 @@ export function DashboardView() {
                 <Bar dataKey="target" fill="#94a3b8" name="Target (%)" />
               </BarChart>
             </ResponsiveContainer>
+            </ChartAccessible>
           </CardContent>
         </Card>
       </div>
@@ -353,6 +370,9 @@ export function DashboardView() {
           <CardDescription>Comparative view across strategic, functional, and tactical levels</CardDescription>
         </CardHeader>
         <CardContent>
+          <ChartAccessible
+            summary={`Radar chart comparing strategic, functional, and tactical scores across metrics: ${radarData.map((r) => `${r.metric} strategic ${r.strategic}%, functional ${r.functional}%, tactical ${r.tactical}%`).join('; ')}.`}
+          >
           <ResponsiveContainer width="100%" height={400}>
             <RadarChart data={radarData}>
               <PolarGrid className="stroke-muted" />
@@ -365,6 +385,7 @@ export function DashboardView() {
               <Tooltip />
             </RadarChart>
           </ResponsiveContainer>
+          </ChartAccessible>
         </CardContent>
       </Card>
 

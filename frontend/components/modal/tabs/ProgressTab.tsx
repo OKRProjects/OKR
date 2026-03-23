@@ -19,6 +19,7 @@ import {
 import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, AlertTriangle, Pencil } from 'lucide-react';
 import { cn } from '@/components/ui/utils';
 import { InlineHelp } from '@/components/shared/InlineHelp';
+import { FieldLabel } from '@/components/shared/FieldLabel';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { toast } from 'sonner';
 
@@ -261,7 +262,13 @@ function KRProgressRow({
               </InlineHelp>
               <div className="flex flex-wrap items-end gap-4">
                 <div ref={sliderContainerRef} className="min-w-0 flex-1">
-                  <label className="block text-sm font-medium text-muted-foreground mb-1">Score (0–100%)</label>
+                  <FieldLabel
+                    className="text-muted-foreground mb-1"
+                    tooltip="Completion as a share of the KR target (0–100%). Drives roll-up scores and status colors on the dashboard."
+                    learnMoreHref="/docs#scoring"
+                  >
+                    Score (0–100%)
+                  </FieldLabel>
                   <ScoreSlider value={score} onChange={setScore} disabled={loading} />
                 </div>
                 <Button type="submit" size="sm" disabled={loading} className="min-h-[44px] min-w-[44px] touch-manipulation" title="Save (Ctrl+Enter or Enter)">
@@ -269,8 +276,15 @@ function KRProgressRow({
                 </Button>
               </div>
               <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-1">Notes</label>
+                <FieldLabel
+                  htmlFor={kr._id ? `kr-notes-${kr._id}` : undefined}
+                  className="text-muted-foreground mb-1"
+                  tooltip="Optional context saved with this score update (visible in history)."
+                >
+                  Notes
+                </FieldLabel>
                 <textarea
+                  id={kr._id ? `kr-notes-${kr._id}` : undefined}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Add progress note..."

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import Chatbot from "@/components/Chatbot";
+import { ThemePreference } from "@/components/ThemePreference";
 import { ViewRoleProvider } from "@/lib/ViewRoleContext";
 import { ViewPreferencesProvider } from "@/lib/useViewPreferences";
 
@@ -27,10 +28,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <ThemePreference />
         <ViewRoleProvider>
           <ViewPreferencesProvider>
             {children}

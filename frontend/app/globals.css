@@ -15,7 +15,8 @@
   --secondary: oklch(0.95 0.0058 264.53);
   --secondary-foreground: #030213;
   --muted: #ececf0;
-  --muted-foreground: #717182;
+  /* ~4.6:1 on white for WCAG 2.1 AA body text */
+  --muted-foreground: #52525c;
   --accent: #e9ebef;
   --accent-foreground: #030213;
   --destructive: #d4183d;
@@ -128,12 +129,18 @@
     @apply border-border outline-ring/50;
   }
 
+  /* Links: visible focus (buttons/inputs use component focus rings) */
+  a:focus-visible {
+    @apply rounded-sm outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
   body {
     @apply bg-background text-foreground;
   }
 
   html {
     font-size: var(--font-size);
+    color-scheme: light dark;
   }
 
   h1 {
@@ -176,6 +183,53 @@
     font-size: var(--text-base);
     font-weight: var(--font-weight-normal);
     line-height: 1.5;
+  }
+}
+
+/* Screen-reader-only text (chart summaries, live regions) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Windows High Contrast / forced-colors: preserve boundaries and focus */
+@media (forced-colors: active) {
+  :root {
+    --ring: CanvasText;
+  }
+
+  button,
+  [role='button'],
+  [role='tab'],
+  a {
+    forced-color-adjust: none;
+    border: 1px solid ButtonBorder;
+  }
+
+  :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+}
+
+/* Stronger contrast preference */
+@media (prefers-contrast: more) {
+  :root {
+    --border: oklch(0.35 0 0);
+    --muted-foreground: oklch(0.25 0 0);
+  }
+
+  .dark {
+    --border: oklch(0.85 0 0);
+    --muted-foreground: oklch(0.92 0 0);
   }
 }
 

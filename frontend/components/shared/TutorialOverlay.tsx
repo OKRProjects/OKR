@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';
 import type { TutorialStep } from '@/lib/tutorial';
+import { useFocusTrap, useRestoreFocusOnUnmount } from '@/lib/useFocusTrap';
 
 export interface TutorialOverlayProps {
   steps: TutorialStep[];
@@ -16,6 +17,18 @@ export function TutorialOverlay({ steps, onDismiss, contextName }: TutorialOverl
   const [stepIndex, setStepIndex] = useState(0);
   const step = steps[stepIndex];
   const isLast = stepIndex === steps.length - 1;
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useRestoreFocusOnUnmount();
+  useFocusTrap(panelRef, true);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onDismiss();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onDismiss]);
 
   const handleNext = () => {
     if (isLast) {
@@ -37,7 +50,10 @@ export function TutorialOverlay({ steps, onDismiss, contextName }: TutorialOverl
       aria-labelledby="tutorial-title"
       aria-describedby="tutorial-body"
     >
-      <div className="relative max-w-md rounded-lg border bg-card p-5 shadow-lg">
+      <div
+        ref={panelRef}
+        className="relative max-w-md rounded-lg border bg-card p-5 shadow-lg"
+      >
         <button
           type="button"
           onClick={handleSkip}
@@ -46,10 +62,16 @@ export function TutorialOverlay({ steps, onDismiss, contextName }: TutorialOverl
         >
           <X className="h-4 w-4" />
         </button>
-        <div className="pr-8">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{contextName} · Step {stepIndex + 1} of {steps.length}</p>
-          <h2 id="tutorial-title" className="mt-1 text-lg font-semibold">{step.title}</h2>
-          <p id="tutorial-body" className="mt-2 text-sm text-muted-foreground">{step.body}</p>
+        <div className="pr-8" aria-live="polite">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {contextName} · Step {stepIndex + 1} of {steps.length}
+          </p>
+          <h2 id="tutorial-title" className="mt-1 text-lg font-semibold">
+            {step.title}
+          </h2>
+          <p id="tutorial-body" className="mt-2 text-sm text-muted-foreground">
+            {step.body}
+          </p>
         </div>
         <div className="mt-5 flex items-center justify-between gap-3">
           <button

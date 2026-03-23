@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/components/ui/utils';
+import { useFocusTrap, useRestoreFocusWhenActive } from '@/lib/useFocusTrap';
 
 const shortcuts = [
   { keys: 'Esc', description: 'Close modal or dialog' },
@@ -21,6 +22,11 @@ interface ShortcutHelpProps {
 }
 
 export function ShortcutHelp({ open, onClose, className }: ShortcutHelpProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useRestoreFocusWhenActive(open);
+  useFocusTrap(panelRef, open);
+
   useEffect(() => {
     if (!open) return;
     const onEscape = (e: KeyboardEvent) => {
@@ -41,6 +47,7 @@ export function ShortcutHelp({ open, onClose, className }: ShortcutHelpProps) {
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
+        ref={panelRef}
         className={cn(
           'bg-card border rounded-xl shadow-xl w-full max-w-sm p-4 space-y-4',
           className

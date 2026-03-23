@@ -18,6 +18,7 @@ import {
   RadialBar
 } from 'recharts';
 import { api, Objective, KeyResult } from '@/lib/api';
+import { ChartAccessible } from '@/components/shared/ChartAccessible';
 
 const divisionColors: Record<string, string> = {
   'Infrastructure': '#3b82f6',
@@ -124,6 +125,9 @@ export function DivisionsView() {
             {/* Bar Chart */}
             <div>
               <h3 className="mb-4 text-sm font-medium">Average Score by Division</h3>
+              <ChartAccessible
+                summary={`Bar chart of average key result score by division: ${divisionsData.map((d) => `${d.name} ${d.avgScore}%`).join('; ')}.`}
+              >
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={divisionsData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -133,11 +137,15 @@ export function DivisionsView() {
                   <Bar dataKey="avgScore" fill="#3b82f6" name="Avg Score (%)" />
                 </BarChart>
               </ResponsiveContainer>
+              </ChartAccessible>
             </div>
 
             {/* Radial Chart */}
             <div>
               <h3 className="mb-4 text-sm font-medium">Performance Distribution</h3>
+              <ChartAccessible
+                summary={`Radial chart of division average scores: ${radialData.map((r) => `${r.name} ${r.score}%`).join('; ')}.`}
+              >
               <ResponsiveContainer width="100%" height={300}>
                 <RadialBarChart 
                   cx="50%" 
@@ -162,6 +170,7 @@ export function DivisionsView() {
                   <Tooltip />
                 </RadialBarChart>
               </ResponsiveContainer>
+              </ChartAccessible>
             </div>
           </div>
         </CardContent>

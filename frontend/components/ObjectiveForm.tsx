@@ -76,7 +76,7 @@ export default function ObjectiveForm({ objective, parentOptions = [], onSuccess
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {error && <ErrorMessage message={error} className="mb-4" />}
+      {error && <ErrorMessage message={error} learnMoreHref="/docs" className="mb-4" />}
       <div>
         <FieldLabel htmlFor="objective-title" tooltip="A clear, outcome-focused statement of what you want to achieve." learnMoreHref="/docs#okrs" required>
           Title

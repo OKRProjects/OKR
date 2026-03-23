@@ -21,6 +21,7 @@ import {
   WORKFLOW_STEPS,
   getCurrentStepIndex,
 } from '@/lib/workflowStatus';
+import { useFocusTrap, useRestoreFocusOnUnmount } from '@/lib/useFocusTrap';
 
 const VIEW_HEARTBEAT_MS = 28000;
 const LIVE_POLL_MS = 60000;
@@ -44,7 +45,6 @@ export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
   const [shareCreating, setShareCreating] = useState(false);
   const loadingRef = useRef(false);
   const modalContentRef = useRef<HTMLDivElement>(null);
-  const previousActiveElementRef = useRef<HTMLElement | null>(null);
 
   const load = useCallback(async (showLoading = true) => {
     if (loadingRef.current) return;
@@ -124,43 +124,8 @@ export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
     };
   }, [objectiveId, objective?.updatedAt]);
 
-  // Focus trap: save previous focus on open, focus first focusable, trap Tab, restore on close
-  useEffect(() => {
-    previousActiveElementRef.current = document.activeElement as HTMLElement | null;
-    const el = modalContentRef.current;
-    if (!el) return;
-    const focusableSelector =
-      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex^="-"])';
-    const focusables = el.querySelectorAll<HTMLElement>(focusableSelector);
-    const first = focusables[0];
-    if (first) {
-      requestAnimationFrame(() => first.focus());
-    }
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return;
-      const list = Array.from(el.querySelectorAll<HTMLElement>(focusableSelector)).filter(
-        (node) => node.offsetParent != null
-      );
-      if (list.length === 0) return;
-      const i = list.indexOf(document.activeElement as HTMLElement);
-      if (e.shiftKey) {
-        if (i <= 0) {
-          e.preventDefault();
-          list[list.length - 1].focus();
-        }
-      } else {
-        if (i === -1 || i >= list.length - 1) {
-          e.preventDefault();
-          list[0].focus();
-        }
-      }
-    };
-    el.addEventListener('keydown', onKeyDown);
-    return () => {
-      el.removeEventListener('keydown', onKeyDown);
-      previousActiveElementRef.current?.focus?.();
-    };
-  }, [objectiveId]);
+  useRestoreFocusOnUnmount();
+  useFocusTrap(modalContentRef, !shortcutHelpOpen);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -371,7 +336,11 @@ export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
           )}
         </div>
         {externalUpdateBanner && (
-          <div className="shrink-0 px-3 sm:px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 text-sm text-amber-800 dark:text-amber-200 flex items-center justify-between gap-2">
+          <div
+            role="status"
+            aria-live="polite"
+            className="shrink-0 px-3 sm:px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 text-sm text-amber-800 dark:text-amber-200 flex items-center justify-between gap-2"
+          >
             <span>This OKR was updated by someone else.</span>
             <Button
               variant="outline"
@@ -386,9 +355,17 @@ export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
             </Button>
           </div>
         )}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 min-h-0">
+        <div
+          className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 min-h-0"
+          aria-busy={loading}
+        >
           {loading && (
-            <div className="space-y-4 animate-pulse">
+            <span className="sr-only" aria-live="polite">
+              Loading OKR details.
+            </span>
+          )}
+          {loading && (
+            <div className="space-y-4 animate-pulse" aria-hidden="true">
               <div className="h-8 bg-muted rounded w-3/4" />
               <div className="h-4 bg-muted rounded w-full" />
               <div className="h-4 bg-muted rounded w-5/6" />

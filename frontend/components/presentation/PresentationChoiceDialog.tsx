@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { X, FileText, Sparkles, Loader2 } from 'lucide-react';
+import { useFocusTrap, useRestoreFocusWhenActive } from '@/lib/useFocusTrap';
 
 export interface PresentationChoiceDialogProps {
   open: boolean;
@@ -29,6 +30,19 @@ export function PresentationChoiceDialog({
   const [step, setStep] = useState<'choice' | 'generating' | 'story'>('choice');
   const [story, setStory] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useRestoreFocusWhenActive(open);
+  useFocusTrap(panelRef, open);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -77,6 +91,7 @@ export function PresentationChoiceDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby="presentation-choice-title"
+      aria-describedby={step === 'choice' ? 'presentation-choice-desc' : undefined}
     >
       <div
         className="absolute inset-0 bg-black/50"
@@ -84,25 +99,29 @@ export function PresentationChoiceDialog({
         aria-hidden="true"
       />
       <div
-        className="relative z-10 w-full max-w-lg rounded-xl border bg-white p-6 shadow-xl dark:bg-gray-900 dark:border-gray-700"
+        ref={panelRef}
+        className="relative z-10 w-full max-w-lg rounded-xl border bg-card p-6 shadow-xl text-card-foreground"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 id="presentation-choice-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          <h2 id="presentation-choice-title" className="text-lg font-semibold text-foreground">
             OKR presentation
           </h2>
-          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
-            <X className="h-5 w-5" />
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close dialog">
+            <X className="h-5 w-5" aria-hidden />
           </Button>
         </div>
 
         {step === 'choice' && (
           <>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            <p id="presentation-choice-desc" className="text-sm text-muted-foreground mb-4">
               Present from slides only, or add an AI-generated narrative that turns your OKRs into a clear, presentable story.
             </p>
             {error && (
-              <div className="mb-4 rounded-md bg-red-50 dark:bg-red-950/30 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+              <div
+                role="alert"
+                className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              >
                 {error}
               </div>
             )}
@@ -140,8 +159,13 @@ export function PresentationChoiceDialog({
         )}
 
         {step === 'generating' && (
-          <div className="flex flex-col items-center justify-center py-8 gap-4">
-            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <div
+            className="flex flex-col items-center justify-center py-8 gap-4"
+            role="status"
+            aria-live="polite"
+            aria-busy="true"
+          >
+            <Loader2 className="h-10 w-10 animate-spin text-primary" aria-hidden />
             <p className="text-sm text-muted-foreground">Generating your OKR narrative…</p>
           </div>
         )}
@@ -149,7 +173,10 @@ export function PresentationChoiceDialog({
         {step === 'story' && story && (
           <>
             <p className="text-sm text-muted-foreground mb-3">Your professional OKR narrative:</p>
-            <div className="max-h-64 overflow-y-auto rounded-lg border bg-gray-50 dark:bg-gray-800/50 p-4 text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap mb-4">
+            <div
+              className="max-h-64 overflow-y-auto rounded-lg border bg-muted/50 p-4 text-sm text-foreground whitespace-pre-wrap mb-4"
+              tabIndex={0}
+            >
               {story}
             </div>
             <div className="flex gap-2 justify-end">
