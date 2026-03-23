@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScoreSlider } from '@/components/shared/ScoreSlider';
@@ -40,6 +40,7 @@ function KRProgressRow({
   onFocusRow = () => {},
   focusedIndex = 0,
   objectiveUpdatedAt,
+  rowButtonRef,
 }: {
   kr: KeyResult;
   onUpdate: () => void;
@@ -49,8 +50,10 @@ function KRProgressRow({
   onFocusRow?: (i: number) => void;
   focusedIndex?: number;
   objectiveUpdatedAt?: string;
+  /** Parent registers row button for arrow-key focus management */
+  rowButtonRef?: (el: HTMLButtonElement | null) => void;
 }) {
-  const rowRef = useRef<HTMLButtonElement>(null);
+  const rowRef = useRef<HTMLButtonElement | null>(null);
   const sliderContainerRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [score, setScore] = useState(kr.score ?? 0);
@@ -168,38 +171,28 @@ function KRProgressRow({
     })
     .slice(-20);
 
-  const handleRowKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      onFocusRow(Math.min(index + 1, totalCount - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      onFocusRow(Math.max(0, index - 1));
-    }
-  };
-
   const handleQuickUpdate = () => {
     setExpanded(true);
   };
 
-  const handleSaveKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-      e.preventDefault();
-      handleSave();
-    }
-  };
+  const setRowButtonRef = useCallback(
+    (el: HTMLButtonElement | null) => {
+      rowRef.current = el;
+      rowButtonRef?.(el);
+    },
+    [rowButtonRef]
+  );
 
   return (
     <Card className="overflow-hidden">
       <div className="w-full flex items-center gap-2 px-4 py-3 min-h-[44px]">
         <button
           type="button"
-          ref={rowRef}
+          ref={setRowButtonRef}
           tabIndex={focusedIndex === index ? 0 : -1}
           className="flex items-center gap-2 flex-1 min-w-0 text-left hover:bg-muted/50 active:bg-muted/70 touch-manipulation rounded -m-2 p-2"
           onClick={() => setExpanded((e) => !e)}
           onFocus={() => onFocusRow(index)}
-          onKeyDown={handleRowKeyDown}
           aria-expanded={expanded}
         >
           {expanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
@@ -232,7 +225,20 @@ function KRProgressRow({
         )}
       </div>
       {expanded && (
-        <CardContent className="pt-0 border-t space-y-4" onKeyDown={handleSaveKeyDown}>
+        <CardContent className="pt-0 border-t space-y-4">
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSave();
+            }}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                handleSave();
+              }
+            }}
+          >
           {isBehind && (
             <div className="flex items-center gap-2 text-amber-700 bg-amber-50 dark:bg-amber-950/30 rounded-lg px-3 py-2 text-sm">
               <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -258,7 +264,7 @@ function KRProgressRow({
                   <label className="block text-sm font-medium text-muted-foreground mb-1">Score (0–100%)</label>
                   <ScoreSlider value={score} onChange={setScore} disabled={loading} />
                 </div>
-                <Button size="sm" onClick={() => handleSave()} disabled={loading} className="min-h-[44px] min-w-[44px] touch-manipulation" title="Save (Ctrl+Enter)">
+                <Button type="submit" size="sm" disabled={loading} className="min-h-[44px] min-w-[44px] touch-manipulation" title="Save (Ctrl+Enter or Enter)">
                   {loading ? 'Saving…' : 'Save'}
                 </Button>
               </div>
@@ -292,6 +298,7 @@ function KRProgressRow({
           {history.length === 0 && (
             <p className="text-sm text-muted-foreground">No score history yet. Save a score to see the trend.</p>
           )}
+          </form>
         </CardContent>
       )}
       {conflictOpen && (
@@ -325,9 +332,40 @@ export function ProgressTab({
 }: ProgressTabProps) {
   const refresh = onKeyResultsUpdate ?? (() => {});
   const [focusedIndex, setFocusedIndex] = useState(0);
+  const progressNavRef = useRef<HTMLDivElement>(null);
+  const rowRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  useEffect(() => {
+    rowRefs.current.length = keyResults.length;
+  }, [keyResults.length]);
+
+  useEffect(() => {
+    const root = progressNavRef.current;
+    if (!root || keyResults.length === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+      const t = e.target as HTMLElement | null;
+      if (!t || !root.contains(t)) return;
+      if (t.tagName === 'TEXTAREA') return;
+      if (t.closest('form')) return;
+      if (t.closest('[role="slider"]')) return;
+      if (t.tagName === 'INPUT' && (t as HTMLInputElement).type === 'range') return;
+      e.preventDefault();
+      setFocusedIndex((prev) => {
+        const next =
+          e.key === 'ArrowDown'
+            ? Math.min(prev + 1, keyResults.length - 1)
+            : Math.max(0, prev - 1);
+        requestAnimationFrame(() => rowRefs.current[next]?.focus());
+        return next;
+      });
+    };
+    root.addEventListener('keydown', onKey);
+    return () => root.removeEventListener('keydown', onKey);
+  }, [keyResults.length]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" ref={progressNavRef}>
       <Card>
         <CardHeader>
           <CardTitle>Key result progress</CardTitle>
@@ -356,6 +394,9 @@ export function ProgressTab({
               onFocusRow={setFocusedIndex}
               focusedIndex={focusedIndex}
               objectiveUpdatedAt={objective.updatedAt ?? undefined}
+              rowButtonRef={(el) => {
+                rowRefs.current[index] = el;
+              }}
             />
           ))}
         </div>

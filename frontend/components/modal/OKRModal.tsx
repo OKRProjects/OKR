@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Link2, HelpCircle, MoreHorizontal, RefreshCw } from 'lucide-react';
+import { X, Link2, HelpCircle, MoreHorizontal, RefreshCw, Share2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { api, type Objective, type KeyResult } from '@/lib/api';
 import { OKRDetailView } from './OKRDetailView';
@@ -40,6 +41,7 @@ export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [externalUpdateBanner, setExternalUpdateBanner] = useState(false);
+  const [shareCreating, setShareCreating] = useState(false);
   const loadingRef = useRef(false);
   const modalContentRef = useRef<HTMLDivElement>(null);
   const previousActiveElementRef = useRef<HTMLElement | null>(null);
@@ -166,7 +168,9 @@ export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
         if (shortcutHelpOpen) setShortcutHelpOpen(false);
         else onClose();
       }
-      if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const isHelpKey =
+        e.key === '?' || (e.key === '/' && e.shiftKey);
+      if (isHelpKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
         const target = e.target as HTMLElement;
         if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
           e.preventDefault();
@@ -222,7 +226,44 @@ export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-1 shrink-0 relative">
+            <div className="flex items-center gap-1 shrink-0 relative flex-wrap justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-[44px] inline-flex"
+                onClick={() => {
+                  const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/okrs/${objectiveId}`;
+                  navigator.clipboard.writeText(url).then(() => toast.success('Link copied')).catch(() => toast.error('Could not copy'));
+                }}
+                aria-label="Copy page link"
+                title="Copy link to this OKR page"
+              >
+                <Link2 className="h-4 w-4 shrink-0 sm:mr-1.5" />
+                <span className="hidden sm:inline">Copy link</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-[44px] inline-flex"
+                disabled={shareCreating || !objectiveId}
+                onClick={async () => {
+                  setShareCreating(true);
+                  try {
+                    const res = await api.createShareLink(objectiveId);
+                    await navigator.clipboard.writeText(res.url);
+                    toast.success('Share link copied', { description: 'Anyone with the link can view this OKR.' });
+                  } catch {
+                    toast.error('Could not create share link');
+                  } finally {
+                    setShareCreating(false);
+                  }
+                }}
+                aria-label="Copy shareable link"
+                title="Create and copy a public share link"
+              >
+                <Share2 className="h-4 w-4 shrink-0 sm:mr-1.5" />
+                <span className="hidden sm:inline">Share link</span>
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"

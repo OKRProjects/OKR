@@ -6,11 +6,12 @@ import { cn } from '@/components/ui/utils';
 
 const shortcuts = [
   { keys: 'Esc', description: 'Close modal or dialog' },
-  { keys: 'Tab', description: 'Navigate between tabs and fields' },
-  { keys: 'Enter', description: 'Submit form or confirm' },
-  { keys: 'Ctrl / Cmd + Enter', description: 'Save changes (e.g. key result score)' },
-  { keys: '↑ / ↓', description: 'Move between key results (Progress tab)' },
-  { keys: '?', description: 'Show this shortcut help' },
+  { keys: 'Tab', description: 'Move focus between buttons, tabs, and fields' },
+  { keys: 'Enter', description: 'Submit save (Progress tab) or activate focused control' },
+  { keys: 'Ctrl / Cmd + Enter', description: 'Save key result score and notes (Progress tab)' },
+  { keys: 'Alt + 1–6', description: 'Switch OKR detail tabs (when visible)' },
+  { keys: '↑ / ↓', description: 'Move between key result rows (Progress tab)' },
+  { keys: '? or Shift + /', description: 'Toggle this keyboard shortcut help' },
 ];
 
 interface ShortcutHelpProps {
@@ -56,7 +57,7 @@ export function ShortcutHelp({ open, onClose, className }: ShortcutHelpProps) {
         </div>
         <dl className="space-y-2 text-sm">
           {shortcuts.map(({ keys, description }) => (
-            <div key={keys} className="flex justify-between gap-4">
+            <div key={description} className="flex justify-between gap-4">
               <dt className="font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
                 {keys}
               </dt>

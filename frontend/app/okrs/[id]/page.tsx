@@ -119,7 +119,8 @@ export default function ObjectiveDetailPage() {
         if (shortcutHelpOpen) setShortcutHelpOpen(false);
         else router.push('/okrs');
       }
-      if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const isHelpKey = e.key === '?' || (e.key === '/' && e.shiftKey);
+      if (isHelpKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
         const target = e.target as HTMLElement;
         if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
           e.preventDefault();
