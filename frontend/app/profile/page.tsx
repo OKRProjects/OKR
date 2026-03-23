@@ -13,6 +13,16 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useViewPreferences } from '@/lib/useViewPreferences';
 import { RotateCcw } from 'lucide-react';
+import { toast } from 'sonner';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import type { DashboardSortField, SortDirection } from '@/lib/api';
 
 const OKR_TAB_LABELS: Record<string, string> = {
   overview: 'Overview',
@@ -23,34 +33,136 @@ const OKR_TAB_LABELS: Record<string, string> = {
   files: 'Files',
 };
 
-function ProfileOKRPreferences() {
+const OKR_TAB_IDS = Object.keys(OKR_TAB_LABELS);
+
+const HISTORY_EVENT_FILTER_OPTIONS: { value: string; label: string }[] = [
+  { value: 'all', label: 'All types' },
+  { value: 'in_review', label: 'Submitted' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'draft', label: 'Back to draft' },
+];
+
+/** Customizable views (#24): tabs, dashboard sort/filter, history filter — persisted on profile */
+function ProfileCustomizableViews() {
   const { preferences, updatePreferences, resetToDefault, loading } = useViewPreferences();
-  if (loading) return null;
+  if (loading) return <p className="text-sm text-muted-foreground">Loading view settings…</p>;
+
+  const visibleTabCount = OKR_TAB_IDS.filter((id) => preferences.visibleTabs[id] !== false).length;
+
+  const handleTabToggle = (id: string, checked: boolean) => {
+    if (!checked && visibleTabCount <= 1) {
+      toast.error('Debe quedar al menos una pestaña visible en el detalle del OKR.');
+      return;
+    }
+    void updatePreferences({ visibleTabs: { [id]: checked } });
+  };
+
+  const sortCombo = `${preferences.dashboardSort}-${preferences.dashboardSortDirection}` as string;
+
   return (
-    <div>
-      <h2 className="text-lg font-semibold mb-2">OKR modal tabs</h2>
-      <p className="text-sm text-muted-foreground mb-4">
-        Choose which tabs appear when you open an OKR. At least one must be visible.
-      </p>
-      <div className="flex flex-wrap gap-x-6 gap-y-2 mb-4">
-        {Object.entries(OKR_TAB_LABELS).map(([id, label]) => (
-          <label key={id} className="flex items-center gap-2 cursor-pointer text-sm">
-            <input
-              type="checkbox"
-              checked={preferences.visibleTabs[id] !== false}
-              onChange={(e) => {
-                const checked = e.target.checked;
-                updatePreferences({ visibleTabs: { [id]: checked } });
-              }}
-              className="rounded border-input h-4 w-4"
-            />
-            {label}
-          </label>
-        ))}
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-lg font-semibold mb-1">Vistas personalizables</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Se guardan en tu perfil: última pestaña del modal OKR, pestañas visibles, orden del listado del
+          dashboard y filtros.
+        </p>
       </div>
-      <Button variant="outline" size="sm" onClick={() => resetToDefault()} className="gap-2">
+
+      <div>
+        <h3 className="text-base font-medium mb-2">Pestañas del detalle OKR</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Oculta secciones (por ejemplo Historial). La última pestaña que elijas se recordará al abrir otro OKR.
+        </p>
+        <div className="flex flex-wrap gap-x-6 gap-y-2">
+          {Object.entries(OKR_TAB_LABELS).map(([id, label]) => (
+            <label key={id} className="flex items-center gap-2 cursor-pointer text-sm">
+              <input
+                type="checkbox"
+                checked={preferences.visibleTabs[id] !== false}
+                onChange={(e) => handleTabToggle(id, e.target.checked)}
+                className="rounded border-input h-4 w-4"
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-base font-medium mb-2">Listado del dashboard</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Mismo criterio que la barra de filtros del dashboard: orden y actividad reciente.
+        </p>
+        <div className="flex flex-col sm:flex-row flex-wrap gap-4 max-w-xl">
+          <div className="space-y-2 flex-1 min-w-[200px]">
+            <Label htmlFor="profile-sort">Ordenar por</Label>
+            <Select
+              value={sortCombo}
+              onValueChange={(v) => {
+                const [sort, dir] = v.split('-') as [DashboardSortField, SortDirection];
+                void updatePreferences({ dashboardSort: sort, dashboardSortDirection: dir });
+              }}
+            >
+              <SelectTrigger id="profile-sort">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="score-desc">Puntuación (mayor primero)</SelectItem>
+                <SelectItem value="score-asc">Puntuación (menor primero)</SelectItem>
+                <SelectItem value="owner-asc">Propietario (A–Z)</SelectItem>
+                <SelectItem value="owner-desc">Propietario (Z–A)</SelectItem>
+                <SelectItem value="updated-desc">Actualizado (más reciente)</SelectItem>
+                <SelectItem value="updated-asc">Actualizado (más antiguo)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2 flex-1 min-w-[200px]">
+            <Label htmlFor="profile-update-filter">Filtro por actividad</Label>
+            <Select
+              value={preferences.dashboardFilterUpdateType}
+              onValueChange={(v) => void updatePreferences({ dashboardFilterUpdateType: v })}
+            >
+              <SelectTrigger id="profile-update-filter">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Cualquier actividad</SelectItem>
+                <SelectItem value="recent">Actualizado en los últimos 7 días</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-base font-medium mb-2">Pestaña Historial (por defecto)</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Tipo de evento de workflow mostrado al abrir la pestaña Historial en un OKR.
+        </p>
+        <div className="max-w-xs">
+          <Select
+            value={preferences.historyEventTypeFilter}
+            onValueChange={(v) => void updatePreferences({ historyEventTypeFilter: v })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {HISTORY_EVENT_FILTER_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <Button variant="outline" size="sm" onClick={() => void resetToDefault()} className="gap-2">
         <RotateCcw className="h-4 w-4" />
-        Reset to default
+        Restablecer todo a valores por defecto
       </Button>
     </div>
   );
@@ -253,7 +365,7 @@ export default function ProfilePage() {
           </div>
 
           <div className="border-t pt-6 mt-6">
-            <ProfileOKRPreferences />
+            <ProfileCustomizableViews />
           </div>
 
           <div className="border-t pt-6 mt-6">

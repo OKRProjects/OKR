@@ -58,7 +58,10 @@ export function OKRDetailView({
   const isViewOnly = effectiveRole === 'view_only';
   const permissions: OKRPermissions = getOKRPermissions(user ?? null, objective, keyResults);
   const { preferences, updatePreferences } = useViewPreferences();
-  const visibleTabIds = TAB_IDS.filter((id) => preferences.visibleTabs[id] !== false);
+  const visibleTabIdsRaw = TAB_IDS.filter((id) => preferences.visibleTabs[id] !== false);
+  // If prefs are corrupted or all hidden, fall back so the modal always works
+  const visibleTabIds =
+    visibleTabIdsRaw.length > 0 ? visibleTabIdsRaw : (['overview'] as (typeof TAB_IDS)[number][]);
   const defaultTab = visibleTabIds.includes(preferences.lastDetailTab as (typeof TAB_IDS)[number])
     ? preferences.lastDetailTab
     : visibleTabIds[0] ?? 'overview';
