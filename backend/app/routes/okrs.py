@@ -721,6 +721,25 @@ def _objective_with_score(db, doc):
     return out
 
 
+def _dependency_health_get(health_map, target_oid):
+    """Read float health (0–1) for a related objective id from a dependencyHealth subdocument."""
+    if not health_map or target_oid is None:
+        return None
+    key = str(target_oid)
+    if key in health_map:
+        try:
+            return float(health_map[key])
+        except (TypeError, ValueError):
+            return None
+    for k, val in health_map.items():
+        if str(k) == key:
+            try:
+                return float(val)
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
 @bp.route('/objectives/<objective_id>/dependencies', methods=['GET'])
 @require_auth
 def get_dependencies(objective_id, user_id):
@@ -734,14 +753,79 @@ def get_dependencies(objective_id, user_id):
         if not obj:
             return jsonify({'error': 'Objective not found'}), 404
         related_ids = obj.get('relatedObjectiveIds') or []
+        health = obj.get('dependencyHealth') or {}
         upstream = []
         for rid in related_ids:
             doc = db.objectives.find_one({'_id': rid})
             if doc:
-                upstream.append(_objective_with_score(db, doc))
+                row = _objective_with_score(db, doc)
+                lh = _dependency_health_get(health, rid)
+                if lh is not None:
+                    row['linkHealth'] = lh
+                upstream.append(row)
         downstream_docs = list(db.objectives.find({'relatedObjectiveIds': oid}))
-        downstream = [_objective_with_score(db, d) for d in downstream_docs]
+        downstream = []
+        for d in downstream_docs:
+            row = _objective_with_score(db, d)
+            child_health = d.get('dependencyHealth') or {}
+            lh = _dependency_health_get(child_health, oid)
+            if lh is not None:
+                row['linkHealth'] = lh
+            downstream.append(row)
         return jsonify({'upstream': upstream, 'downstream': downstream}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/objectives/<objective_id>/dependency-health', methods=['PATCH'])
+@require_auth
+def patch_dependency_health(objective_id, user_id):
+    """Set or clear subjective dependency health (0–1, one decimal) for a linked OKR."""
+    try:
+        oid = _parse_object_id(objective_id)
+        if oid is None:
+            return jsonify({'error': 'Invalid objective ID'}), 400
+        body = request.get_json() or {}
+        related_raw = body.get('relatedObjectiveId')
+        score = body.get('score')
+        related_oid = _parse_object_id(related_raw) if related_raw else None
+        if related_oid is None:
+            return jsonify({'error': 'relatedObjectiveId is required'}), 400
+        db = get_db()
+        owner = db.objectives.find_one({'_id': oid})
+        if not owner:
+            return jsonify({'error': 'Objective not found'}), 404
+        if get_user_role(db, user_id) == 'view_only' or not can_edit_objective(db, user_id, owner):
+            return jsonify({'error': 'Not allowed to edit this objective'}), 403
+        related_doc = db.objectives.find_one({'_id': related_oid})
+        if not related_doc:
+            return jsonify({'error': 'Related objective not found'}), 404
+        owner_related = list(owner.get('relatedObjectiveIds') or [])
+        child_related = list(related_doc.get('relatedObjectiveIds') or [])
+        linked = (related_oid in owner_related) or (oid in child_related)
+        if not linked:
+            return jsonify({'error': 'Objectives are not linked as dependencies'}), 400
+
+        now = _now()
+        field_key = 'dependencyHealth.%s' % str(related_oid)
+        if score is None:
+            db.objectives.update_one(
+                {'_id': oid},
+                {'$unset': {field_key: ''}, '$set': {'updatedAt': now}},
+            )
+        else:
+            try:
+                s = float(score)
+            except (TypeError, ValueError):
+                return jsonify({'error': 'score must be a number between 0 and 1'}), 400
+            s = max(0.0, min(1.0, s))
+            s = round(s * 10) / 10.0
+            db.objectives.update_one(
+                {'_id': oid},
+                {'$set': {field_key: s, 'updatedAt': now}},
+            )
+        updated = db.objectives.find_one({'_id': oid})
+        return jsonify(_serialize_doc(updated)), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

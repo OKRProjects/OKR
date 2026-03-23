@@ -68,9 +68,13 @@ export interface Objective {
   departmentId?: string | null;
   status?: ObjectiveStatus;
   relatedObjectiveIds?: string[];
+  /** Per linked OKR id: subjective 0–1 health of that dependency (0.1 steps), stored on this objective. */
+  dependencyHealth?: Record<string, number>;
   averageScore?: number | null;
   createdAt?: string;
   updatedAt?: string;
+  /** Present on objectives returned from the dependencies graph API. */
+  linkHealth?: number | null;
 }
 
 export interface ObjectiveTree extends Objective {
@@ -572,8 +576,27 @@ export const api = {
     return fetchWithAuth(`/api/objectives/${objectiveId}/workflow-history`);
   },
 
-  async getDependencies(objectiveId: string): Promise<{ upstream: Objective[]; downstream: Objective[] }> {
+  async getDependencies(objectiveId: string): Promise<{
+    upstream: Objective[];
+    downstream: Objective[];
+  }> {
     return fetchWithAuth(`/api/objectives/${objectiveId}/dependencies`);
+  },
+
+  /**
+   * Set or clear dependency health (0–1, one decimal) on `ownerObjectiveId` for the link to `relatedObjectiveId`.
+   * Upstream: owner is this OKR, related is the upstream objective.
+   * Downstream: owner is the child OKR, related is this OKR.
+   */
+  async patchDependencyHealth(
+    ownerObjectiveId: string,
+    relatedObjectiveId: string,
+    score: number | null
+  ): Promise<Objective> {
+    return fetchWithAuth(`/api/objectives/${ownerObjectiveId}/dependency-health`, {
+      method: 'PATCH',
+      body: JSON.stringify({ relatedObjectiveId, score }),
+    });
   },
 
   async submitObjective(objectiveId: string): Promise<Objective> {
