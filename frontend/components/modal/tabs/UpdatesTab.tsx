@@ -1,16 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { api, type Objective, type Comment, type WorkflowEvent } from '@/lib/api';
 import { MessageSquare, GitBranch, User, ChevronDown, ChevronUp } from 'lucide-react';
+import { toast } from 'sonner';
 
 const ACTIVITY_PREVIEW = 5;
 
 interface UpdatesTabProps {
   objective: Objective;
   readOnly?: boolean;
+  /** When >0 and this tab is active, periodically refetch comments and workflow (soft real-time). */
+  refreshIntervalMs?: number;
 }
 
 type FeedItem =
@@ -31,7 +34,7 @@ function displayActor(id: string) {
   return id.slice(0, 8) + '…';
 }
 
-export function UpdatesTab({ objective, readOnly }: UpdatesTabProps) {
+export function UpdatesTab({ objective, readOnly, refreshIntervalMs = 0 }: UpdatesTabProps) {
   const objectiveId = objective._id;
   const [comments, setComments] = useState<Comment[]>([]);
   const [workflow, setWorkflow] = useState<WorkflowEvent[]>([]);
@@ -40,26 +43,38 @@ export function UpdatesTab({ objective, readOnly }: UpdatesTabProps) {
   const [submitting, setSubmitting] = useState(false);
   const [showAllActivity, setShowAllActivity] = useState(false);
 
-  const load = async () => {
-    if (!objectiveId) return;
-    setLoading(true);
-    try {
-      const [c, w] = await Promise.all([
-        api.getComments(objectiveId),
-        api.getWorkflowHistory(objectiveId),
-      ]);
-      setComments(c);
-      setWorkflow(w);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const load = useCallback(
+    async (silent = false) => {
+      if (!objectiveId) return;
+      if (!silent) setLoading(true);
+      try {
+        const [c, w] = await Promise.all([
+          api.getComments(objectiveId),
+          api.getWorkflowHistory(objectiveId),
+        ]);
+        setComments(c);
+        setWorkflow(w);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [objectiveId]
+  );
 
   useEffect(() => {
-    load();
-  }, [objectiveId]);
+    load(false);
+  }, [load]);
+
+  useEffect(() => {
+    if (!objectiveId || refreshIntervalMs <= 0) return;
+    const id = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      load(true);
+    }, refreshIntervalMs);
+    return () => clearInterval(id);
+  }, [objectiveId, refreshIntervalMs, load]);
 
   const feed: FeedItem[] = [
     ...comments.map((x) => ({
@@ -92,8 +107,10 @@ export function UpdatesTab({ objective, readOnly }: UpdatesTabProps) {
       await api.createComment(objectiveId, newBody.trim());
       setNewBody('');
       await load();
+      toast.success('Comment posted');
     } catch (e) {
       console.error(e);
+      toast.error('Could not post comment');
     } finally {
       setSubmitting(false);
     }
@@ -105,7 +122,7 @@ export function UpdatesTab({ objective, readOnly }: UpdatesTabProps) {
         <CardHeader>
           <CardTitle>Updates</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Comments and status changes in chronological order.
+            Comments and status changes in chronological order. Activity refreshes periodically while this tab is open.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">

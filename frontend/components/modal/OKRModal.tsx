@@ -24,7 +24,7 @@ import {
 import { useFocusTrap, useRestoreFocusOnUnmount } from '@/lib/useFocusTrap';
 
 const VIEW_HEARTBEAT_MS = 28000;
-const LIVE_POLL_MS = 60000;
+const LIVE_POLL_MS = 45000;
 
 interface OKRModalProps {
   objectiveId: string;
@@ -111,6 +111,9 @@ export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
         setObjective(obj);
         setKeyResults(krs);
         setExternalUpdateBanner(true);
+        toast.message('OKR updated', {
+          description: 'Another viewer may have changed this objective. Review the banner or refresh.',
+        });
       } catch {
         // ignore poll errors
       }
@@ -304,17 +307,17 @@ export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
             </div>
           </div>
           {objective && (objective.status ?? '').toString().toLowerCase() !== 'rejected' && (
-            <div className="flex items-center gap-2 px-3 sm:px-4 pb-3">
+            <div className="flex flex-wrap items-start gap-x-2 gap-y-3 px-3 sm:px-4 pb-3 overflow-x-auto">
               {WORKFLOW_STEPS.map((step, index) => {
                 const currentIdx = getCurrentStepIndex(objective.status);
                 const isCompleted = index < currentIdx;
                 const isCurrent = index === currentIdx;
                 return (
                   <div key={step.status} className="flex items-center">
-                    <div className="flex flex-col items-center">
+                    <div className="flex flex-col items-center min-w-[56px]">
                       <div
                         className={cn(
-                          'w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium border-2 transition-colors',
+                          'w-10 h-10 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs font-medium border-2 transition-colors touch-manipulation',
                           isCompleted && 'bg-green-100 text-green-700 border-green-500 dark:bg-green-900/50 dark:border-green-600',
                           isCurrent && 'bg-blue-100 text-blue-700 border-blue-500 dark:bg-blue-900/50 dark:border-blue-600',
                           !isCompleted && !isCurrent && 'bg-muted text-muted-foreground border-border'

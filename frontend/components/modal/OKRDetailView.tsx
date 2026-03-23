@@ -205,7 +205,11 @@ export function OKRDetailView({
         )}
         {visibleTabIds.includes('updates') && (
           <TabsContent value="updates" className="mt-0">
-            <UpdatesTab objective={objective} readOnly={false} />
+            <UpdatesTab
+              objective={objective}
+              readOnly={isViewOnly}
+              refreshIntervalMs={activeTab === 'updates' ? 35000 : 0}
+            />
           </TabsContent>
         )}
         {visibleTabIds.includes('history') && (
