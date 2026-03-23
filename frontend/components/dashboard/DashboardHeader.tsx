@@ -1,8 +1,20 @@
 'use client';
 
 import { Target, TrendingUp, Calendar, CheckCircle2, Users, Briefcase, AlertCircle } from 'lucide-react';
+import { isDeptScopedLeaderRole } from '@/lib/roles';
 
-export type DashboardRole = 'view_only' | 'standard' | 'leader' | 'admin' | 'developer' | undefined;
+export type DashboardRole =
+  | 'view_only'
+  | 'standard'
+  | 'leader'
+  | 'admin'
+  | 'developer'
+  | 'manager'
+  | 'director'
+  | 'vp'
+  | 'executive'
+  | 'org_owner'
+  | undefined;
 
 interface DashboardHeaderProps {
   totalObjectives: number;
@@ -128,7 +140,7 @@ export function DashboardHeader({
         </span>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-        {role === 'standard' && myObjectivesCount !== undefined && (
+        {myObjectivesCount !== undefined && (
           <StatBlock
             label="My objectives"
             value={myObjectivesCount}
@@ -136,7 +148,7 @@ export function DashboardHeader({
             className="border-primary/30 bg-primary/5"
           />
         )}
-        {role === 'leader' && departmentStats && (
+        {isDeptScopedLeaderRole(role) && departmentStats && (
           <StatBlock
             label="Your department"
             value={departmentStats.count}

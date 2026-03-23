@@ -16,6 +16,7 @@ import {
   Plug,
   Eye,
   Users,
+  CircleUserRound,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from './ui/utils';
@@ -30,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { userCanCreateObjectives } from '@/lib/roles';
 
 interface SidebarProps {
   onNewObjective?: () => void;
@@ -48,10 +50,11 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
   const pathname = usePathname();
 
   const mainNavigation = [
-    { id: 'dashboard', name: 'Dashboard', icon: Home, href: '/dashboard' },
+    { id: 'my-okrs', name: 'My OKRs', icon: CircleUserRound, href: '/my-okrs' },
+    { id: 'organization', name: 'Organization', icon: Building2, href: '/divisions' },
+    { id: 'dashboard', name: 'Company dashboard', icon: Home, href: '/dashboard' },
     { id: 'objectives', name: 'Objectives', icon: Target, href: '/okrs' },
     { id: 'analytics', name: 'Analytics', icon: BarChart3, href: '/analytics' },
-    { id: 'divisions', name: 'Divisions', icon: Building2, href: '/divisions' },
   ];
 
   const bottomNavigation = [
@@ -67,7 +70,15 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
   const loadStats = async () => {
     try {
       const fiscalYear = new Date().getFullYear();
-      const isScoped = (role === 'leader' || role === 'view_only') && userForPermissions?.departmentId;
+      const isScoped =
+        ((role === 'leader' ||
+          role === 'manager' ||
+          role === 'director' ||
+          role === 'vp' ||
+          role === 'executive' ||
+          role === 'org_owner') ||
+          role === 'view_only') &&
+        userForPermissions?.departmentId;
       const departmentId = isScoped ? userForPermissions!.departmentId! : undefined;
       const data = await api.getObjectivesStats({ fiscalYear, departmentId: departmentId ?? undefined });
       setStats({
@@ -82,6 +93,9 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
   };
 
   const isActive = (href: string) => {
+    if (href === '/my-okrs') {
+      return pathname === '/my-okrs';
+    }
     if (href === '/dashboard') {
       return pathname === '/dashboard';
     }
@@ -137,8 +151,8 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
         )}
       </div>
 
-      {/* New Objective Button (hidden for view_only) */}
-      {role !== 'view_only' && (
+      {/* New objective: leadership roles only (managers and above) */}
+      {userCanCreateObjectives(role) && (
         <div className="p-3">
           <Button
             onClick={onNewObjective || (() => (window.location.href = '/okrs/new'))}
@@ -257,7 +271,23 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
           </p>
           <Select
             value={rolePreview ?? 'actual'}
-            onValueChange={(v) => setRolePreview(v === 'actual' ? null : (v as 'admin' | 'leader' | 'standard' | 'view_only' | 'developer'))}
+            onValueChange={(v) =>
+              setRolePreview(
+                v === 'actual'
+                  ? null
+                  : (v as
+                      | 'admin'
+                      | 'leader'
+                      | 'standard'
+                      | 'view_only'
+                      | 'developer'
+                      | 'manager'
+                      | 'director'
+                      | 'vp'
+                      | 'executive'
+                      | 'org_owner')
+              )
+            }
           >
             <SelectTrigger className="h-9 text-xs">
               <SelectValue placeholder="Actual (my real role)" />
@@ -265,8 +295,13 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
             <SelectContent>
               <SelectItem value="actual">Actual (my real role)</SelectItem>
               <SelectItem value="view_only">View only</SelectItem>
-              <SelectItem value="standard">Standard</SelectItem>
-              <SelectItem value="leader">Leader</SelectItem>
+              <SelectItem value="standard">Standard (IC)</SelectItem>
+              <SelectItem value="manager">Manager</SelectItem>
+              <SelectItem value="director">Director</SelectItem>
+              <SelectItem value="vp">VP</SelectItem>
+              <SelectItem value="executive">Executive</SelectItem>
+              <SelectItem value="org_owner">Org owner</SelectItem>
+              <SelectItem value="leader">Leader (legacy)</SelectItem>
               <SelectItem value="admin">Admin</SelectItem>
               <SelectItem value="developer">Developer</SelectItem>
             </SelectContent>

@@ -2,6 +2,7 @@ import type { Objective, KeyResult } from '@/lib/api';
 import type { DashboardFilters } from './FilterBar';
 import type { DashboardRole } from './DashboardHeader';
 import type { PresentationSlide, PresentationDeckStats } from '@/components/presentation/PresentationMode';
+import { isDeptScopedLeaderRole } from '@/lib/roles';
 
 /** User shape for visibility: sub (id) and optional departmentId, role */
 export interface UserForVisibility {
@@ -13,9 +14,10 @@ export interface UserForVisibility {
 /**
  * Returns objectives visible to the user based on role and team.
  * - view_only: objectives in user's department (if departmentId set); otherwise all (read-only).
- * - standard: objectives user owns OR where user owns at least one key result.
- * - leader: objectives in user's department.
+ * - standard: objectives user owns OR where user owns at least one key result (IC / contributor scope).
+ * - leader, manager, director, vp, executive, org_owner: objectives in user's department when departmentId is set; otherwise all.
  * - admin: all objectives.
+ * - developer: same as standard (narrow) when in DB as developer; callers often override via test role.
  */
 export function getVisibleObjectivesByRole(
   objectives: Objective[],
@@ -30,7 +32,7 @@ export function getVisibleObjectivesByRole(
 
   if (role === 'admin') return objectives;
 
-  if (role === 'leader') {
+  if (isDeptScopedLeaderRole(role)) {
     if (!userDept) return objectives;
     return objectives.filter(
       (o) => norm(o.departmentId) === norm(userDept)
@@ -53,6 +55,57 @@ export function getVisibleObjectivesByRole(
   }
 
   return objectives;
+}
+
+/**
+ * Objectives tied to the signed-in user: owned, key-result contributor, plus roll-up/down the parent/child chain.
+ */
+export function getPersonalObjectiveIds(
+  objectives: Objective[],
+  keyResultsByObjective: Record<string, KeyResult[]>,
+  userId: string
+): Set<string> {
+  const ids = new Set<string>();
+  const byId = new Map<string, Objective>();
+  for (const o of objectives) {
+    if (o._id) byId.set(String(o._id), o);
+  }
+  const norm = (s: string | undefined | null) => (s == null ? '' : String(s));
+
+  for (const o of objectives) {
+    if (!o._id) continue;
+    const oid = String(o._id);
+    if (norm(o.ownerId) === userId) ids.add(oid);
+    const krs = keyResultsByObjective[o._id] ?? [];
+    if (krs.some((kr) => norm(kr.ownerId) === userId)) ids.add(oid);
+  }
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const id of [...ids]) {
+      const o = byId.get(id);
+      const p = o?.parentObjectiveId;
+      if (p != null && p !== '' && !ids.has(String(p))) {
+        ids.add(String(p));
+        changed = true;
+      }
+    }
+  }
+  changed = true;
+  while (changed) {
+    changed = false;
+    for (const o of objectives) {
+      if (!o._id) continue;
+      const oid = String(o._id);
+      const pid = o.parentObjectiveId;
+      if (pid != null && pid !== '' && ids.has(String(pid)) && !ids.has(oid)) {
+        ids.add(oid);
+        changed = true;
+      }
+    }
+  }
+  return ids;
 }
 
 export function getDaysLeftInQuarter(): number {
@@ -176,6 +229,12 @@ export interface DashboardViewProps {
   onShowTutorial?: () => void;
   /** Current user display name for reference-style header */
   currentUserName?: string;
+  /** Override default "OKR Dashboard" title (e.g. My OKRs). */
+  dashboardTitle?: string;
+  /** Optional second line under the title. */
+  dashboardSubtitle?: string;
+  /** When true, empty state does not offer "Create objective" (viewers / personal scope with no items). */
+  hideEmptyStateCreate?: boolean;
   shouldShowTutorial?: boolean;
   onDismissTutorial?: () => void;
   showTutorial?: boolean;

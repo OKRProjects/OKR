@@ -16,7 +16,7 @@ export default function CallbackPage() {
       // We just need to wait a moment and then redirect to dashboard
       // The backend should have set the session cookie by now
       setTimeout(() => {
-        router.push('/dashboard');
+        router.push('/my-okrs');
       }, 1000);
     } else {
       // No code, redirect to home

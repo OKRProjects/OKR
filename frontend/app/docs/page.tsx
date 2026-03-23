@@ -5,6 +5,12 @@ import Link from 'next/link';
 
 const sections = [
   {
+    id: 'ownership',
+    title: 'Who owns OKRs',
+    href: '/docs#ownership',
+    summary: 'Managers and leadership own objectives; viewers and ICs browse. How roll-up and editing work.',
+  },
+  {
     id: 'okrs',
     title: 'OKRs overview',
     href: '/docs#okrs',
@@ -56,6 +62,28 @@ export default function DocsPage() {
         </nav>
 
         <div className="space-y-8 border-t pt-8">
+          <section id="ownership" className="scroll-mt-4">
+            <h2 className="text-xl font-semibold">Who owns OKRs</h2>
+            <p className="mt-2 text-muted-foreground">
+              <strong className="text-foreground">Ownership</strong> starts at the manager level (and above: director,
+              VP, executive, org owner). Those roles create objectives and are accountable for roll-up into higher-level
+              OKRs. <strong className="text-foreground">Individual contributors</strong> are usually{' '}
+              <strong className="text-foreground">viewers</strong> by default: they can read company OKRs but do not
+              create objectives unless an admin assigns a leadership role.
+            </p>
+            <p className="mt-2 text-muted-foreground">
+              <strong className="text-foreground">Who can edit</strong>: objective owners, admins, and department-scoped
+              leaders (manager/director/VP/etc. in the same department) can edit objectives and key results in line with
+              workflow rules. <strong className="text-foreground">Who can view</strong>: authenticated users in the
+              company domain generally have broad read access; sensitive initiatives should stay outside this system.
+            </p>
+            <p className="mt-2 text-muted-foreground">
+              <strong className="text-foreground">Roll-up</strong>: use parent/child objective links for formal hierarchy
+              (org → VP → director → manager). The Dependencies tab is for cross-team supporting links, not the same as
+              management roll-up.
+            </p>
+          </section>
+
           <section id="okrs" className="scroll-mt-4">
             <h2 className="text-xl font-semibold">OKRs overview</h2>
             <p className="mt-2 text-muted-foreground">

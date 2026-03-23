@@ -57,9 +57,15 @@ export function FullDashboardView(props: DashboardViewProps) {
     showTutorial,
     setShowTutorial,
     currentUserName,
+    dashboardTitle,
+    dashboardSubtitle,
+    hideEmptyStateCreate,
   } = props;
 
   const quarterLabel = `Q${Math.ceil((new Date().getMonth() + 1) / 3)} ${new Date().getFullYear()}`;
+  const headerTitle = dashboardTitle ?? 'OKR Dashboard';
+  const headerSub =
+    dashboardSubtitle ?? `${quarterLabel} • ${currentUserName ?? 'User'}`;
 
   return (
     <div className="min-h-full bg-gray-50">
@@ -103,8 +109,8 @@ export function FullDashboardView(props: DashboardViewProps) {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">OKR Dashboard</h1>
-              <p className="text-sm text-gray-600 mt-1">{quarterLabel} • {currentUserName ?? 'User'}</p>
+              <h1 className="text-2xl font-bold text-gray-900">{headerTitle}</h1>
+              <p className="text-sm text-gray-600 mt-1">{headerSub}</p>
             </div>
             <div className="flex items-center gap-2">
               {role === 'admin' && (
@@ -219,11 +225,23 @@ export function FullDashboardView(props: DashboardViewProps) {
           title={objectives.length === 0 ? 'No objectives yet' : 'No objectives match your filters'}
           description={
             objectives.length === 0
-              ? 'Create your first objective to get started. Use the OKRs page to add strategic, divisional, or tactical objectives.'
+              ? hideEmptyStateCreate
+                ? 'Nothing is linked to you yet (ownership or key results). Browse the organization view to explore company OKRs, or ask an admin to assign your role and department.'
+                : 'Create your first objective to get started. Use the OKRs page to add strategic, divisional, or tactical objectives.'
               : 'Try changing or clearing filters to see more objectives.'
           }
-          action={objectives.length === 0 ? { label: 'Create objective', onClick: () => (window.location.href = '/okrs/new') } : undefined}
-          secondaryLink={objectives.length === 0 ? { label: 'Learn more about OKRs', href: '/docs#okrs' } : undefined}
+          action={
+            objectives.length === 0 && !hideEmptyStateCreate
+              ? { label: 'Create objective', onClick: () => (window.location.href = '/okrs/new') }
+              : undefined
+          }
+          secondaryLink={
+            objectives.length === 0
+              ? hideEmptyStateCreate
+                ? { label: 'Open organization view', href: '/divisions' }
+                : { label: 'Learn more about OKRs', href: '/docs#okrs' }
+              : undefined
+          }
         />
       )}
       {((showTutorial ?? false) || (shouldShowTutorial && filteredAndSorted.length > 0)) && onDismissTutorial && (

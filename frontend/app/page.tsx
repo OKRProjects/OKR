@@ -63,7 +63,7 @@ export default function Home() {
       setUser(loggedInUser);
       // Redirect to Dashboard (primary destination)
       if (typeof window !== 'undefined') {
-        window.location.href = '/dashboard';
+        window.location.href = '/my-okrs';
       }
     } catch (error: any) {
       const errorMessage = error?.message || 'Login failed';
@@ -83,7 +83,7 @@ export default function Home() {
       setUser(newUser);
       // Redirect to Dashboard (primary destination)
       if (typeof window !== 'undefined') {
-        window.location.href = '/dashboard';
+        window.location.href = '/my-okrs';
       }
     } catch (error: any) {
       const errorMessage = error?.message || 'Registration failed';
@@ -100,7 +100,8 @@ export default function Home() {
           OKR Tracker
         </h1>
         <p className="text-lg text-slate-600 mb-8">
-          Align strategy to execution. Track objectives and key results across your organization.
+          Leadership-owned OKRs with org roll-up: managers and above create and own objectives; most people browse and
+          follow progress across the company.
         </p>
         
         {error && (
@@ -120,10 +121,10 @@ export default function Home() {
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Link
-                href="/dashboard"
+                href="/my-okrs"
                 className="inline-block bg-slate-800 text-white px-6 py-3 rounded-lg font-semibold hover:bg-slate-900 transition-colors"
               >
-                Go to Dashboard
+                Go to My OKRs
               </Link>
               <Link
                 href="/profile"

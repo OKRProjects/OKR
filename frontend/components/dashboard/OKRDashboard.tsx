@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
+import { usePathname } from 'next/navigation';
 import { api, Objective, KeyResult } from '@/lib/api';
 import {
   type PresentationSlide,
@@ -12,10 +13,19 @@ import { defaultFilters, type DashboardFilters } from './FilterBar';
 import { useFirstTimeTutorial } from '@/lib/tutorial';
 import { useViewPreferences } from '@/lib/useViewPreferences';
 import { useViewRole } from '@/lib/ViewRoleContext';
-import { filterObjective, getDaysLeftInQuarter, getVisibleObjectivesByRole, type DashboardViewProps } from './dashboardShared';
+import {
+  filterObjective,
+  getDaysLeftInQuarter,
+  getPersonalObjectiveIds,
+  getVisibleObjectivesByRole,
+  type DashboardViewProps,
+} from './dashboardShared';
+import { isDeptScopedLeaderRole, userCanCreateObjectives } from '@/lib/roles';
 import { FullDashboardView } from './FullDashboardView';
 
 export function OKRDashboard() {
+  const pathname = usePathname();
+  const isPersonalHome = pathname === '/my-okrs';
   const { userForPermissions } = useViewRole();
   const user = userForPermissions;
   const role = user?.role;
@@ -55,7 +65,7 @@ export function OKRDashboard() {
     async function load() {
       try {
         const isScopedByDept =
-          (role === 'leader' || role === 'view_only') && user?.departmentId;
+          (isDeptScopedLeaderRole(role) || role === 'view_only') && user?.departmentId;
         const objs = await api.getObjectives({
           fiscalYear,
           ...(isScopedByDept ? { departmentId: user!.departmentId! } : {}),
@@ -104,9 +114,19 @@ export function OKRDashboard() {
     [objectives, keyResultsByObjective, user, role]
   );
 
+  const personalIds = useMemo(() => {
+    if (!isPersonalHome || !user?.sub) return null;
+    return getPersonalObjectiveIds(visibleObjectives, keyResultsByObjective, user.sub);
+  }, [isPersonalHome, user?.sub, visibleObjectives, keyResultsByObjective]);
+
+  const scopeObjectives = useMemo(() => {
+    if (!personalIds) return visibleObjectives;
+    return visibleObjectives.filter((o) => o._id && personalIds.has(String(o._id)));
+  }, [visibleObjectives, personalIds]);
+
   const filtered = useMemo(() => {
-    return visibleObjectives.filter((o) => filterObjective(o, scoreByObjectiveId, filters));
-  }, [visibleObjectives, scoreByObjectiveId, filters]);
+    return scopeObjectives.filter((o) => filterObjective(o, scoreByObjectiveId, filters));
+  }, [scopeObjectives, scoreByObjectiveId, filters]);
 
   const filteredAndSorted = useMemo(() => {
     let list = [...filtered];
@@ -162,13 +182,14 @@ export function OKRDashboard() {
   );
 
   const needsReviewObjectives = useMemo(() => {
-    if (role !== 'leader' || !user?.departmentId) return [];
-    return visibleObjectives.filter(
+    if (!isDeptScopedLeaderRole(role) || !user?.departmentId) return [];
+    const pool = isPersonalHome ? scopeObjectives : visibleObjectives;
+    return pool.filter(
       (o) =>
         (o.status ?? 'draft') === 'in_review' &&
         (o.departmentId === user.departmentId || String(o.departmentId) === user.departmentId)
     );
-  }, [visibleObjectives, role, user?.departmentId]);
+  }, [visibleObjectives, scopeObjectives, isPersonalHome, role, user?.departmentId]);
 
   const myObjectivesCount = useMemo(() => {
     if (!user?.sub) return 0;
@@ -176,13 +197,12 @@ export function OKRDashboard() {
   }, [visibleObjectives, user?.sub]);
 
   const myWorkObjectives = useMemo(() => {
-    if (role !== 'standard' && role !== 'developer') return [];
     if (!user?.sub) return [];
     return filteredAndSorted.filter((o) => o.ownerId === user.sub);
-  }, [role, user?.sub, filteredAndSorted]);
+  }, [user?.sub, filteredAndSorted]);
 
   const departmentStats = useMemo(() => {
-    if (role !== 'leader' || !user?.departmentId) return null;
+    if (!isDeptScopedLeaderRole(role) || !user?.departmentId) return null;
     const dept = visibleObjectives.filter(
       (o) =>
         o.departmentId === user.departmentId || String(o.departmentId) === user.departmentId
@@ -412,17 +432,22 @@ export function OKRDashboard() {
     }
   }, [objectiveIdsFromPresentation]);
 
+  const displayObjectives = useMemo(
+    () => (isPersonalHome ? scopeObjectives : visibleObjectives),
+    [isPersonalHome, scopeObjectives, visibleObjectives]
+  );
+
   const divisions = useMemo(() => {
     const set = new Set<string>();
-    visibleObjectives.forEach((o) => {
+    displayObjectives.forEach((o) => {
       if (o.division) set.add(o.division);
     });
     return Array.from(set).sort();
-  }, [visibleObjectives]);
+  }, [displayObjectives]);
 
   const stats = useMemo(() => {
-    const total = visibleObjectives.length;
-    const allScores = visibleObjectives
+    const total = displayObjectives.length;
+    const allScores = displayObjectives
       .map((o) => (o._id ? scoreByObjectiveId[o._id] : undefined))
       .filter((s): s is number => s !== undefined);
     const avg =
@@ -435,7 +460,7 @@ export function OKRDashboard() {
       onTrackPercent: onTrackPct,
       daysLeftInQuarter: getDaysLeftInQuarter(),
     };
-  }, [visibleObjectives, scoreByObjectiveId]);
+  }, [displayObjectives, scoreByObjectiveId]);
 
   if (loading) {
     return (
@@ -459,7 +484,7 @@ export function OKRDashboard() {
 
   const baseProps: DashboardViewProps = {
     role: role as DashboardViewProps['role'],
-    objectives: visibleObjectives,
+    objectives: displayObjectives,
     strategic,
     divisional,
     tactical,
@@ -485,9 +510,9 @@ export function OKRDashboard() {
     generatePresentationStory,
     presentationNarrative,
     setPresentationNarrative,
-    needsReviewObjectives: role === 'leader' ? needsReviewObjectives : undefined,
-    myObjectivesCount: role === 'standard' ? myObjectivesCount : undefined,
-    myWorkObjectives: role === 'standard' ? myWorkObjectives : undefined,
+    needsReviewObjectives: isDeptScopedLeaderRole(role) ? needsReviewObjectives : undefined,
+    myObjectivesCount,
+    myWorkObjectives,
     departmentStats: departmentStats ?? undefined,
     viewPreferences,
     onExport: role !== 'view_only' ? handleExport : undefined,
@@ -503,6 +528,11 @@ export function OKRDashboard() {
     showTutorial,
     setShowTutorial,
     currentUserName: user?.name ?? user?.email ?? 'User',
+    dashboardTitle: isPersonalHome ? 'My OKRs' : undefined,
+    dashboardSubtitle: isPersonalHome
+      ? 'Objectives you own or contribute to, plus roll-up in the hierarchy'
+      : undefined,
+    hideEmptyStateCreate: isPersonalHome && !userCanCreateObjectives(role),
   };
 
   // Use admin (FullDashboardView) layout for all roles so design is consistent; filtering handles role-specific data.

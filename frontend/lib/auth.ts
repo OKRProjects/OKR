@@ -8,7 +8,7 @@ export interface User {
   email: string;
   picture?: string;
   nickname?: string;
-  /** From backend users collection: admin | leader | standard | view_only | developer (default when no role) */
+  /** From backend users collection: admin, leadership (manager+), standard (IC), view_only, developer, etc. */
   role?: string;
   departmentId?: string;
 }

@@ -166,7 +166,7 @@ export default function ObjectiveDetailPage() {
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" asChild>
-            <Link href="/dashboard">Back to Dashboard</Link>
+            <Link href="/my-okrs">Back to My OKRs</Link>
           </Button>
           <Button variant="outline" asChild>
             <Link href="/okrs">Back to OKRs</Link>
