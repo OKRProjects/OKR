@@ -127,10 +127,14 @@ export function WorkflowActions({
 
   return (
     <>
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="text-sm text-muted-foreground">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between flex-wrap">
+        <div className="text-sm text-muted-foreground space-y-1 min-w-0 flex-1">
+          <p className="font-medium text-foreground capitalize">Status: {status.replace(/_/g, ' ')}</p>
           {!hasAnyWorkflowPermission && (
-            <span>You do not have permission to change the workflow state.</span>
+            <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs leading-relaxed">
+              You do not have permission to change workflow from this state. Owners can submit or resubmit; department
+              leaders and admins can approve or reject. Ask an admin if your role should include workflow actions.
+            </p>
           )}
         </div>
         <div className="flex flex-wrap gap-2">
