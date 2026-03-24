@@ -67,6 +67,8 @@ def seed_data():
             "fiscalYear": fiscal_year,
             "quarter": 1,
             "timeline": "annual",
+            "nextReviewDate": (now + timedelta(days=14)).date().isoformat(),
+            "latestUpdateSummary": "Q1 review: enterprise pipeline strong; shifting one KR to account for longer security review.",
         },
         {
             "title": "Double Annual Recurring Revenue",
@@ -93,6 +95,8 @@ def seed_data():
             "fiscalYear": fiscal_year,
             "quarter": 1,
             "timeline": "annual",
+            "nextReviewDate": (now + timedelta(days=7)).date().isoformat(),
+            "latestUpdateSummary": "Submitted for review: architecture sign-off complete; awaiting leadership approval on launch scope.",
         },
         {
             "title": "Expand Enterprise Sales Pipeline",
@@ -252,13 +256,15 @@ def seed_data():
     ])
     print("Created comments")
 
-    # --- Attachments (reference)
+    # --- Attachments (reachable demo URLs so preview/download work without Cloudinary)
+    sample_pdf = "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+    sample_png = "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Cat03.jpg/320px-Cat03.jpg"
     att_docs = [
-        {"objectiveId": obj_ids[0], "fileName": "Q1_Strategy_Deck.pdf", "fileSize": 2458624, "fileType": "application/pdf", "url": "#", "uploadedBy": "auth0|demo_u1", "uploadedAt": now - timedelta(days=5)},
-        {"objectiveId": obj_ids[0], "fileName": "Market_Analysis.xlsx", "fileSize": 1245678, "fileType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "url": "#", "uploadedBy": "auth0|demo_u1", "uploadedAt": now - timedelta(days=7)},
+        {"objectiveId": obj_ids[0], "fileName": "Q1_Strategy_Deck.pdf", "fileSize": 2458624, "fileType": "application/pdf", "url": sample_pdf, "uploadedBy": "auth0|demo_u1", "uploadedAt": now - timedelta(days=5)},
+        {"objectiveId": obj_ids[0], "fileName": "Reference_Screenshot.png", "fileSize": 1245678, "fileType": "image/png", "url": sample_png, "uploadedBy": "auth0|demo_u1", "uploadedAt": now - timedelta(days=7)},
     ]
     if kr_ids_by_obj[2]:
-        att_docs.append({"objectiveId": obj_ids[2], "keyResultId": kr_ids_by_obj[2][0], "fileName": "Architecture_Diagram.png", "fileSize": 845632, "fileType": "image/png", "url": "#", "uploadedBy": "auth0|demo_u4", "uploadedAt": now - timedelta(days=2)})
+        att_docs.append({"objectiveId": obj_ids[2], "keyResultId": kr_ids_by_obj[2][0], "fileName": "Architecture_Diagram.png", "fileSize": 845632, "fileType": "image/png", "url": sample_png, "uploadedBy": "auth0|demo_u4", "uploadedAt": now - timedelta(days=2)})
     db.attachments.insert_many(att_docs)
     print("Created attachments")
 

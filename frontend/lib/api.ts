@@ -73,6 +73,10 @@ export interface Objective {
   averageScore?: number | null;
   createdAt?: string;
   updatedAt?: string;
+  /** ISO date (YYYY-MM-DD) for next leadership review / check-in. */
+  nextReviewDate?: string | null;
+  /** Short narrative for slides and overview; persisted on the objective. */
+  latestUpdateSummary?: string | null;
   /** Present on objectives returned from the dependencies graph API. */
   linkHealth?: number | null;
 }

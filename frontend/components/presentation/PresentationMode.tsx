@@ -60,6 +60,8 @@ export interface ObjectiveSlide {
   objective: Objective;
   score: number | null;
   keyResults: KeyResult[];
+  /** Leadership narrative: persisted on objective, else derived from KR notes / description. */
+  latestUpdateSummary?: string;
   navigation?: ObjectiveSlideNavigation;
 }
 
@@ -412,6 +414,16 @@ export function PresentationMode({
                     )}
                   </div>
                   <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold leading-tight">{o.title}</h1>
+                  {slide.latestUpdateSummary?.trim() ? (
+                    <div className="rounded-xl border bg-muted/40 px-4 py-3 text-left">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                        Latest update
+                      </p>
+                      <p className="text-sm sm:text-base leading-relaxed whitespace-pre-wrap">
+                        {slide.latestUpdateSummary.trim()}
+                      </p>
+                    </div>
+                  ) : null}
                   <div className="grid sm:grid-cols-2 gap-2 text-base sm:text-lg">
                     <p>
                       <span className="text-muted-foreground font-medium">Department </span>

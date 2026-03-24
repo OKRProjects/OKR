@@ -132,8 +132,26 @@ export function HistoryTab({ objective, eventTypeFilter = 'all', onEventTypeFilt
             <div>
               <CardTitle>Workflow History</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                Timeline of status changes with timestamps, actors, and reasons.
+                Timeline of status changes with timestamps, actors, and reasons. Pair this with the Overview tab for
+                next review date and latest update narrative.
               </p>
+              {objective.nextReviewDate && (
+                <p className="mt-3 text-sm rounded-md border bg-muted/40 px-3 py-2">
+                  <span className="font-medium text-foreground">Scheduled next review: </span>
+                  {(() => {
+                    try {
+                      return new Date(objective.nextReviewDate).toLocaleDateString(undefined, {
+                        weekday: 'short',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      });
+                    } catch {
+                      return objective.nextReviewDate;
+                    }
+                  })()}
+                </p>
+              )}
             </div>
             {filtered.length > 0 && (
               <Button variant="outline" size="sm" onClick={handleExportCSV} className="shrink-0">

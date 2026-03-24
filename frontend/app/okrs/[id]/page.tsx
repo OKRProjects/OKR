@@ -29,7 +29,15 @@ export default function ObjectiveDetailPage() {
   const searchParams = useSearchParams();
   const id = params.id as string;
   const tabFromUrl = searchParams.get('tab');
-  const initialTab = tabFromUrl === 'progress' || tabFromUrl === 'updates' ? tabFromUrl : undefined;
+
+  const persistDetailTabToUrl = useCallback(
+    (tab: 'overview' | 'progress' | 'updates' | 'history' | 'dependencies' | 'files') => {
+      const q = new URLSearchParams(searchParams.toString());
+      q.set('tab', tab);
+      router.replace(`/okrs/${id}?${q.toString()}`, { scroll: false });
+    },
+    [router, id, searchParams]
+  );
 
   useEffect(() => {
     loadUser();
@@ -273,7 +281,8 @@ export default function ObjectiveDetailPage() {
           user={userForPermissions ?? user}
           effectiveRole={effectiveRole}
           viewerCount={viewerCount}
-          initialTab={initialTab}
+          urlTab={tabFromUrl}
+          onPersistTabToUrl={persistDetailTabToUrl}
         />
       </div>
     </AppLayout>

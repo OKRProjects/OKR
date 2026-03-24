@@ -70,6 +70,12 @@ function extensionLabel(fileName: string): string {
   return (m?.[1] ?? '?').slice(0, 4).toUpperCase();
 }
 
+/** Seed / legacy rows used "#" or non-HTTP URLs; real uploads use http(s) from storage. */
+export function isPlaceholderAttachmentUrl(url: string | undefined): boolean {
+  const u = (url ?? '').trim();
+  return u === '' || u === '#' || u === '/#' || !/^https?:\/\//i.test(u);
+}
+
 function validateClientFile(file: File): string | null {
   if (file.size <= 0) return `${file.name}: file is empty`;
   if (file.size > MAX_ATTACHMENT_BYTES) {
@@ -370,12 +376,17 @@ export function FilesTab({ objective, keyResults, readOnly }: FilesTabProps) {
                       onClick={() => setPreview(att)}
                       aria-label={`Preview ${att.fileName}`}
                     >
-                      {isImageType(att.fileType) ? (
+                      {isImageType(att.fileType) && !isPlaceholderAttachmentUrl(att.url) ? (
                         <img
                           src={att.url}
                           alt=""
                           className="w-full h-full object-cover"
                         />
+                      ) : isImageType(att.fileType) && isPlaceholderAttachmentUrl(att.url) ? (
+                        <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground text-xs p-4 text-center">
+                          <File className="h-10 w-10 opacity-50" />
+                          No preview URL — re-upload with Cloudinary configured
+                        </div>
                       ) : (
                         <div
                           className="flex flex-col items-center justify-center gap-2 text-muted-foreground w-full h-full"
@@ -404,6 +415,12 @@ export function FilesTab({ objective, keyResults, readOnly }: FilesTabProps) {
                           ? `Key result: ${keyResults.find((k) => k._id === att.keyResultId)?.title ?? att.keyResultId}`
                           : 'Objective-level file'}
                       </p>
+                      {isPlaceholderAttachmentUrl(att.url) && (
+                        <p className="text-xs text-amber-800 dark:text-amber-200 bg-amber-500/10 rounded px-2 py-1 mt-2">
+                          Placeholder file record — download/preview need a real storage URL. New uploads use your
+                          configured file storage.
+                        </p>
+                      )}
                       <div className="flex gap-2 mt-auto pt-3">
                         <Button
                           variant="ghost"

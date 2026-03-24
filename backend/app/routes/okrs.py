@@ -551,7 +551,10 @@ def update_objective(objective_id, user_id):
             return jsonify({'error': 'Not allowed to edit this objective'}), 403
 
         update = {'updatedAt': _now()}
-        for key in ('title', 'description', 'ownerId', 'level', 'timeline', 'fiscalYear', 'quarter', 'division', 'status', 'departmentId'):
+        for key in (
+            'title', 'description', 'ownerId', 'level', 'timeline', 'fiscalYear', 'quarter', 'division', 'status',
+            'departmentId', 'nextReviewDate', 'latestUpdateSummary',
+        ):
             if key in data:
                 update[key] = data[key]
         if 'relatedObjectiveIds' in data:

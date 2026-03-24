@@ -43,6 +43,10 @@ interface OKRDetailViewProps {
   viewerCount?: number;
   /** When set (e.g. from ?tab=progress), open this tab on mount. */
   initialTab?: (typeof TAB_IDS)[number];
+  /** Raw `tab` query value on `/okrs/[id]` — keeps detail in sync with the URL (durable deep links). */
+  urlTab?: string | null;
+  /** Persist active tab to the URL (e.g. router.replace with ?tab=). */
+  onPersistTabToUrl?: (tab: (typeof TAB_IDS)[number]) => void;
 }
 
 export function OKRDetailView({
@@ -54,6 +58,8 @@ export function OKRDetailView({
   effectiveRole,
   viewerCount,
   initialTab: initialTabProp,
+  urlTab,
+  onPersistTabToUrl,
 }: OKRDetailViewProps) {
   const isViewOnly = effectiveRole === 'view_only';
   const permissions: OKRPermissions = getOKRPermissions(user ?? null, objective, keyResults);
@@ -65,26 +71,49 @@ export function OKRDetailView({
   const defaultTab = visibleTabIds.includes(preferences.lastDetailTab as (typeof TAB_IDS)[number])
     ? preferences.lastDetailTab
     : visibleTabIds[0] ?? 'overview';
+  const urlTabValid =
+    urlTab &&
+    (TAB_IDS as readonly string[]).includes(urlTab) &&
+    visibleTabIds.includes(urlTab as (typeof TAB_IDS)[number])
+      ? (urlTab as (typeof TAB_IDS)[number])
+      : null;
   const tabToUse =
-    initialTabProp && visibleTabIds.includes(initialTabProp) ? initialTabProp : defaultTab;
+    urlTabValid ??
+    (initialTabProp && visibleTabIds.includes(initialTabProp) ? initialTabProp : defaultTab);
   const [activeTab, setActiveTab] = useState<(typeof TAB_IDS)[number]>(tabToUse as (typeof TAB_IDS)[number]);
   const touchStartX = useRef<number | null>(null);
+
+  // Browser back/forward: follow ?tab=
+  useEffect(() => {
+    if (urlTabValid) setActiveTab(urlTabValid);
+  }, [urlTabValid]);
 
   // When visible tabs change and current tab is hidden, switch to first visible
   useEffect(() => {
     if (visibleTabIds.length && !visibleTabIds.includes(activeTab)) {
-      setActiveTab((visibleTabIds[0] ?? 'overview') as (typeof TAB_IDS)[number]);
+      const next = (visibleTabIds[0] ?? 'overview') as (typeof TAB_IDS)[number];
+      setActiveTab(next);
+      onPersistTabToUrl?.(next);
     }
-  }, [visibleTabIds.join(','), activeTab]);
+  }, [visibleTabIds.join(','), activeTab, onPersistTabToUrl]);
 
-  // Restore last-selected tab from preferences when they first load (run once when defaultTab becomes available). Skip when initialTab from URL is provided.
+  // Restore last-selected tab from preferences when they first load (run once when defaultTab becomes available). Skip when URL or initial tab is provided.
   const appliedDefaultRef = useRef(false);
   useEffect(() => {
-    if (initialTabProp) return;
+    if (urlTabValid || initialTabProp) return;
     if (appliedDefaultRef.current || !defaultTab || !visibleTabIds.includes(defaultTab as (typeof TAB_IDS)[number])) return;
     appliedDefaultRef.current = true;
     setActiveTab(defaultTab as (typeof TAB_IDS)[number]);
-  }, [defaultTab, visibleTabIds, initialTabProp]);
+  }, [defaultTab, visibleTabIds, initialTabProp, urlTabValid]);
+
+  const persistTab = useCallback(
+    (tab: (typeof TAB_IDS)[number]) => {
+      setActiveTab(tab);
+      updatePreferences({ lastDetailTab: tab });
+      onPersistTabToUrl?.(tab);
+    },
+    [updatePreferences, onPersistTabToUrl]
+  );
 
   // Keyboard shortcuts Alt+1–6 for tabs
   useEffect(() => {
@@ -94,22 +123,20 @@ export function OKRDetailView({
         if (visibleTabIds[index]) {
           e.preventDefault();
           const tab = visibleTabIds[index];
-          setActiveTab(tab);
-          updatePreferences({ lastDetailTab: tab });
+          persistTab(tab);
         }
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [visibleTabIds, updatePreferences]);
+  }, [visibleTabIds, persistTab]);
 
   const handleTabChange = useCallback(
     (value: string) => {
       const tab = value as (typeof TAB_IDS)[number];
-      setActiveTab(tab);
-      updatePreferences({ lastDetailTab: tab });
+      persistTab(tab);
     },
-    [updatePreferences]
+    [persistTab]
   );
 
   const goToTab = useCallback(
@@ -118,11 +145,14 @@ export function OKRDetailView({
         const idx = visibleTabIds.indexOf(current);
         const next = Math.max(0, Math.min(visibleTabIds.length - 1, idx + dir));
         const nextTab = visibleTabIds[next];
-        if (nextTab) updatePreferences({ lastDetailTab: nextTab });
+        if (nextTab) {
+          updatePreferences({ lastDetailTab: nextTab });
+          onPersistTabToUrl?.(nextTab);
+        }
         return nextTab ?? current;
       });
     },
-    [visibleTabIds, updatePreferences]
+    [visibleTabIds, updatePreferences, onPersistTabToUrl]
   );
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -188,7 +218,7 @@ export function OKRDetailView({
               objective={objective}
               keyResults={keyResults}
               onObjectiveUpdate={onObjectiveUpdate}
-              readOnly={isViewOnly}
+              readOnly={isViewOnly || !permissions.canEditObjective}
             />
           </TabsContent>
         )}

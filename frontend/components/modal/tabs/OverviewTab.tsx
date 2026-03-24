@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { ScoreRing, getScoreStatusLabel } from '@/components/shared/ScoreRing';
 import { StatusPill } from '@/components/shared/StatusPill';
 import { Building2, User, Target, Calendar, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
-import type { Objective, KeyResult } from '@/lib/api';
+import { api, type Objective, type KeyResult } from '@/lib/api';
+import { toast } from 'sonner';
 
 const KEY_RESULTS_PREVIEW = 3;
 
@@ -36,6 +37,14 @@ export function OverviewTab({
 }: OverviewTabProps) {
   const [showMore, setShowMore] = useState(false);
   const [showMoreKrs, setShowMoreKrs] = useState(false);
+  const [nextReviewDate, setNextReviewDate] = useState(objective.nextReviewDate?.slice(0, 10) ?? '');
+  const [latestUpdateSummary, setLatestUpdateSummary] = useState(objective.latestUpdateSummary ?? '');
+  const [savingMeta, setSavingMeta] = useState(false);
+
+  useEffect(() => {
+    setNextReviewDate(objective.nextReviewDate?.slice(0, 10) ?? '');
+    setLatestUpdateSummary(objective.latestUpdateSummary ?? '');
+  }, [objective._id, objective.nextReviewDate, objective.latestUpdateSummary]);
   const avgScore =
     keyResults.length > 0
       ? keyResults.reduce((s, kr) => s + (kr.score ?? 0), 0) / keyResults.length
@@ -104,6 +113,73 @@ export function OverviewTab({
             </div>
           </div>
         </CardHeader>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Review cadence &amp; latest update</CardTitle>
+          <p className="text-sm text-muted-foreground mt-1">
+            Next review date supports scheduling; latest update is shown on the objective page, in exports, and in
+            presentation slides.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <label htmlFor="okr-next-review" className="text-sm font-medium text-muted-foreground">
+              Next review date
+            </label>
+            <input
+              id="okr-next-review"
+              type="date"
+              className="mt-1 block w-full max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[44px]"
+              value={nextReviewDate}
+              onChange={(e) => setNextReviewDate(e.target.value)}
+              disabled={readOnly || savingMeta}
+            />
+          </div>
+          <div>
+            <label htmlFor="okr-latest-update" className="text-sm font-medium text-muted-foreground">
+              Latest update (for leadership / slides)
+            </label>
+            <textarea
+              id="okr-latest-update"
+              rows={4}
+              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              placeholder="Concise context for the current review cycle…"
+              value={latestUpdateSummary}
+              onChange={(e) => setLatestUpdateSummary(e.target.value)}
+              disabled={readOnly || savingMeta}
+              maxLength={2000}
+            />
+            <p className="text-xs text-muted-foreground mt-1">{latestUpdateSummary.length}/2000</p>
+          </div>
+          {!readOnly && objective._id && (
+            <Button
+              type="button"
+              size="sm"
+              className="min-h-[44px] touch-manipulation"
+              disabled={savingMeta}
+              onClick={async () => {
+                if (!objective._id) return;
+                setSavingMeta(true);
+                try {
+                  const updated = await api.updateObjective(objective._id, {
+                    nextReviewDate: nextReviewDate.trim() || null,
+                    latestUpdateSummary: latestUpdateSummary.trim() || null,
+                  });
+                  onObjectiveUpdate(updated);
+                  toast.success('Review fields saved');
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : 'Save failed');
+                } finally {
+                  setSavingMeta(false);
+                }
+              }}
+            >
+              {savingMeta ? 'Saving…' : 'Save review fields'}
+            </Button>
+          )}
+        </CardContent>
       </Card>
 
       <div className="flex flex-wrap gap-4">

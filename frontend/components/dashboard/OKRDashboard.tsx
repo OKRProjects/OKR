@@ -23,6 +23,23 @@ import {
 import { isDeptScopedLeaderRole, userCanCreateObjectives } from '@/lib/roles';
 import { FullDashboardView } from './FullDashboardView';
 
+/** Text for presentation slides: saved leadership update, else newest KR note, else description. */
+function presentationLatestSummary(objective: Objective, krs: KeyResult[]): string {
+  const persisted = objective.latestUpdateSummary?.trim();
+  if (persisted) return persisted.slice(0, 500);
+  const noteEntries = krs.flatMap((kr) =>
+    (Array.isArray(kr.notes) ? kr.notes : []).map((n) => ({
+      text: (n.text ?? '').trim(),
+      t: n.createdAt ? new Date(n.createdAt).getTime() : 0,
+    }))
+  );
+  noteEntries.sort((a, b) => b.t - a.t);
+  if (noteEntries[0]?.text) return noteEntries[0].text.slice(0, 500);
+  const desc = (objective.description ?? '').trim();
+  if (desc) return desc.slice(0, 400);
+  return '';
+}
+
 export function OKRDashboard() {
   const pathname = usePathname();
   const isPersonalHome = pathname === '/my-okrs';
@@ -282,11 +299,13 @@ export function OKRDashboard() {
               ],
             }
           : undefined;
+      const krs = oid ? (keyResultsByObjective[oid] ?? []) : [];
       return {
         type: 'objective' as const,
         objective,
         score: oid ? (scoreByObjectiveId[oid] ?? null) : null,
-        keyResults: oid ? (keyResultsByObjective[oid] ?? []) : [],
+        keyResults: krs,
+        latestUpdateSummary: presentationLatestSummary(objective, krs),
         navigation,
       };
     });
