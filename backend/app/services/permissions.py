@@ -64,6 +64,40 @@ def can_create_objective(db, user_id: str) -> bool:
     return get_user_role(db, user_id) in OKR_LEADERSHIP_ROLES
 
 
+def can_view_objective(db, user_id: str, objective: dict) -> bool:
+    """True if user can view this objective. Admin always; otherwise owner or same department."""
+    role = get_user_role(db, user_id)
+    if role == ROLE_ADMIN:
+        return True
+    if not objective:
+        return False
+    if objective.get('ownerId') == user_id:
+        return True
+    obj_dept = objective.get('departmentId')
+    user_dept = get_user_department_id(db, user_id)
+    if obj_dept and user_dept and str(obj_dept) == user_dept:
+        return True
+    # If objective has no department, allow only leadership roles to view it (keeps org-level OKRs restricted).
+    if not obj_dept and role in OKR_LEADERSHIP_ROLES:
+        return True
+    return False
+
+
+def build_objective_visibility_query(db, user_id: str) -> dict:
+    """Mongo query fragment limiting which objectives user can see (for list endpoints)."""
+    role = get_user_role(db, user_id)
+    if role == ROLE_ADMIN:
+        return {}
+    user_dept = get_user_department_id(db, user_id)
+    clauses = [{'ownerId': user_id}]
+    if user_dept:
+        clauses.append({'departmentId': user_dept})
+    if role in OKR_LEADERSHIP_ROLES:
+        clauses.append({'departmentId': None})
+        clauses.append({'departmentId': {'$exists': False}})
+    return {'$or': clauses} if clauses else {}
+
+
 def can_edit_objective(db, user_id: str, objective: dict) -> bool:
     """True if user can edit this objective (and its KRs). Owner, dept-scoped leader of same dept, or admin."""
     role = get_user_role(db, user_id)

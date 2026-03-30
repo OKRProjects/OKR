@@ -1097,6 +1097,11 @@ def list_key_results(user_id):
         if oid is None:
             return jsonify({'error': 'Invalid objectiveId'}), 400
         db = get_db()
+        obj = db.objectives.find_one({'_id': oid})
+        if not obj:
+            return jsonify({'error': 'Objective not found'}), 404
+        if not can_view_objective(db, user_id, obj):
+            return jsonify({'error': 'Not allowed to view this objective'}), 403
         cursor = db.key_results.find({'objectiveId': oid})
         items = [_serialize_doc(d) for d in cursor]
         return jsonify(items), 200
