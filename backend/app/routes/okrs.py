@@ -1,9 +1,12 @@
 from flask import Blueprint, request, jsonify
 from app.db.mongodb import get_db
 from app.routes.auth_backend import require_auth
+from app.repositories.okr_repo_factory import get_okr_repository
 from app.services.permissions import (
     get_user_role,
     ROLE_VIEW_ONLY,
+    can_view_objective,
+    build_objective_visibility_query,
     can_submit_for_review,
     can_approve_reject,
     can_resubmit,
@@ -54,6 +57,14 @@ def _parse_object_id(value, param_name='id'):
         return None
 
 
+def _using_postgres_repo():
+    try:
+        # Keep this logic aligned with okr_repo_factory.py
+        return (os.getenv("OKR_REPOSITORY") or "mongo").strip().lower() == "postgres"
+    except Exception:
+        return False
+
+
 # ---- Departments (for dashboard display: name, color) ----
 
 @bp.route('/departments', methods=['GET'])
@@ -61,15 +72,9 @@ def _parse_object_id(value, param_name='id'):
 def list_departments(user_id):
     """List all departments (id, name, color) for dashboard and cards."""
     try:
-        db = get_db()
-        cursor = db.departments.find({}, {'_id': 1, 'name': 1, 'color': 1})
-        items = []
-        for doc in cursor:
-            d = {'_id': str(doc['_id']), 'name': doc.get('name', '')}
-            if doc.get('color'):
-                d['color'] = doc['color']
-            items.append(d)
-        return jsonify(items), 200
+        repo = get_okr_repository()
+        items = repo.list_departments(user_id)
+        return jsonify(items or []), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -81,8 +86,7 @@ def list_departments(user_id):
 def list_objectives(user_id):
     """List objectives with optional filters: fiscalYear, level, division, parentObjectiveId."""
     try:
-        db = get_db()
-        coll = db.objectives
+        repo = get_okr_repository()
         q = {}
         fiscal_year = request.args.get('fiscalYear', type=int)
         if fiscal_year is not None:
@@ -104,16 +108,28 @@ def list_objectives(user_id):
             q['departmentId'] = department_id
         parent_id = request.args.get('parentObjectiveId')
         if parent_id:
-            oid = _parse_object_id(parent_id)
-            if oid is None:
-                return jsonify({'error': 'Invalid parentObjectiveId'}), 400
-            q['parentObjectiveId'] = oid
+            if _using_postgres_repo():
+                q['parentObjectiveId'] = parent_id
+            else:
+                oid = _parse_object_id(parent_id)
+                if oid is None:
+                    return jsonify({'error': 'Invalid parentObjectiveId'}), 400
+                q['parentObjectiveId'] = oid
         elif parent_id is not None and parent_id == '':
-            q['$or'] = [{'parentObjectiveId': None}, {'parentObjectiveId': {'$exists': False}}]
+            if _using_postgres_repo():
+                q["__no_parent__"] = True
+            else:
+                q['$or'] = [{'parentObjectiveId': None}, {'parentObjectiveId': {'$exists': False}}]
 
-        cursor = coll.find(q).sort('createdAt', -1)
-        items = [_serialize_doc(d) for d in cursor]
-        return jsonify(items), 200
+        if not _using_postgres_repo():
+            # Enforce visibility in Mongo mode (Postgres RBAC is introduced in the next step).
+            db = get_db()
+            vis = build_objective_visibility_query(db, user_id)
+            if vis:
+                q = {'$and': [q, vis]} if q else vis
+
+        items = repo.list_objectives(user_id, q)
+        return jsonify(items or []), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -391,6 +407,13 @@ def generate_presentation_story(user_id):
 def get_objective(objective_id, user_id):
     """Get a single objective by ID. Optional ?since=ISO8601 returns 304-style unchanged if no updates."""
     try:
+        repo = get_okr_repository()
+        if _using_postgres_repo():
+            doc = repo.get_objective(user_id, objective_id)
+            if not doc:
+                return jsonify({'error': 'Objective not found'}), 404
+            return jsonify(doc), 200
+
         oid = _parse_object_id(objective_id)
         if oid is None:
             return jsonify({'error': 'Invalid objective ID'}), 400
@@ -398,6 +421,8 @@ def get_objective(objective_id, user_id):
         doc = db.objectives.find_one({'_id': oid})
         if not doc:
             return jsonify({'error': 'Objective not found'}), 404
+        if not can_view_objective(db, user_id, doc):
+            return jsonify({'error': 'Not allowed to view this objective'}), 403
         since = request.args.get('since')
         if since:
             try:
@@ -485,6 +510,21 @@ def post_leave(objective_id, user_id):
 def create_objective(user_id):
     """Create a new objective."""
     try:
+        repo = get_okr_repository()
+        if _using_postgres_repo():
+            data = request.get_json() or {}
+            title = data.get('title')
+            if not title:
+                return jsonify({'error': 'Title is required'}), 400
+            fiscal_year = data.get('fiscalYear')
+            if fiscal_year is None:
+                return jsonify({'error': 'fiscalYear is required'}), 400
+            # orgId is required in Postgres mode
+            if not (data.get("orgId") or data.get("org_id")):
+                return jsonify({'error': 'orgId is required'}), 400
+            created = repo.create_objective(user_id, data)
+            return jsonify(created), 201
+
         db = get_db()
         if not can_create_objective(db, user_id):
             return jsonify({
@@ -539,6 +579,14 @@ def create_objective(user_id):
 def update_objective(objective_id, user_id):
     """Update an existing objective."""
     try:
+        repo = get_okr_repository()
+        if _using_postgres_repo():
+            data = request.get_json() or {}
+            updated = repo.update_objective(user_id, objective_id, data)
+            if not updated:
+                return jsonify({'error': 'Objective not found'}), 404
+            return jsonify(updated), 200
+
         oid = _parse_object_id(objective_id)
         if oid is None:
             return jsonify({'error': 'Invalid objective ID'}), 400
@@ -584,6 +632,13 @@ def update_objective(objective_id, user_id):
 def delete_objective(objective_id, user_id):
     """Delete an objective and its key results."""
     try:
+        repo = get_okr_repository()
+        if _using_postgres_repo():
+            ok = repo.delete_objective(user_id, objective_id)
+            if not ok:
+                return jsonify({'error': 'Objective not found'}), 404
+            return jsonify({'message': 'Objective deleted'}), 200
+
         oid = _parse_object_id(objective_id)
         if oid is None:
             return jsonify({'error': 'Invalid objective ID'}), 400
@@ -989,6 +1044,13 @@ def reopen_objective(objective_id, user_id):
 def get_objective_tree(objective_id, user_id):
     """Get objective with full tree of children (recursive) and key results. Roll-up view."""
     try:
+        repo = get_okr_repository()
+        if _using_postgres_repo():
+            tree = repo.get_objective_tree(user_id, objective_id)
+            if not tree:
+                return jsonify({'error': 'Objective not found'}), 404
+            return jsonify(tree), 200
+
         oid = _parse_object_id(objective_id)
         if oid is None:
             return jsonify({'error': 'Invalid objective ID'}), 400
@@ -996,6 +1058,8 @@ def get_objective_tree(objective_id, user_id):
         root = db.objectives.find_one({'_id': oid})
         if not root:
             return jsonify({'error': 'Objective not found'}), 404
+        if not can_view_objective(db, user_id, root):
+            return jsonify({'error': 'Not allowed to view this objective'}), 403
 
         def build_node(obj_doc):
             node = _serialize_doc(obj_doc)
@@ -1024,6 +1088,11 @@ def list_key_results(user_id):
         objective_id = request.args.get('objectiveId')
         if not objective_id:
             return jsonify({'error': 'objectiveId query param is required'}), 400
+        repo = get_okr_repository()
+        if _using_postgres_repo():
+            items = repo.list_key_results(user_id, objective_id)
+            return jsonify(items or []), 200
+
         oid = _parse_object_id(objective_id)
         if oid is None:
             return jsonify({'error': 'Invalid objectiveId'}), 400
@@ -1040,6 +1109,13 @@ def list_key_results(user_id):
 def get_key_result(kr_id, user_id):
     """Get a single key result by ID."""
     try:
+        repo = get_okr_repository()
+        if _using_postgres_repo():
+            doc = repo.get_key_result(user_id, kr_id)
+            if not doc:
+                return jsonify({'error': 'Key result not found'}), 404
+            return jsonify(doc), 200
+
         kid = _parse_object_id(kr_id)
         if kid is None:
             return jsonify({'error': 'Invalid key result ID'}), 400
@@ -1080,6 +1156,11 @@ def create_key_result(user_id):
         title = data.get('title')
         if not objective_id or not title:
             return jsonify({'error': 'objectiveId and title are required'}), 400
+        repo = get_okr_repository()
+        if _using_postgres_repo():
+            created = repo.create_key_result(user_id, data)
+            return jsonify(created), 201
+
         oid = _parse_object_id(objective_id)
         if oid is None:
             return jsonify({'error': 'Invalid objectiveId'}), 400
@@ -1113,6 +1194,14 @@ def update_key_result(kr_id, user_id):
     """Update a key result (including progress: currentValue, score, notes). Appends to score_history when score/notes change.
     Optional body field lastUpdatedAt: if sent and server has a newer lastUpdatedAt, returns 409 Conflict."""
     try:
+        repo = get_okr_repository()
+        if _using_postgres_repo():
+            data = request.get_json() or {}
+            updated = repo.update_key_result(user_id, kr_id, data)
+            if not updated:
+                return jsonify({'error': 'Key result not found'}), 404
+            return jsonify(updated), 200
+
         kid = _parse_object_id(kr_id)
         if kid is None:
             return jsonify({'error': 'Invalid key result ID'}), 400
@@ -1171,6 +1260,13 @@ def update_key_result(kr_id, user_id):
 def delete_key_result(kr_id, user_id):
     """Delete a key result."""
     try:
+        repo = get_okr_repository()
+        if _using_postgres_repo():
+            ok = repo.delete_key_result(user_id, kr_id)
+            if not ok:
+                return jsonify({'error': 'Key result not found'}), 404
+            return jsonify({'message': 'Key result deleted'}), 200
+
         kid = _parse_object_id(kr_id)
         if kid is None:
             return jsonify({'error': 'Invalid key result ID'}), 400

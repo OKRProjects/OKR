@@ -1,6 +1,7 @@
 from flask import Flask
 from flask_cors import CORS
 from app.db.mongodb import init_db
+from app.db.postgres import init_pg
 from app.config.cloudinary_config import init_cloudinary
 import os
 
@@ -24,6 +25,14 @@ def create_app():
     except Exception as e:
         print(f"Warning: MongoDB connection failed: {e}")
         print("Backend will start but database operations will fail until MongoDB is available.")
+
+    # Initialize Postgres (optional; enabled when DATABASE_URL is set)
+    try:
+        if os.getenv("DATABASE_URL"):
+            init_pg()
+            print("Postgres engine initialized", flush=True)
+    except Exception as e:
+        print(f"Warning: Postgres initialization failed: {e}", flush=True)
     
     # Initialize Cloudinary
     init_cloudinary()
