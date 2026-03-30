@@ -225,6 +225,34 @@ def require_auth(f):
             return jsonify({'error': 'Authentication failed'}), 401
     return decorated_function
 
+
+def _ensure_pg_user_row(user_info: dict) -> None:
+    """Best-effort: ensure authenticated user exists in Postgres users table."""
+    try:
+        if not os.getenv("DATABASE_URL"):
+            return
+        from app.db.postgres import pg_session
+        from app.models_sql.user import User
+        uid = (user_info or {}).get("sub")
+        if not uid:
+            return
+        with pg_session() as s:
+            u = s.get(User, uid)
+            if u is None:
+                u = User(id=uid)
+                s.add(u)
+            # Keep these fields up to date when available
+            email = (user_info or {}).get("email") or None
+            name = (user_info or {}).get("name") or (user_info or {}).get("nickname") or None
+            if email:
+                u.email = email
+            if name:
+                u.name = name
+            s.add(u)
+    except Exception:
+        # Don't block auth if provisioning fails; RBAC will enforce access later.
+        return
+
 @bp.route('/auth/login', methods=['GET'])
 def login():
     """Redirect to Auth0 login (OAuth flow)"""
@@ -507,6 +535,7 @@ def get_current_user(user_id):
     Demo mode: if user is not in users collection, return role=admin so they can see all seed data."""
     try:
         user_info = get_user_info_from_request()
+        _ensure_pg_user_row(user_info)
         try:
             from app.db.mongodb import get_db
             db = get_db()
@@ -516,8 +545,17 @@ def get_current_user(user_id):
                 if app_user.get('departmentId') is not None:
                     user_info['departmentId'] = str(app_user['departmentId'])
             else:
-                # Demo mode: any authenticated user not in users table sees all data (as admin)
-                user_info['role'] = 'admin'
+                # Secure default: create an app user record as view_only until provisioned.
+                safe = {
+                    '_id': user_id,
+                    'role': 'view_only',
+                    'name': user_info.get('name') or user_info.get('nickname') or '',
+                    'email': user_info.get('email') or '',
+                    'createdAt': datetime.utcnow().isoformat() + 'Z',
+                }
+                db.users.update_one({'_id': user_id}, {'$setOnInsert': safe}, upsert=True)
+                user_info['role'] = 'view_only'
+                user_info['needsProvisioning'] = True
         except Exception:
             user_info['role'] = user_info.get('role', 'developer')
         if 'role' not in user_info:
@@ -541,8 +579,7 @@ def get_token():
 
 
 def require_admin(f):
-    """Decorator to require authenticated admin user. Matches /auth/me: if user is not in db.users
-    we treat them as admin (demo mode) so they can access user management and assign roles."""
+    """Decorator to require authenticated admin user."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         try:
@@ -551,11 +588,8 @@ def require_admin(f):
             from app.services.permissions import get_user_role, ROLE_ADMIN
             db = get_db()
             role = get_user_role(db, user_id)
-            # Allow admin if in db with role=admin, or if not in db (demo: first user can manage and assign themselves)
             if role != ROLE_ADMIN:
-                app_user = db.users.find_one({'_id': user_id})
-                if app_user is not None:
-                    return jsonify({'error': 'Admin access required'}), 403
+                return jsonify({'error': 'Admin access required'}), 403
             kwargs['user_id'] = user_id
             return f(*args, **kwargs)
         except ValueError as e:
