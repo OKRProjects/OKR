@@ -1254,6 +1254,40 @@ def update_key_result(kr_id, user_id):
                     'recordedBy': user_id,
                     'recordedAt': now,
                 })
+                # Significant change alert (best-effort): notify objective owner via Gmail if connected.
+                try:
+                    prev = existing.get('score')
+                    if prev is not None:
+                        delta = abs(float(score) - float(prev))
+                        if delta >= 0.2 and objective and objective.get('ownerId'):
+                            from app.services.google_gmail import send_gmail
+                            owner_id = objective.get('ownerId')
+                            # Look up owner's email (stored in Postgres users table during /auth/me provisioning).
+                            owner_email = None
+                            try:
+                                if os.getenv("DATABASE_URL"):
+                                    from app.db.postgres import pg_session
+                                    from app.models_sql.user import User
+                                    with pg_session() as s:
+                                        u = s.get(User, str(owner_id))
+                                        owner_email = getattr(u, "email", None) if u else None
+                            except Exception:
+                                owner_email = None
+                            if not owner_email:
+                                raise ValueError("owner_email_missing")
+                            frontend = (os.getenv('FRONTEND_URL') or 'http://localhost:3000').rstrip('/')
+                            subject = 'Significant OKR change detected'
+                            body = (
+                                f"One of your OKRs changed significantly (Δscore {delta:.1f}).\n\n"
+                                f"Objective: {objective.get('title') or 'Untitled'}\n"
+                                f"Key Result: {existing.get('title') or ''}\n"
+                                f"New score: {float(score):.2f}\n\n"
+                                f"View: {frontend}/okrs/{objective.get('_id')}\n"
+                            )
+                            # Send from the owner's connected Gmail account to themselves.
+                            send_gmail(user_id=str(owner_id), to_email=str(owner_email), subject=subject, body_text=body)
+                except Exception:
+                    pass
         updated = db.key_results.find_one({'_id': kid})
         return jsonify(_serialize_doc(updated)), 200
     except Exception as e:

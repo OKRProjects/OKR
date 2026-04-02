@@ -38,7 +38,7 @@ def create_app():
     init_cloudinary()
     
     # Register blueprints
-    from app.routes import items, health, profiles, chat, auth_backend, okrs, shares, integrations, webhooks
+    from app.routes import items, health, profiles, chat, auth_backend, okrs, shares, integrations, webhooks, orgs, google_email, notifications
     app.register_blueprint(items.bp, url_prefix='/api')
     app.register_blueprint(profiles.bp, url_prefix='/api')
     app.register_blueprint(chat.bp, url_prefix='/api')
@@ -47,6 +47,9 @@ def create_app():
     app.register_blueprint(shares.bp, url_prefix='/api')
     app.register_blueprint(integrations.bp, url_prefix='/api')
     app.register_blueprint(webhooks.bp, url_prefix='/api')
+    app.register_blueprint(orgs.bp, url_prefix='/api')
+    app.register_blueprint(google_email.bp, url_prefix='/api')
+    app.register_blueprint(notifications.bp, url_prefix='/api')
     app.register_blueprint(health.bp)
     
     return app

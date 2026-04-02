@@ -5,6 +5,7 @@ from app.models_sql.team import Team
 from app.models_sql.user import User
 from app.models_sql.membership import Membership
 from app.models_sql.okr import Objective, KeyResult
+from app.models_sql.integrations import GoogleEmailToken, NotificationState
 
 __all__ = [
     "Base",
@@ -15,5 +16,7 @@ __all__ = [
     "Membership",
     "Objective",
     "KeyResult",
+    "GoogleEmailToken",
+    "NotificationState",
 ]
 

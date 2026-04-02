@@ -34,6 +34,8 @@ export function IntegrationsSection() {
   const searchParams = useSearchParams();
   const googleStatus = searchParams?.get('google');
   const googleErrorReason = searchParams?.get('reason') ?? null;
+  const googleEmailStatus = searchParams?.get('google_email');
+  const googleEmailErrorReason = searchParams?.get('reason') ?? null;
 
   useEffect(() => {
     api
@@ -214,6 +216,67 @@ export function IntegrationsSection() {
             }}
           >
             Connect Google account
+          </Button>
+        </CardContent>
+      </Card>
+
+      {googleEmailStatus === 'connected' && (
+        <p className="text-sm text-green-600 bg-green-50 dark:bg-green-950 p-3 rounded">
+          Gmail connected. You’ll receive OKR reminder emails and OKR-change alerts from your own Gmail account.
+        </p>
+      )}
+      {googleEmailStatus === 'error' && (
+        <div className="text-sm text-destructive bg-destructive/10 p-3 rounded space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span>Gmail connection failed.</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  const { url } = await api.getGoogleEmailAuthUrl();
+                  window.location.href = url;
+                } catch (e) {
+                  alert(e instanceof Error ? e.message : 'Failed to get auth URL');
+                }
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+          {googleEmailErrorReason && (
+            <p className="text-xs font-mono text-muted-foreground break-all" title="Error from backend (dev only)">
+              {(() => {
+                try {
+                  return decodeURIComponent(googleEmailErrorReason);
+                } catch {
+                  return googleEmailErrorReason;
+                }
+              })()}
+            </p>
+          )}
+        </div>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Email reminders (Gmail)</CardTitle>
+          <CardDescription>
+            Connect Gmail so we can send automated OKR update reminders and alert you when there are significant OKR changes.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            onClick={async () => {
+              try {
+                const { url } = await api.getGoogleEmailAuthUrl();
+                window.location.href = url;
+              } catch (e) {
+                alert(e instanceof Error ? e.message : 'Failed to get auth URL');
+              }
+            }}
+          >
+            Connect Gmail
           </Button>
         </CardContent>
       </Card>

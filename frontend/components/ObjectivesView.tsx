@@ -86,6 +86,8 @@ function convertToObjectiveTree(apiObj: ObjectiveTree, allObjectives: ApiObjecti
 
 interface ObjectivesViewProps {
   onUpdateProgress?: (objective: Objective) => void;
+  prefetchedApiObjectives?: ApiObjective[];
+  hideFilters?: boolean;
 }
 
 const ROOT_PAGE_SIZE = 6;
@@ -105,7 +107,7 @@ function ObjectivesTreeSkeleton() {
   );
 }
 
-export function ObjectivesView({ onUpdateProgress }: ObjectivesViewProps) {
+export function ObjectivesView({ onUpdateProgress, prefetchedApiObjectives, hideFilters }: ObjectivesViewProps) {
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
@@ -155,12 +157,13 @@ export function ObjectivesView({ onUpdateProgress }: ObjectivesViewProps) {
   }, [rootPage, rootTotalPages]);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    loadData(prefetchedApiObjectives);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefetchedApiObjectives]);
 
-  const loadData = async () => {
+  const loadData = async (apiObjectivesOverride?: ApiObjective[]) => {
     try {
-      const allObjs = await api.getObjectives({ fiscalYear });
+      const allObjs = apiObjectivesOverride ?? (await api.getObjectives({ fiscalYear }));
       
       // Find root objectives (no parent)
       const rootObjs = allObjs.filter(o => !o.parentObjectiveId);
@@ -337,51 +340,52 @@ export function ObjectivesView({ onUpdateProgress }: ObjectivesViewProps) {
 
   return (
     <div className="space-y-6">
-      {/* Filters and Search */}
-      <Card>
-        <CardHeader>
-          <CardTitle>All Objectives</CardTitle>
-          <CardDescription>Hierarchical view of strategic, functional, and tactical objectives</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-4 md:flex-row md:items-center">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search objectives..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
+      {!hideFilters && (
+        <Card>
+          <CardHeader>
+            <CardTitle>All Objectives</CardTitle>
+            <CardDescription>Hierarchical view of strategic, functional, and tactical objectives</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-4 md:flex-row md:items-center">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search objectives..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Select value={levelFilter} onValueChange={setLevelFilter}>
+                  <SelectTrigger className="w-[160px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Levels</SelectItem>
+                    <SelectItem value="strategic">Strategic</SelectItem>
+                    <SelectItem value="functional">Functional</SelectItem>
+                    <SelectItem value="tactical">Tactical</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="on-track">On Track</SelectItem>
+                    <SelectItem value="at-risk">At Risk</SelectItem>
+                    <SelectItem value="behind">Behind</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <Select value={levelFilter} onValueChange={setLevelFilter}>
-                <SelectTrigger className="w-[160px]">
-                  <Filter className="mr-2 h-4 w-4" />
-                  <SelectValue placeholder="Level" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Levels</SelectItem>
-                  <SelectItem value="strategic">Strategic</SelectItem>
-                  <SelectItem value="functional">Functional</SelectItem>
-                  <SelectItem value="tactical">Tactical</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="on-track">On Track</SelectItem>
-                  <SelectItem value="at-risk">At Risk</SelectItem>
-                  <SelectItem value="behind">Behind</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Objectives Tree */}
       {loading ? (

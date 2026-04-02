@@ -246,7 +246,7 @@ export function OKRDashboard() {
     const titleSlide: PresentationSlide = {
       type: 'title',
       title: 'OKR Presentation',
-      subtitle: `Q${quarter} ${year} • Executive review • ${list.length} objective${list.length !== 1 ? 's' : ''}`,
+      subtitle: `Q${quarter} ${year} • Executive review • ${list.length} objective${list.length !== 1 ? 's' : ''} • AWS Postgres • RBAC • Gmail reminders`,
     };
     const agendaSlide: PresentationSlide = {
       type: 'agenda',

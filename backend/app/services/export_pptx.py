@@ -51,13 +51,13 @@ def build_okr_pptx(db, objective_ids, output_stream, narrative=None):
         title_layout = prs.slide_layouts[0]
         slide = prs.slides.add_slide(title_layout)
         if slide.shapes.title:
-            slide.shapes.title.text = "OKR Presentation"
+            slide.shapes.title.text = "OKR Presentation (Hierarchy + RBAC)"
         if len(slide.placeholders) > 1:
             slide.placeholders[1].text = f"{len(items)} objective(s)"
     except (IndexError, AttributeError, KeyError):
         slide = prs.slides.add_slide(prs.slide_layouts[6] if len(prs.slide_layouts) > 6 else prs.slide_layouts[0])
         box = slide.shapes.add_textbox(Inches(0.5), Inches(2.5), Inches(9), Inches(1))
-        box.text_frame.paragraphs[0].text = "OKR Presentation"
+        box.text_frame.paragraphs[0].text = "OKR Presentation (Hierarchy + RBAC)"
         box.text_frame.paragraphs[0].font.size = Pt(44)
 
     # Optional narrative/script slide (after title, before objectives)

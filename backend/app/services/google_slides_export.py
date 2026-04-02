@@ -87,7 +87,7 @@ def create_okr_presentation(user_id, tree_root_id=None, objective_ids=None):
     if not items:
         raise ValueError('No objectives to export')
 
-    title = 'OKR Export'
+    title = 'OKR Export (Hierarchy + RBAC)'
     body = {
         'title': title,
     }

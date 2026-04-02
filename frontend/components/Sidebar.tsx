@@ -41,6 +41,11 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
   const { setRolePreview, roleForUI, rolePreview, userForPermissions } = useViewRole();
   const role = roleForUI;
   const [collapsed, setCollapsed] = useState(false);
+  const [orgs, setOrgs] = useState<Array<{ id: string; name: string; slug: string }>>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  const [orgTree, setOrgTree] = useState<any | null>(null);
+  const [expandedDepts, setExpandedDepts] = useState<Set<string>>(new Set());
+  const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
   const [stats, setStats] = useState({
     strategic: 0,
     functional: 0,
@@ -66,6 +71,36 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
   useEffect(() => {
     loadStats();
   }, [userForPermissions?.departmentId]);
+
+  useEffect(() => {
+    loadOrgHierarchy();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedOrgId) return;
+    (async () => {
+      try {
+        const tree = await api.getOrgTree(selectedOrgId);
+        setOrgTree(tree);
+        const firstDept = tree?.departments?.[0]?.id;
+        if (firstDept) setExpandedDepts(new Set([firstDept]));
+      } catch {
+        setOrgTree(null);
+      }
+    })();
+  }, [selectedOrgId]);
+
+  const loadOrgHierarchy = async () => {
+    try {
+      const list = await api.getOrgs();
+      setOrgs(list);
+      setSelectedOrgId(list?.[0]?.id ?? null);
+    } catch {
+      setOrgs([]);
+      setSelectedOrgId(null);
+      setOrgTree(null);
+    }
+  };
 
   const loadStats = async () => {
     try {
@@ -186,6 +221,129 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
             </Link>
           );
         })}
+
+        {/* Hierarchy navigation (org -> dept -> team -> user) */}
+        {!collapsed && orgs.length > 0 && (
+          <div className="mt-3 rounded-lg border border-sidebar-border bg-background/40 p-2">
+            <div className="mb-2 flex items-center justify-between px-1">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
+                Hierarchy
+              </span>
+              {orgs.length > 1 && (
+                <select
+                  className="h-7 rounded border bg-background px-2 text-xs"
+                  value={selectedOrgId ?? ''}
+                  onChange={(e) => setSelectedOrgId(e.target.value || null)}
+                >
+                  {orgs.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {selectedOrgId && (
+              <Link
+                href={`/okrs/scope/org/${selectedOrgId}`}
+                className={cn(
+                  'block rounded-md px-2 py-1.5 text-sm font-medium',
+                  pathname?.startsWith(`/okrs/scope/org/${selectedOrgId}`)
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                    : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                )}
+              >
+                {orgs.find((o) => o.id === selectedOrgId)?.name ?? 'Organization'}
+              </Link>
+            )}
+
+            {orgTree?.departments?.length ? (
+              <div className="mt-2 space-y-1">
+                {orgTree.departments.map((d: any) => {
+                  const isOpen = expandedDepts.has(d.id);
+                  return (
+                    <div key={d.id} className="rounded-md">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = new Set(expandedDepts);
+                          if (next.has(d.id)) next.delete(d.id);
+                          else next.add(d.id);
+                          setExpandedDepts(next);
+                        }}
+                        className="flex w-full items-center justify-between rounded-md px-2 py-1 text-left text-sm text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                      >
+                        <span className="truncate">{d.displayName}</span>
+                        <span className="text-xs text-sidebar-foreground/50">{isOpen ? '–' : '+'}</span>
+                      </button>
+
+                      {isOpen && (
+                        <div className="ml-2 mt-1 space-y-1 border-l border-sidebar-border pl-2">
+                          <Link
+                            href={`/okrs/scope/department/${d.id}`}
+                            className="block rounded px-2 py-1 text-xs text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                          >
+                            View department OKRs
+                          </Link>
+                          {(d.teams || []).map((t: any) => {
+                            const teamOpen = expandedTeams.has(t.id);
+                            return (
+                              <div key={t.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const next = new Set(expandedTeams);
+                                    if (next.has(t.id)) next.delete(t.id);
+                                    else next.add(t.id);
+                                    setExpandedTeams(next);
+                                  }}
+                                  className="flex w-full items-center justify-between rounded px-2 py-1 text-left text-xs text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                                >
+                                  <span className="truncate">{t.displayName}</span>
+                                  <span className="text-[10px] text-sidebar-foreground/50">{teamOpen ? '–' : '+'}</span>
+                                </button>
+                                {teamOpen && (
+                                  <div className="ml-2 mt-1 space-y-1 border-l border-sidebar-border pl-2">
+                                    <Link
+                                      href={`/okrs/scope/team/${t.id}`}
+                                      className="block rounded px-2 py-1 text-[11px] text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                                    >
+                                      View team OKRs
+                                    </Link>
+                                    {(t.users || []).slice(0, 8).map((u: any) => (
+                                      <Link
+                                        key={u.id}
+                                        href={`/okrs/scope/user/${encodeURIComponent(u.id)}`}
+                                        className="block truncate rounded px-2 py-1 text-[11px] text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                                        title={u.email || u.name || u.id}
+                                      >
+                                        {u.name || u.email || u.id}
+                                      </Link>
+                                    ))}
+                                    {(t.users || []).length > 8 && (
+                                      <div className="px-2 py-1 text-[11px] text-sidebar-foreground/50">
+                                        +{(t.users || []).length - 8} more
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="mt-2 px-2 py-1 text-xs text-sidebar-foreground/50">
+                No org hierarchy configured yet.
+              </div>
+            )}
+          </div>
+        )}
       </nav>
 
       {/* Admin: User management */}

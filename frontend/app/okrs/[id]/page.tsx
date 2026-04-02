@@ -23,6 +23,7 @@ export default function ObjectiveDetailPage() {
   const [shareLinkUrl, setShareLinkUrl] = useState<string | null>(null);
   const [shareCreating, setShareCreating] = useState(false);
   const [postingUpdate, setPostingUpdate] = useState(false);
+  const [ancestors, setAncestors] = useState<Array<{ _id: string; title: string }>>([]);
   const loadingRef = useRef(false);
   const params = useParams();
   const router = useRouter();
@@ -73,6 +74,18 @@ export default function ObjectiveDetailPage() {
       loadKeyResults();
     }
   }, [user, id, loadObjective, loadKeyResults]);
+
+  useEffect(() => {
+    if (!user || !id) return;
+    (async () => {
+      try {
+        const chain = await api.getObjectiveAncestors(id);
+        setAncestors(chain || []);
+      } catch {
+        setAncestors([]);
+      }
+    })();
+  }, [user, id]);
 
   // Presence: register view, heartbeat, leave on unmount
   useEffect(() => {
@@ -172,6 +185,27 @@ export default function ObjectiveDetailPage() {
       description={`${objective.level} objective`}
     >
       <div className="space-y-4">
+        {ancestors.length > 1 && (
+          <div className="text-sm text-muted-foreground">
+            {ancestors.map((a, idx) => {
+              const isLast = idx === ancestors.length - 1;
+              return (
+                <span key={a._id}>
+                  {!isLast ? (
+                    <>
+                      <Link href={`/okrs/${a._id}`} className="hover:underline text-foreground/80">
+                        {a.title}
+                      </Link>
+                      <span className="mx-2">/</span>
+                    </>
+                  ) : (
+                    <span className="text-foreground">{a.title}</span>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" asChild>
             <Link href="/my-okrs">Back to My OKRs</Link>

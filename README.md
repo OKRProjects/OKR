@@ -1,12 +1,12 @@
-# Hackathon Template
+# Hackathon Template (OKRs)
 
-A full-stack hackathon template featuring Next.js frontend, Flask backend, Auth0 authentication with Google sign-in, MongoDB Atlas database, and Docker containerization.
+A full-stack OKR application featuring Next.js frontend, Flask backend, Auth0 authentication, hierarchical OKRs (org → department → team → user), role-based access control, AWS-ready Postgres persistence, and automated Gmail reminders.
 
 ## Architecture
 
 ```
 ┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
-│   Next.js App   │ ──────> │   Flask API     │ ──────> │  MongoDB Atlas  │
+│   Next.js App   │ ──────> │   Flask API     │ ──────> │  Postgres (RDS)  │
 │   (Frontend)    │         │   (Backend)     │         │   (Database)    │
 └─────────────────┘         └─────────────────┘         └─────────────────┘
          │                           │
@@ -16,6 +16,11 @@ A full-stack hackathon template featuring Next.js frontend, Flask backend, Auth0
          │     Auth0       │
          │  (Google OAuth) │
          └─────────────────┘
+                     │
+          ┌─────────────────┐
+          │   Gmail API     │
+          │ (Reminders)     │
+          └─────────────────┘
 ```
 
 ## Features
@@ -23,10 +28,13 @@ A full-stack hackathon template featuring Next.js frontend, Flask backend, Auth0
 - **Frontend**: Next.js 16 with TypeScript, Tailwind CSS, and App Router
 - **Backend**: Flask RESTful API with JWT authentication
 - **Authentication**: Auth0 with Google social login
-- **Database**: MongoDB Atlas integration
+- **Database**: Postgres (local via Docker; production on AWS RDS)
 - **Image Storage**: Cloudinary integration for profile images
 - **User Profiles**: Create and manage user profiles with images
 - **AI Chatbot**: OpenRouter-powered chatbot accessible from all pages
+- **OKR hierarchy**: Unrestricted drill-up/drill-down across objectives and org structure
+- **RBAC**: Scoped access controls (admin/leadership/IC/view-only)
+- **Notifications**: Gmail reminders + significant change alerts (per-user OAuth)
 - **Containerization**: Docker and Docker Compose setup
 - **CRUD Operations**: Full Create, Read, Update, Delete functionality for Items and Profiles
 
@@ -36,7 +44,7 @@ A full-stack hackathon template featuring Next.js frontend, Flask backend, Auth0
 - Python 3.11+
 - Docker and Docker Compose
 - Auth0 account (free tier available)
-- MongoDB Atlas account (free tier available)
+- AWS account (for production deployment)
 - Cloudinary account (free tier available)
 - OpenRouter account (free tier available) - for AI chatbot
 
@@ -73,7 +81,9 @@ cd HackathonTemplate
    - Identifier: `https://YOUR_AUTH0_DOMAIN.auth0.com/api/v2/`
    - Note the Identifier (this is your Audience)
 
-### 3. MongoDB Atlas Configuration
+### 3. Postgres Configuration (Local + AWS)
+
+Local development uses Docker Compose (`postgres` service). For AWS, see `[infra/](infra/)`.
 
 1. Sign up for MongoDB Atlas at https://www.mongodb.com/cloud/atlas
 2. Create a free cluster (M0)
@@ -199,7 +209,7 @@ docker-compose down
 
 The application will be available at:
 - Frontend: http://localhost:3000
-- Backend API: http://localhost:5000
+- Backend API: http://localhost:5001
 
 ### 8. Running Locally (Without Docker)
 

@@ -168,6 +168,47 @@ export interface AttachmentDeletionAudit {
   deletedAt: string;
 }
 
+export interface OrgSummary {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export interface OrgTreeUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
+export interface OrgTreeTeam {
+  id: string;
+  canonicalName: string;
+  displayName: string;
+  departmentId?: string | null;
+  users: OrgTreeUser[];
+}
+
+export interface OrgTreeDepartment {
+  id: string;
+  canonicalName: string;
+  displayName: string;
+  parentDepartmentId?: string | null;
+  teams: OrgTreeTeam[];
+}
+
+export interface OrgTreeResponse {
+  org: OrgSummary;
+  departments: OrgTreeDepartment[];
+  unassignedUsers: OrgTreeUser[];
+}
+
+export interface ObjectiveAncestor {
+  _id: string;
+  title: string;
+  parentObjectiveId?: string | null;
+}
+
 async function getAccessToken(): Promise<string | null> {
   try {
     const response = await fetch(`${API_URL}/api/auth/token`, {
@@ -316,6 +357,26 @@ export const api = {
 
   async getDepartments(): Promise<{ _id: string; name: string; color?: string }[]> {
     return fetchWithAuth('/api/departments');
+  },
+
+  async getOrgs(): Promise<OrgSummary[]> {
+    return fetchWithAuth('/api/orgs');
+  },
+
+  async getOrgTree(orgId: string): Promise<OrgTreeResponse> {
+    return fetchWithAuth(`/api/orgs/${encodeURIComponent(orgId)}/tree`);
+  },
+
+  async getObjectivesByScope(params: { scope: 'org' | 'department' | 'team' | 'user'; scopeId: string; fiscalYear?: number }): Promise<Objective[]> {
+    const search = new URLSearchParams();
+    search.set('scope', params.scope);
+    search.set('scopeId', params.scopeId);
+    if (params.fiscalYear != null) search.set('fiscalYear', String(params.fiscalYear));
+    return fetchWithAuth(`/api/okrs/scope/objectives?${search.toString()}`);
+  },
+
+  async getObjectiveAncestors(objectiveId: string): Promise<ObjectiveAncestor[]> {
+    return fetchWithAuth(`/api/objectives/${encodeURIComponent(objectiveId)}/ancestors`);
   },
 
   async updateUser(
@@ -755,6 +816,11 @@ export const api = {
   /** Get Google OAuth URL to connect account for Slides export. */
   async getGoogleAuthUrl(): Promise<{ url: string }> {
     return fetchWithAuth('/api/integrations/google/auth-url');
+  },
+
+  /** Get Google OAuth URL to connect Gmail sending (per-user OAuth). */
+  async getGoogleEmailAuthUrl(): Promise<{ url: string }> {
+    return fetchWithAuth('/api/integrations/google-email/auth-url');
   },
 
   /** Create Google Slides presentation from OKR tree. Body: { treeRootId } or { objectiveIds: string[] }. */
