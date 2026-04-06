@@ -28,6 +28,8 @@ type UserRecord = {
   name?: string;
   email?: string;
   okrCreateDisabled?: boolean;
+  /** When true, User management links are hidden for this user (admin / org owner only). */
+  hideUserManagementNav?: boolean;
 };
 
 const ROLES = ASSIGNABLE_APP_ROLES as unknown as readonly string[];
@@ -62,6 +64,7 @@ function UserRow({
     role?: string;
     departmentId?: string | null;
     okrCreateDisabled?: boolean;
+    hideUserManagementNav?: boolean;
   }) => void;
   roles: readonly string[];
   /** Org owners cannot reassign admin accounts */
@@ -70,12 +73,14 @@ function UserRow({
   const [role, setRole] = useState(u.role);
   const [departmentId, setDepartmentId] = useState(u.departmentId ?? '');
   const [okrCreateDisabled, setOkrCreateDisabled] = useState(!!u.okrCreateDisabled);
+  const [hideUserManagementNav, setHideUserManagementNav] = useState(!!u.hideUserManagementNav);
 
   useEffect(() => {
     setRole(u.role);
     setDepartmentId(u.departmentId ?? '');
     setOkrCreateDisabled(!!u.okrCreateDisabled);
-  }, [u._id, u.role, u.departmentId, u.okrCreateDisabled]);
+    setHideUserManagementNav(!!u.hideUserManagementNav);
+  }, [u._id, u.role, u.departmentId, u.okrCreateDisabled, u.hideUserManagementNav]);
 
   useEffect(() => {
     if (role === 'admin') setOkrCreateDisabled(false);
@@ -87,13 +92,15 @@ function UserRow({
   const hasChanges =
     role !== u.role ||
     (departmentId.trim() || null) !== (u.departmentId ?? null) ||
-    !!okrCreateDisabled !== !!u.okrCreateDisabled;
+    !!okrCreateDisabled !== !!u.okrCreateDisabled ||
+    !!hideUserManagementNav !== !!u.hideUserManagementNav;
 
   const handleSave = () => {
     onUpdate({
       role,
       departmentId: departmentId.trim() || null,
       okrCreateDisabled,
+      hideUserManagementNav,
     });
   };
 
@@ -101,7 +108,7 @@ function UserRow({
     <div
       className={cn(
         'rounded-xl border border-border bg-card p-4 shadow-sm',
-        'grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,1fr)_auto]'
+        'grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_auto]'
       )}
     >
       <div className="min-w-0 space-y-1">
@@ -178,6 +185,26 @@ function UserRow({
             </span>
           </label>
         </div>
+        {(role === 'admin' || role === 'org_owner') && (
+          <div className="rounded-lg border border-border/80 bg-muted/30 px-3 py-2">
+            <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-input"
+                checked={hideUserManagementNav}
+                disabled={saving}
+                onChange={(e) => setHideUserManagementNav(e.target.checked)}
+              />
+              <span>
+                <span className="font-medium">Hide User management button</span>
+                <span className="block text-xs text-muted-foreground">
+                  Removes User management from the sidebar, profile, and dashboard header for this account. They can
+                  still open <code className="text-[10px]">/admin/users</code> directly if they know the URL.
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
       </div>
 
       <div className="flex items-end lg:justify-end">
@@ -250,7 +277,12 @@ export default function AdminUsersPage() {
 
   const handleUpdate = async (
     uid: string,
-    updates: { role?: string; departmentId?: string | null; okrCreateDisabled?: boolean }
+    updates: {
+      role?: string;
+      departmentId?: string | null;
+      okrCreateDisabled?: boolean;
+      hideUserManagementNav?: boolean;
+    }
   ) => {
     setSavingId(uid);
     setError(null);
@@ -265,10 +297,17 @@ export default function AdminUsersPage() {
                 departmentId: updates.departmentId !== undefined ? (updates.departmentId ?? undefined) : u.departmentId,
                 okrCreateDisabled:
                   updates.okrCreateDisabled !== undefined ? updates.okrCreateDisabled : u.okrCreateDisabled,
+                hideUserManagementNav:
+                  updates.hideUserManagementNav !== undefined
+                    ? updates.hideUserManagementNav
+                    : u.hideUserManagementNav,
               }
             : u
         )
       );
+      if (sessionUser?.sub && uid === sessionUser.sub) {
+        await refetchUser();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to update user');
     } finally {
@@ -370,7 +409,9 @@ export default function AdminUsersPage() {
                 <p className="text-sm text-muted-foreground mt-1">
                   Combined <strong className="text-foreground">Auth0 + MongoDB</strong> list: people in your directory
                   plus anyone with an app record. <strong>Role</strong> sets the baseline;{' '}
-                  <strong>Allow creating objectives</strong> toggles only that permission.
+                  <strong>Allow creating objectives</strong> toggles only that permission. For{' '}
+                  <strong className="text-foreground">admin</strong> / <strong className="text-foreground">org owner</strong>{' '}
+                  rows you can hide the User management button in the app.
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -409,10 +450,10 @@ export default function AdminUsersPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="hidden lg:grid lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,1fr)_auto] gap-4 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <div className="hidden lg:grid lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,1.2fr)_auto] gap-4 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   <span>User</span>
                   <span>Role</span>
-                  <span>Department &amp; permissions</span>
+                  <span>Department, OKR create &amp; nav</span>
                   <span className="text-right">Action</span>
                 </div>
                 {users.map((u) => (

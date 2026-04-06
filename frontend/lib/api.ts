@@ -460,8 +460,19 @@ export const api = {
 
   async updateUser(
     uid: string,
-    body: { role?: string; departmentId?: string | null; okrCreateDisabled?: boolean }
-  ): Promise<{ _id: string; role: string; departmentId?: string; okrCreateDisabled?: boolean }> {
+    body: {
+      role?: string;
+      departmentId?: string | null;
+      okrCreateDisabled?: boolean;
+      hideUserManagementNav?: boolean;
+    }
+  ): Promise<{
+    _id: string;
+    role: string;
+    departmentId?: string;
+    okrCreateDisabled?: boolean;
+    hideUserManagementNav?: boolean;
+  }> {
     return fetchWithAuth(`/api/auth/users/${encodeURIComponent(uid)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

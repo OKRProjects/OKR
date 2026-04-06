@@ -263,6 +263,11 @@ export default function ProfilePage() {
           <Card>
             <CardContent className="pt-6 pb-6">
               <SettingsAccountSection />
+              {shouldShowUserManagementNav(sessionUser, rolePreview) && (
+                <Button asChild className="mt-6 w-full" size="lg">
+                  <Link href="/admin/users">User management</Link>
+                </Button>
+              )}
             </CardContent>
           </Card>
           <Card>
@@ -340,6 +345,14 @@ export default function ProfilePage() {
         <CardContent className="px-6 py-8">
           <SettingsAccountSection />
 
+          {shouldShowUserManagementNav(sessionUser, rolePreview) && (
+            <div className="mt-6">
+              <Button asChild className="w-full sm:w-auto" size="lg">
+                <Link href="/admin/users">User management</Link>
+              </Button>
+            </div>
+          )}
+
           <div className="border-t pt-8 mt-8 space-y-6">
           {profile.bio && (
             <div className="mb-6">
@@ -392,11 +405,6 @@ export default function ProfilePage() {
             <Button variant="outline" onClick={() => setEditing(true)}>
               Edit Profile
             </Button>
-            {shouldShowUserManagementNav(sessionUser, rolePreview) && (
-              <Button variant="outline" asChild>
-                <Link href="/admin/users">User management</Link>
-              </Button>
-            )}
           </div>
           </div>
         </CardContent>

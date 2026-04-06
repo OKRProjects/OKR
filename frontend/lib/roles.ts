@@ -56,14 +56,15 @@ export function canManageUsersAccount(u: { role?: string } | null | undefined): 
 }
 
 /**
- * User management nav: real account must be admin or org owner. When previewing another role,
- * only show the link if the preview is admin or org owner (so IC/viewer demos hide it).
+ * User management nav: real account must be admin or org owner and not opted out via User management.
+ * When previewing another role, only show the link if the preview is admin or org owner (so IC/viewer demos hide it).
  */
 export function shouldShowUserManagementNav(
-  user: { role?: string } | null | undefined,
+  user: { role?: string; hideUserManagementNav?: boolean } | null | undefined,
   rolePreview: string | null | undefined
 ): boolean {
   if (!canManageUsersAccount(user)) return false;
+  if (user?.hideUserManagementNav === true) return false;
   if (rolePreview == null) return true;
   const p = normalizeAppRole(rolePreview);
   return p === 'admin' || p === 'org_owner';

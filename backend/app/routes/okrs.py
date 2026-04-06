@@ -22,6 +22,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 import secrets
 import os
+import uuid
 
 bp = Blueprint('okrs', __name__)
 
@@ -59,6 +60,31 @@ def _parse_object_id(value, param_name='id'):
 
 def _using_postgres_repo():
     return is_postgres_okr_repository()
+
+
+def _parse_uuid_objective_id(value):
+    """Normalize a Postgres/UUID objective id string, or None if invalid."""
+    if value is None or not isinstance(value, str):
+        return None
+    s = value.strip()
+    if not s:
+        return None
+    try:
+        return str(uuid.UUID(s))
+    except (ValueError, TypeError):
+        return None
+
+
+def _postgres_objective_norm_or_error(user_id, objective_id):
+    """Returns (norm_id, None) or (None, (jsonify_response, status_code))."""
+    norm = _parse_uuid_objective_id(objective_id)
+    if norm is None:
+        return None, (jsonify({'error': 'Invalid objective ID'}), 400)
+    repo = get_okr_repository()
+    doc = repo.get_objective(user_id, norm)
+    if not doc:
+        return None, (jsonify({'error': 'Objective not found'}), 404)
+    return norm, None
 
 
 # ---- Departments (for dashboard display: name, color) ----
@@ -530,12 +556,18 @@ def _get_recent_viewers(db, objective_oid):
 def post_view(objective_id, user_id):
     """Register or refresh presence for this user viewing this objective. Returns current viewers."""
     try:
-        oid = _parse_object_id(objective_id)
-        if oid is None:
-            return jsonify({'error': 'Invalid objective ID'}), 400
         db = get_db()
-        if not db.objectives.find_one({'_id': oid}):
-            return jsonify({'error': 'Objective not found'}), 404
+        if _using_postgres_repo():
+            norm, err = _postgres_objective_norm_or_error(user_id, objective_id)
+            if err:
+                return err
+            oid = norm
+        else:
+            oid = _parse_object_id(objective_id)
+            if oid is None:
+                return jsonify({'error': 'Invalid objective ID'}), 400
+            if not db.objectives.find_one({'_id': oid}):
+                return jsonify({'error': 'Objective not found'}), 404
         data = request.get_json() or {}
         user_name = data.get('userName') or user_id
         now = _now()
@@ -559,10 +591,16 @@ def post_view(objective_id, user_id):
 def post_leave(objective_id, user_id):
     """Remove this user's presence for this objective."""
     try:
-        oid = _parse_object_id(objective_id)
-        if oid is None:
-            return jsonify({'error': 'Invalid objective ID'}), 400
         db = get_db()
+        if _using_postgres_repo():
+            norm, err = _postgres_objective_norm_or_error(user_id, objective_id)
+            if err:
+                return err
+            oid = norm
+        else:
+            oid = _parse_object_id(objective_id)
+            if oid is None:
+                return jsonify({'error': 'Invalid objective ID'}), 400
         db.presence.delete_one({'objectiveId': oid, 'userId': user_id})
         return jsonify({'message': 'Left'}), 200
     except Exception as e:
@@ -749,13 +787,21 @@ def _share_link_serialize(doc):
 def create_share_link(objective_id, user_id):
     """Create a shareable link for this objective. Body: { expiresInDays? }."""
     try:
-        oid = _parse_object_id(objective_id)
-        if oid is None:
-            return jsonify({'error': 'Invalid objective ID'}), 400
         db = get_db()
-        obj = db.objectives.find_one({'_id': oid})
-        if not obj:
-            return jsonify({'error': 'Objective not found'}), 404
+        if _using_postgres_repo():
+            repo = get_okr_repository()
+            norm, err = _postgres_objective_norm_or_error(user_id, objective_id)
+            if err:
+                return err
+            obj = repo.get_objective(user_id, norm)
+            oid = norm
+        else:
+            oid = _parse_object_id(objective_id)
+            if oid is None:
+                return jsonify({'error': 'Invalid objective ID'}), 400
+            obj = db.objectives.find_one({'_id': oid})
+            if not obj:
+                return jsonify({'error': 'Objective not found'}), 404
         if not can_create_share_link(db, user_id, obj):
             return jsonify({'error': 'Not allowed to create share link for this objective'}), 403
         data = request.get_json() or {}
@@ -791,13 +837,21 @@ def create_share_link(objective_id, user_id):
 def list_share_links(objective_id, user_id):
     """List share links for this objective. Creator or admin only."""
     try:
-        oid = _parse_object_id(objective_id)
-        if oid is None:
-            return jsonify({'error': 'Invalid objective ID'}), 400
         db = get_db()
-        obj = db.objectives.find_one({'_id': oid})
-        if not obj:
-            return jsonify({'error': 'Objective not found'}), 404
+        if _using_postgres_repo():
+            repo = get_okr_repository()
+            norm, err = _postgres_objective_norm_or_error(user_id, objective_id)
+            if err:
+                return err
+            obj = repo.get_objective(user_id, norm)
+            oid = norm
+        else:
+            oid = _parse_object_id(objective_id)
+            if oid is None:
+                return jsonify({'error': 'Invalid objective ID'}), 400
+            obj = db.objectives.find_one({'_id': oid})
+            if not obj:
+                return jsonify({'error': 'Objective not found'}), 404
         if not can_create_share_link(db, user_id, obj):
             return jsonify({'error': 'Not allowed to list share links for this objective'}), 403
         cursor = db.share_links.find({'objectiveId': oid}).sort('createdAt', -1)
@@ -815,13 +869,20 @@ def list_share_links(objective_id, user_id):
 def post_update_to_channel(objective_id, user_id):
     """Manual 'Post Update': send current objective summary to configured Slack/Teams webhook."""
     try:
-        oid = _parse_object_id(objective_id)
-        if oid is None:
-            return jsonify({'error': 'Invalid objective ID'}), 400
         db = get_db()
-        obj = db.objectives.find_one({'_id': oid})
-        if not obj:
-            return jsonify({'error': 'Objective not found'}), 404
+        if _using_postgres_repo():
+            repo = get_okr_repository()
+            norm, err = _postgres_objective_norm_or_error(user_id, objective_id)
+            if err:
+                return err
+            obj = repo.get_objective(user_id, norm)
+        else:
+            oid = _parse_object_id(objective_id)
+            if oid is None:
+                return jsonify({'error': 'Invalid objective ID'}), 400
+            obj = db.objectives.find_one({'_id': oid})
+            if not obj:
+                return jsonify({'error': 'Objective not found'}), 404
         cfg = db.integration_configs.find_one({'_id': user_id})
         if not cfg or not cfg.get('webhookUrl'):
             return jsonify({'error': 'No Slack/Teams webhook configured. Add one in Integrations.'}), 400
@@ -842,12 +903,18 @@ def post_update_to_channel(objective_id, user_id):
 def get_workflow_history(objective_id, user_id):
     """List workflow events for an objective (audit trail)."""
     try:
-        oid = _parse_object_id(objective_id)
-        if oid is None:
-            return jsonify({'error': 'Invalid objective ID'}), 400
         db = get_db()
-        if not db.objectives.find_one({'_id': oid}):
-            return jsonify({'error': 'Objective not found'}), 404
+        if _using_postgres_repo():
+            norm, err = _postgres_objective_norm_or_error(user_id, objective_id)
+            if err:
+                return err
+            oid = norm
+        else:
+            oid = _parse_object_id(objective_id)
+            if oid is None:
+                return jsonify({'error': 'Invalid objective ID'}), 400
+            if not db.objectives.find_one({'_id': oid}):
+                return jsonify({'error': 'Objective not found'}), 404
         cursor = db.workflow_events.find({'objectiveId': oid}).sort('timestamp', -1)
         items = [_serialize_doc(d) for d in cursor]
         return jsonify(items), 200
@@ -888,6 +955,12 @@ def _dependency_health_get(health_map, target_oid):
 def get_dependencies(objective_id, user_id):
     """Return upstream (this relates to) and downstream (what depends on this) objectives."""
     try:
+        if _using_postgres_repo():
+            _, err = _postgres_objective_norm_or_error(user_id, objective_id)
+            if err:
+                return err
+            return jsonify({'upstream': [], 'downstream': []}), 200
+
         oid = _parse_object_id(objective_id)
         if oid is None:
             return jsonify({'error': 'Invalid objective ID'}), 400
@@ -925,6 +998,17 @@ def get_dependencies(objective_id, user_id):
 def patch_dependency_health(objective_id, user_id):
     """Set or clear subjective dependency health (0–1, one decimal) for a linked OKR."""
     try:
+        if _using_postgres_repo():
+            repo = get_okr_repository()
+            norm, err = _postgres_objective_norm_or_error(user_id, objective_id)
+            if err:
+                return err
+            db = get_db()
+            owner = repo.get_objective(user_id, norm)
+            if get_user_role(db, user_id) == 'view_only' or not can_edit_objective(db, user_id, owner):
+                return jsonify({'error': 'Not allowed to edit this objective'}), 403
+            return jsonify(owner), 200
+
         oid = _parse_object_id(objective_id)
         if oid is None:
             return jsonify({'error': 'Invalid objective ID'}), 400
@@ -974,11 +1058,43 @@ def patch_dependency_health(objective_id, user_id):
 
 
 def _workflow_transition(objective_id, user_id, from_status, to_status, reason=None):
-    """Update objective status and log WorkflowEvent. Returns (response, status_code) or (None, None) on success."""
+    """Update objective status and log WorkflowEvent. Returns (response, status_code)."""
+    db = get_db()
+    if _using_postgres_repo():
+        norm = _parse_uuid_objective_id(objective_id)
+        if norm is None:
+            return jsonify({'error': 'Invalid objective ID'}), 400
+        repo = get_okr_repository()
+        obj = repo.get_objective(user_id, norm)
+        if not obj:
+            return jsonify({'error': 'Objective not found'}), 404
+        current = obj.get('status', 'draft')
+        if current != from_status:
+            return jsonify({'error': f'Objective is not in {from_status} state'}), 400
+        now = _now()
+        db.workflow_events.insert_one({
+            'objectiveId': norm,
+            'fromStatus': from_status,
+            'toStatus': to_status,
+            'actorId': user_id,
+            'reason': reason,
+            'timestamp': now,
+        })
+        updated = repo.update_objective(user_id, norm, {'status': to_status})
+        try:
+            cfg = db.integration_configs.find_one({'_id': user_id})
+            if cfg and cfg.get('webhookUrl'):
+                from app.services.notifications import post_okr_update_to_webhook, format_okr_update_message
+                title = (updated or obj).get('title') or 'OKR'
+                payload = format_okr_update_message(title, to_status, actor_name='', event_type='workflow')
+                post_okr_update_to_webhook(cfg['webhookUrl'], cfg.get('channelType') or 'slack', payload)
+        except Exception:
+            pass
+        return jsonify(updated or obj), 200
+
     oid = _parse_object_id(objective_id)
     if oid is None:
         return jsonify({'error': 'Invalid objective ID'}), 400
-    db = get_db()
     obj = db.objectives.find_one({'_id': oid})
     if not obj:
         return jsonify({'error': 'Objective not found'}), 404
@@ -996,7 +1112,6 @@ def _workflow_transition(objective_id, user_id, from_status, to_status, reason=N
     })
     db.objectives.update_one({'_id': oid}, {'$set': {'status': to_status, 'updatedAt': now}})
     updated = db.objectives.find_one({'_id': oid})
-    # Notify configured Slack/Teams webhook (fire-and-forget)
     try:
         cfg = db.integration_configs.find_one({'_id': user_id})
         if cfg and cfg.get('webhookUrl'):
@@ -1014,10 +1129,22 @@ def _workflow_transition(objective_id, user_id, from_status, to_status, reason=N
 def submit_objective(objective_id, user_id):
     """DRAFT -> IN_REVIEW. Allowed: owner, leader, admin."""
     try:
+        db = get_db()
+        if _using_postgres_repo():
+            norm, err = _postgres_objective_norm_or_error(user_id, objective_id)
+            if err:
+                return err
+            repo = get_okr_repository()
+            obj = repo.get_objective(user_id, norm)
+            if obj.get('status') != 'draft':
+                return jsonify({'error': 'Objective is not in draft state'}), 400
+            if not can_submit_for_review(db, user_id, obj):
+                return jsonify({'error': 'Not allowed to submit for review'}), 403
+            return _workflow_transition(objective_id, user_id, 'draft', 'in_review')
+
         oid = _parse_object_id(objective_id)
         if oid is None:
             return jsonify({'error': 'Invalid objective ID'}), 400
-        db = get_db()
         obj = db.objectives.find_one({'_id': oid})
         if not obj:
             return jsonify({'error': 'Objective not found'}), 404
@@ -1035,10 +1162,22 @@ def submit_objective(objective_id, user_id):
 def approve_objective(objective_id, user_id):
     """IN_REVIEW -> APPROVED. Allowed: leader (same dept), admin."""
     try:
+        db = get_db()
+        if _using_postgres_repo():
+            norm, err = _postgres_objective_norm_or_error(user_id, objective_id)
+            if err:
+                return err
+            repo = get_okr_repository()
+            obj = repo.get_objective(user_id, norm)
+            if obj.get('status') != 'in_review':
+                return jsonify({'error': 'Objective is not in review'}), 400
+            if not can_approve_reject(db, user_id, obj):
+                return jsonify({'error': 'Not allowed to approve'}), 403
+            return _workflow_transition(objective_id, user_id, 'in_review', 'approved')
+
         oid = _parse_object_id(objective_id)
         if oid is None:
             return jsonify({'error': 'Invalid objective ID'}), 400
-        db = get_db()
         obj = db.objectives.find_one({'_id': oid})
         if not obj:
             return jsonify({'error': 'Objective not found'}), 404
@@ -1056,10 +1195,24 @@ def approve_objective(objective_id, user_id):
 def reject_objective(objective_id, user_id):
     """IN_REVIEW -> REJECTED. Allowed: leader (same dept), admin. Body: { reason? }."""
     try:
+        db = get_db()
+        data = request.get_json() or {}
+        reason = data.get('reason', '')
+        if _using_postgres_repo():
+            norm, err = _postgres_objective_norm_or_error(user_id, objective_id)
+            if err:
+                return err
+            repo = get_okr_repository()
+            obj = repo.get_objective(user_id, norm)
+            if obj.get('status') != 'in_review':
+                return jsonify({'error': 'Objective is not in review'}), 400
+            if not can_approve_reject(db, user_id, obj):
+                return jsonify({'error': 'Not allowed to reject'}), 403
+            return _workflow_transition(objective_id, user_id, 'in_review', 'rejected', reason=reason)
+
         oid = _parse_object_id(objective_id)
         if oid is None:
             return jsonify({'error': 'Invalid objective ID'}), 400
-        db = get_db()
         obj = db.objectives.find_one({'_id': oid})
         if not obj:
             return jsonify({'error': 'Objective not found'}), 404
@@ -1067,8 +1220,6 @@ def reject_objective(objective_id, user_id):
             return jsonify({'error': 'Objective is not in review'}), 400
         if not can_approve_reject(db, user_id, obj):
             return jsonify({'error': 'Not allowed to reject'}), 403
-        data = request.get_json() or {}
-        reason = data.get('reason', '')
         return _workflow_transition(objective_id, user_id, 'in_review', 'rejected', reason=reason)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1079,10 +1230,22 @@ def reject_objective(objective_id, user_id):
 def resubmit_objective(objective_id, user_id):
     """REJECTED -> IN_REVIEW. Allowed: owner, admin."""
     try:
+        db = get_db()
+        if _using_postgres_repo():
+            norm, err = _postgres_objective_norm_or_error(user_id, objective_id)
+            if err:
+                return err
+            repo = get_okr_repository()
+            obj = repo.get_objective(user_id, norm)
+            if obj.get('status') != 'rejected':
+                return jsonify({'error': 'Objective is not rejected'}), 400
+            if not can_resubmit(db, user_id, obj):
+                return jsonify({'error': 'Not allowed to resubmit'}), 403
+            return _workflow_transition(objective_id, user_id, 'rejected', 'in_review')
+
         oid = _parse_object_id(objective_id)
         if oid is None:
             return jsonify({'error': 'Invalid objective ID'}), 400
-        db = get_db()
         obj = db.objectives.find_one({'_id': oid})
         if not obj:
             return jsonify({'error': 'Objective not found'}), 404
@@ -1100,10 +1263,25 @@ def resubmit_objective(objective_id, user_id):
 def reopen_objective(objective_id, user_id):
     """APPROVED or REJECTED -> DRAFT. Allowed: admin only. Body: { reason? }."""
     try:
+        db = get_db()
+        data = request.get_json() or {}
+        reason = data.get('reason', '')
+        if _using_postgres_repo():
+            norm, err = _postgres_objective_norm_or_error(user_id, objective_id)
+            if err:
+                return err
+            repo = get_okr_repository()
+            obj = repo.get_objective(user_id, norm)
+            status = (obj.get('status') or '').lower()
+            if status not in ('approved', 'rejected'):
+                return jsonify({'error': 'Objective can only be reopened from approved or rejected'}), 400
+            if not can_reopen(db, user_id, obj):
+                return jsonify({'error': 'Not allowed to reopen'}), 403
+            return _workflow_transition(objective_id, user_id, status, 'draft', reason=reason)
+
         oid = _parse_object_id(objective_id)
         if oid is None:
             return jsonify({'error': 'Invalid objective ID'}), 400
-        db = get_db()
         obj = db.objectives.find_one({'_id': oid})
         if not obj:
             return jsonify({'error': 'Objective not found'}), 404
@@ -1112,8 +1290,6 @@ def reopen_objective(objective_id, user_id):
             return jsonify({'error': 'Objective can only be reopened from approved or rejected'}), 400
         if not can_reopen(db, user_id, obj):
             return jsonify({'error': 'Not allowed to reopen'}), 403
-        data = request.get_json() or {}
-        reason = data.get('reason', '')
         return _workflow_transition(objective_id, user_id, status, 'draft', reason=reason)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1170,7 +1346,10 @@ def list_key_results(user_id):
             return jsonify({'error': 'objectiveId query param is required'}), 400
         repo = get_okr_repository()
         if _using_postgres_repo():
-            items = repo.list_key_results(user_id, objective_id)
+            norm_oid = _parse_uuid_objective_id(objective_id)
+            if norm_oid is None:
+                return jsonify({'error': 'Invalid objectiveId'}), 400
+            items = repo.list_key_results(user_id, norm_oid)
             return jsonify(items or []), 200
 
         oid = _parse_object_id(objective_id)
@@ -1218,10 +1397,21 @@ def get_key_result(kr_id, user_id):
 def get_key_result_history(kr_id, user_id):
     """List score history for a key result (for trend charts)."""
     try:
+        db = get_db()
+        if _using_postgres_repo():
+            kid = _parse_uuid_objective_id(kr_id)
+            if kid is None:
+                return jsonify({'error': 'Invalid key result ID'}), 400
+            repo = get_okr_repository()
+            if not repo.get_key_result(user_id, kid):
+                return jsonify({'error': 'Key result not found'}), 404
+            cursor = db.score_history.find({'keyResultId': kid}).sort('recordedAt', 1)
+            items = [_serialize_doc(d) for d in cursor]
+            return jsonify(items), 200
+
         kid = _parse_object_id(kr_id)
         if kid is None:
             return jsonify({'error': 'Invalid key result ID'}), 400
-        db = get_db()
         if not db.key_results.find_one({'_id': kid}):
             return jsonify({'error': 'Key result not found'}), 404
         cursor = db.score_history.find({'keyResultId': kid}).sort('recordedAt', 1)
@@ -1406,12 +1596,18 @@ def delete_key_result(kr_id, user_id):
 def list_comments(objective_id, user_id):
     """List comments for an objective."""
     try:
-        oid = _parse_object_id(objective_id)
-        if oid is None:
-            return jsonify({'error': 'Invalid objective ID'}), 400
         db = get_db()
-        if not db.objectives.find_one({'_id': oid}):
-            return jsonify({'error': 'Objective not found'}), 404
+        if _using_postgres_repo():
+            norm, err = _postgres_objective_norm_or_error(user_id, objective_id)
+            if err:
+                return err
+            oid = norm
+        else:
+            oid = _parse_object_id(objective_id)
+            if oid is None:
+                return jsonify({'error': 'Invalid objective ID'}), 400
+            if not db.objectives.find_one({'_id': oid}):
+                return jsonify({'error': 'Objective not found'}), 404
         cursor = db.comments.find({'objectiveId': oid}).sort('createdAt', 1)
         items = [_serialize_doc(d) for d in cursor]
         return jsonify(items), 200
@@ -1424,16 +1620,22 @@ def list_comments(objective_id, user_id):
 def create_comment(objective_id, user_id):
     """Add a comment. Body: { body }."""
     try:
-        oid = _parse_object_id(objective_id)
-        if oid is None:
-            return jsonify({'error': 'Invalid objective ID'}), 400
         data = request.get_json() or {}
         body = data.get('body', '').strip()
         if not body:
             return jsonify({'error': 'body is required'}), 400
         db = get_db()
-        if not db.objectives.find_one({'_id': oid}):
-            return jsonify({'error': 'Objective not found'}), 404
+        if _using_postgres_repo():
+            norm, err = _postgres_objective_norm_or_error(user_id, objective_id)
+            if err:
+                return err
+            oid = norm
+        else:
+            oid = _parse_object_id(objective_id)
+            if oid is None:
+                return jsonify({'error': 'Invalid objective ID'}), 400
+            if not db.objectives.find_one({'_id': oid}):
+                return jsonify({'error': 'Objective not found'}), 404
         now = _now()
         doc = {
             'objectiveId': oid,
@@ -1528,17 +1730,44 @@ def _key_result_belongs_to_objective(db, kr_oid, objective_oid):
     return True, None
 
 
+def _key_result_belongs_to_objective_unified(user_id, db, key_result_id_str, objective_ref):
+    """objective_ref: Mongo ObjectId or Postgres objective UUID string."""
+    if not key_result_id_str:
+        return True, None
+    if _using_postgres_repo():
+        kid = _parse_uuid_objective_id(key_result_id_str)
+        if kid is None:
+            return False, 'Invalid keyResultId'
+        repo = get_okr_repository()
+        kr = repo.get_key_result(user_id, kid)
+        if not kr:
+            return False, 'Key result not found'
+        if str(kr.get('objectiveId')) != str(objective_ref):
+            return False, 'Key result does not belong to this objective'
+        return True, None
+    kr_oid = _parse_object_id(key_result_id_str)
+    if kr_oid is None:
+        return False, 'Invalid keyResultId'
+    return _key_result_belongs_to_objective(db, kr_oid, objective_ref)
+
+
 @bp.route('/objectives/<objective_id>/attachments', methods=['GET'])
 @require_auth
 def list_attachments(objective_id, user_id):
     """List attachments for an objective (exclude soft-deleted)."""
     try:
-        oid = _parse_object_id(objective_id)
-        if oid is None:
-            return jsonify({'error': 'Invalid objective ID'}), 400
         db = get_db()
-        if not db.objectives.find_one({'_id': oid}):
-            return jsonify({'error': 'Objective not found'}), 404
+        if _using_postgres_repo():
+            norm, err = _postgres_objective_norm_or_error(user_id, objective_id)
+            if err:
+                return err
+            oid = norm
+        else:
+            oid = _parse_object_id(objective_id)
+            if oid is None:
+                return jsonify({'error': 'Invalid objective ID'}), 400
+            if not db.objectives.find_one({'_id': oid}):
+                return jsonify({'error': 'Objective not found'}), 404
         cursor = db.attachments.find({'objectiveId': oid, 'deletedAt': None})
         items = [_serialize_doc(d) for d in cursor]
         return jsonify(items), 200
@@ -1564,19 +1793,31 @@ def create_attachment(user_id):
             file = request.files.get('file')
             if not objective_id or not file:
                 return jsonify({'error': 'objectiveId and file are required'}), 400
-            oid = _parse_object_id(objective_id)
-            if oid is None:
-                return jsonify({'error': 'Invalid objectiveId'}), 400
-            if not db.objectives.find_one({'_id': oid}):
-                return jsonify({'error': 'Objective not found'}), 404
+            kr_storage = None
+            if _using_postgres_repo():
+                norm, err = _postgres_objective_norm_or_error(user_id, objective_id)
+                if err:
+                    return err
+                oid = norm
+                ok_kr, kr_err = _key_result_belongs_to_objective_unified(user_id, db, key_result_id, oid)
+                if not ok_kr:
+                    return jsonify({'error': kr_err}), 400
+                kr_storage = _parse_uuid_objective_id(key_result_id) if key_result_id else None
+            else:
+                oid = _parse_object_id(objective_id)
+                if oid is None:
+                    return jsonify({'error': 'Invalid objectiveId'}), 400
+                if not db.objectives.find_one({'_id': oid}):
+                    return jsonify({'error': 'Objective not found'}), 404
+                kr_oid = _parse_object_id(key_result_id) if key_result_id else None
+                if key_result_id and kr_oid is None:
+                    return jsonify({'error': 'Invalid keyResultId'}), 400
+                ok_kr, kr_err = _key_result_belongs_to_objective(db, kr_oid, oid)
+                if not ok_kr:
+                    return jsonify({'error': kr_err}), 400
+                kr_storage = kr_oid
             if get_user_role(db, user_id) == 'view_only':
                 return jsonify({'error': 'Not allowed to upload'}), 403
-            kr_oid = _parse_object_id(key_result_id) if key_result_id else None
-            if key_result_id and kr_oid is None:
-                return jsonify({'error': 'Invalid keyResultId'}), 400
-            ok_kr, kr_err = _key_result_belongs_to_objective(db, kr_oid, oid)
-            if not ok_kr:
-                return jsonify({'error': kr_err}), 400
             ok_f, err_f = _validate_upload_file(file, file.filename or '')
             if not ok_f:
                 return jsonify({'error': err_f}), 400
@@ -1595,24 +1836,37 @@ def create_attachment(user_id):
             objective_id = data.get('objectiveId')
             if not objective_id:
                 return jsonify({'error': 'objectiveId is required'}), 400
-            oid = _parse_object_id(objective_id)
-            if oid is None:
-                return jsonify({'error': 'Invalid objectiveId'}), 400
-            if not db.objectives.find_one({'_id': oid}):
-                return jsonify({'error': 'Objective not found'}), 404
+            kr_storage = None
+            if _using_postgres_repo():
+                norm, err = _postgres_objective_norm_or_error(user_id, objective_id)
+                if err:
+                    return err
+                oid = norm
+                key_result_id = data.get('keyResultId')
+                ok_kr, kr_err = _key_result_belongs_to_objective_unified(user_id, db, key_result_id, oid)
+                if not ok_kr:
+                    return jsonify({'error': kr_err}), 400
+                kr_storage = _parse_uuid_objective_id(key_result_id) if key_result_id else None
+            else:
+                oid = _parse_object_id(objective_id)
+                if oid is None:
+                    return jsonify({'error': 'Invalid objectiveId'}), 400
+                if not db.objectives.find_one({'_id': oid}):
+                    return jsonify({'error': 'Objective not found'}), 404
+                key_result_id = data.get('keyResultId')
+                kr_oid = _parse_object_id(key_result_id) if key_result_id else None
+                if key_result_id and kr_oid is None:
+                    return jsonify({'error': 'Invalid keyResultId'}), 400
+                ok_kr, kr_err = _key_result_belongs_to_objective(db, kr_oid, oid)
+                if not ok_kr:
+                    return jsonify({'error': kr_err}), 400
+                kr_storage = kr_oid
             if get_user_role(db, user_id) == 'view_only':
                 return jsonify({'error': 'Not allowed to upload'}), 403
             url = data.get('url')
             file_name = data.get('fileName', '')
             file_size = data.get('fileSize', 0) or 0
             file_type = data.get('fileType', '') or 'application/octet-stream'
-            key_result_id = data.get('keyResultId')
-            kr_oid = _parse_object_id(key_result_id) if key_result_id else None
-            if key_result_id and kr_oid is None:
-                return jsonify({'error': 'Invalid keyResultId'}), 400
-            ok_kr, kr_err = _key_result_belongs_to_objective(db, kr_oid, oid)
-            if not ok_kr:
-                return jsonify({'error': kr_err}), 400
             if not url or not file_name:
                 return jsonify({'error': 'url and fileName are required'}), 400
             ok_m, err_m = _validate_attachment_json_meta(file_name, file_size, file_type)
@@ -1622,7 +1876,7 @@ def create_attachment(user_id):
         now = _now()
         doc = {
             'objectiveId': oid,
-            'keyResultId': kr_oid,
+            'keyResultId': kr_storage,
             'fileName': file_name,
             'fileSize': file_size,
             'fileType': file_type,
@@ -1653,7 +1907,13 @@ def attachment_access(attachment_id, user_id):
         if not att:
             return jsonify({'error': 'Attachment not found'}), 404
         oid = att.get('objectiveId')
-        if not oid or not db.objectives.find_one({'_id': oid}):
+        if not oid:
+            return jsonify({'error': 'Objective not found'}), 404
+        if _using_postgres_repo():
+            repo = get_okr_repository()
+            if not repo.get_objective(user_id, str(oid)):
+                return jsonify({'error': 'Objective not found'}), 404
+        elif not db.objectives.find_one({'_id': oid}):
             return jsonify({'error': 'Objective not found'}), 404
         return jsonify({
             'url': att.get('url'),
@@ -1669,12 +1929,18 @@ def attachment_access(attachment_id, user_id):
 def list_attachment_deletions(objective_id, user_id):
     """Audit trail: file deletions for this objective."""
     try:
-        oid = _parse_object_id(objective_id)
-        if oid is None:
-            return jsonify({'error': 'Invalid objective ID'}), 400
         db = get_db()
-        if not db.objectives.find_one({'_id': oid}):
-            return jsonify({'error': 'Objective not found'}), 404
+        if _using_postgres_repo():
+            norm, err = _postgres_objective_norm_or_error(user_id, objective_id)
+            if err:
+                return err
+            oid = norm
+        else:
+            oid = _parse_object_id(objective_id)
+            if oid is None:
+                return jsonify({'error': 'Invalid objective ID'}), 400
+            if not db.objectives.find_one({'_id': oid}):
+                return jsonify({'error': 'Objective not found'}), 404
         cursor = db.attachment_deletion_audit.find({'objectiveId': oid}).sort('deletedAt', -1).limit(200)
         items = [_serialize_doc(d) for d in cursor]
         return jsonify(items), 200
@@ -1696,7 +1962,14 @@ def delete_attachment(attachment_id, user_id):
             return jsonify({'error': 'Attachment not found'}), 404
         if existing.get('deletedAt'):
             return jsonify({'message': 'Attachment already deleted'}), 200
-        obj = db.objectives.find_one({'_id': existing['objectiveId']}) if existing.get('objectiveId') else None
+        obj = None
+        if existing.get('objectiveId'):
+            oref = existing['objectiveId']
+            if _using_postgres_repo():
+                repo = get_okr_repository()
+                obj = repo.get_objective(user_id, str(oref))
+            else:
+                obj = db.objectives.find_one({'_id': oref})
         if not can_edit_objective(db, user_id, obj) and get_user_role(db, user_id) != 'admin':
             return jsonify({'error': 'Not allowed to delete this attachment'}), 403
         now = _now()

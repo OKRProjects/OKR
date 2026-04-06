@@ -13,6 +13,8 @@ export interface User {
   departmentId?: string;
   /** When true, user cannot create objectives (admin-set in User management). */
   okrCreateDisabled?: boolean;
+  /** When true, User management nav is hidden for this account (admin / org owner only). */
+  hideUserManagementNav?: boolean;
 }
 
 let currentUser: User | null = null;

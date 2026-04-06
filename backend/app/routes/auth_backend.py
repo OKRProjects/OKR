@@ -688,6 +688,7 @@ def get_current_user(user_id):
                 user_info['okrCreateDisabled'] = False
             else:
                 user_info['okrCreateDisabled'] = bool(app_user.get('okrCreateDisabled')) if app_user else False
+            user_info['hideUserManagementNav'] = bool(app_user.get('hideUserManagementNav')) if app_user else False
         except Exception:
             user_info['role'] = user_info.get('role', 'developer')
         # Map departmentId to Postgres UUID so leader/view_only filters match objectives (UUID department_id).
@@ -718,6 +719,7 @@ def get_current_user(user_id):
         if 'role' not in user_info:
             user_info['role'] = 'developer'
         user_info.setdefault('okrCreateDisabled', False)
+        user_info.setdefault('hideUserManagementNav', False)
         return jsonify(user_info), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 401
@@ -814,6 +816,7 @@ def _user_row_from_mongo_doc(doc: dict) -> dict:
         u['name'] = doc['name']
     if doc.get('email'):
         u['email'] = doc['email']
+    u['hideUserManagementNav'] = bool(doc.get('hideUserManagementNav'))
     return u
 
 
@@ -831,7 +834,15 @@ def list_users(user_id):
             doc['_id']: doc
             for doc in db.users.find(
                 {},
-                {'_id': 1, 'role': 1, 'departmentId': 1, 'name': 1, 'email': 1, 'okrCreateDisabled': 1},
+                {
+                    '_id': 1,
+                    'role': 1,
+                    'departmentId': 1,
+                    'name': 1,
+                    'email': 1,
+                    'okrCreateDisabled': 1,
+                    'hideUserManagementNav': 1,
+                },
             )
         }
         auth0_users = list_auth0_users()
@@ -860,6 +871,7 @@ def list_users(user_id):
                 if app.get('departmentId') is not None:
                     u['departmentId'] = str(app['departmentId'])
                 u['okrCreateDisabled'] = False if u['role'] == 'admin' else bool(app.get('okrCreateDisabled'))
+                u['hideUserManagementNav'] = bool(app.get('hideUserManagementNav'))
                 users.append(u)
             # Users present in Mongo but missing from Auth0 listing (e.g. stale id, different connection)
             for uid, doc in app_users_by_id.items():
@@ -911,6 +923,8 @@ def update_user(user_id, uid):
                 effective_role = existing.get('role') if existing else None
             if effective_role != 'admin':
                 update['okrCreateDisabled'] = bool(data['okrCreateDisabled'])
+        if 'hideUserManagementNav' in data:
+            update['hideUserManagementNav'] = bool(data['hideUserManagementNav'])
         if not update:
             return jsonify({'error': 'No valid fields to update'}), 400
         update['updatedAt'] = datetime.utcnow().isoformat() + 'Z'
@@ -921,11 +935,15 @@ def update_user(user_id, uid):
         )
         if result.matched_count == 0 and not result.upserted_count:
             return jsonify({'error': 'User not found'}), 404
-        updated = db.users.find_one({'_id': uid}, {'_id': 1, 'role': 1, 'departmentId': 1, 'okrCreateDisabled': 1})
+        updated = db.users.find_one(
+            {'_id': uid},
+            {'_id': 1, 'role': 1, 'departmentId': 1, 'okrCreateDisabled': 1, 'hideUserManagementNav': 1},
+        )
         out = {
             '_id': updated['_id'],
             'role': updated.get('role', 'view_only'),
             'okrCreateDisabled': bool(updated.get('okrCreateDisabled')),
+            'hideUserManagementNav': bool(updated.get('hideUserManagementNav')),
         }
         if updated.get('departmentId') is not None:
             out['departmentId'] = str(updated['departmentId'])
