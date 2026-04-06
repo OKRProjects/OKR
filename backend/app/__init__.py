@@ -32,8 +32,13 @@ def create_app():
         app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
         app.config['SESSION_COOKIE_SECURE'] = False
 
-    # CORS configuration
-    cors_origins = os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(',')
+    # CORS: comma-separated origins, or default to FRONTEND_URL (single origin on Render).
+    _cors_raw = (os.getenv('CORS_ORIGINS') or '').strip()
+    _front = (os.getenv('FRONTEND_URL') or 'http://localhost:3000').strip()
+    if _cors_raw:
+        cors_origins = [x.strip() for x in _cors_raw.split(',') if x.strip()]
+    else:
+        cors_origins = [_front] if _front else ['http://localhost:3000']
     CORS(app, origins=cors_origins, supports_credentials=True)
 
     # Initialize MongoDB (non-blocking - will connect on first request)

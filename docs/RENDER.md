@@ -1,5 +1,7 @@
 # Render.com (free tier blueprint)
 
+**Environment variables:** see [`RENDER_ENV.md`](RENDER_ENV.md).
+
 The repo root [`render.yaml`](../render.yaml) defines:
 
 - **Web service** `hackathon-backend`: Docker build from [`backend/Dockerfile`](../backend/Dockerfile), **Free** plan.

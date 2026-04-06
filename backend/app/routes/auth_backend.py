@@ -10,12 +10,37 @@ from datetime import datetime, timedelta
 
 bp = Blueprint('auth_backend', __name__)
 
-AUTH0_DOMAIN = os.getenv('AUTH0_DOMAIN')
+
+def _auth0_domain_from_env() -> str | None:
+    """Prefer AUTH0_DOMAIN; else derive host from AUTH0_ISSUER_BASE_URL (same as Next.js / Render)."""
+    d = (os.getenv('AUTH0_DOMAIN') or '').strip()
+    if d:
+        return d
+    issuer = (os.getenv('AUTH0_ISSUER_BASE_URL') or '').strip().rstrip('/')
+    if not issuer:
+        return None
+    for prefix in ('https://', 'http://'):
+        if issuer.startswith(prefix):
+            return issuer[len(prefix) :]
+    return issuer
+
+
+AUTH0_DOMAIN = _auth0_domain_from_env()
 AUTH0_CLIENT_ID = os.getenv('AUTH0_CLIENT_ID')
 AUTH0_CLIENT_SECRET = os.getenv('AUTH0_CLIENT_SECRET')
 AUTH0_AUDIENCE = os.getenv('AUTH0_AUDIENCE')
-AUTH0_BASE_URL = os.getenv('AUTH0_BASE_URL', 'http://localhost:3000')
-BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:5001')
+# Public URL of the Next app (OAuth redirects). FRONTEND_URL is clearer on Render; AUTH0_BASE_URL kept for compat.
+AUTH0_BASE_URL = (
+    (os.getenv('AUTH0_BASE_URL') or '').strip()
+    or (os.getenv('FRONTEND_URL') or '').strip()
+    or 'http://localhost:3000'
+)
+# Public URL of this API (OAuth callback). Render sets RENDER_EXTERNAL_URL automatically.
+BACKEND_URL = (
+    (os.getenv('BACKEND_URL') or '').strip()
+    or (os.getenv('RENDER_EXTERNAL_URL') or '').strip()
+    or 'http://localhost:5001'
+)
 
 if not AUTH0_AUDIENCE and AUTH0_DOMAIN:
     AUTH0_AUDIENCE = f'https://{AUTH0_DOMAIN}/api/v2/'
@@ -257,7 +282,7 @@ def _ensure_pg_user_row(user_info: dict) -> None:
 def login():
     """Redirect to Auth0 login (OAuth flow)"""
     if not AUTH0_DOMAIN or not AUTH0_CLIENT_ID:
-        error_msg = 'Auth0 not configured. Please set AUTH0_DOMAIN and AUTH0_CLIENT_ID in backend .env file.'
+        error_msg = 'Auth0 not configured. Set AUTH0_ISSUER_BASE_URL (or AUTH0_DOMAIN) and AUTH0_CLIENT_ID.'
         print(f"ERROR: {error_msg}")
         return jsonify({'error': error_msg}), 500
     

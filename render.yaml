@@ -1,8 +1,11 @@
 # Render Blueprint: https://render.com/docs/infrastructure-as-code
 # Deploy: New → Blueprint → connect repo → apply this file.
 #
-# Free tier: Web Services + PostgreSQL (free instance limits apply; services may spin down when idle).
-# Set secrets in the Render dashboard (Environment) or link a secret store — do not commit .env.
+# Free tier: Web Services + PostgreSQL (limits apply; services may spin down when idle).
+# Set secrets in the Render dashboard — do not commit .env.
+#
+# Env reference: docs/RENDER_ENV.md
+# Render injects PORT, RENDER_EXTERNAL_URL per service; DATABASE_URL is linked from Postgres.
 
 version: "1"
 
@@ -24,7 +27,6 @@ services:
     dockerContext: ./backend
     healthCheckPath: /live
     envVars:
-      # PORT is injected by Render; run.py reads it.
       - key: FLASK_ENV
         value: production
       - key: OKR_REPOSITORY
@@ -35,12 +37,12 @@ services:
           property: connectionString
       - key: FLASK_SECRET_KEY
         generateValue: true
-      # --- Set these in the Render dashboard (Environment) after first deploy ---
+      # --- Set in dashboard (see docs/RENDER_ENV.md) ---
       - key: MONGODB_URI
         sync: false
       - key: MONGODB_DB_NAME
         sync: false
-      - key: AUTH0_DOMAIN
+      - key: AUTH0_ISSUER_BASE_URL
         sync: false
       - key: AUTH0_CLIENT_ID
         sync: false
@@ -48,12 +50,7 @@ services:
         sync: false
       - key: AUTH0_AUDIENCE
         sync: false
-      - key: AUTH0_BASE_URL
-        sync: false
-      - key: BACKEND_URL
-        sync: false
-      - key: CORS_ORIGINS
-        sync: false
+      # Public Next URL (CORS + OAuth redirects). Same as hackathon-frontend RENDER_EXTERNAL_URL.
       - key: FRONTEND_URL
         sync: false
       - key: APP_ADMIN_USER_IDS
@@ -73,16 +70,12 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      # Server-side rewrites: proxy /api → Flask (see frontend/next.config.ts)
       - key: BACKEND_URL
         fromService:
           name: hackathon-backend
           type: web
           envVarKey: RENDER_EXTERNAL_URL
-      # Auth0 (Next.js + @auth0/nextjs-auth0) — set to your frontend public URL after deploy
       - key: AUTH0_SECRET
-        sync: false
-      - key: AUTH0_BASE_URL
         sync: false
       - key: AUTH0_ISSUER_BASE_URL
         sync: false
@@ -91,9 +84,4 @@ services:
       - key: AUTH0_CLIENT_SECRET
         sync: false
       - key: AUTH0_AUDIENCE
-        sync: false
-      # Optional: leave unset so the browser uses same-origin /api (rewrites to BACKEND_URL)
-      - key: NEXT_PUBLIC_API_URL
-        sync: false
-      - key: NEXT_PUBLIC_APP_URL
         sync: false

@@ -9,10 +9,13 @@ const getDomain = () => {
   return issuerBaseUrl;
 };
 
-// Ensure baseURL is a valid URL
+// Public URL of this Next app (Auth0 callbacks). On Render, RENDER_EXTERNAL_URL is set automatically.
 const getBaseURL = () => {
-  const baseURL = process.env.AUTH0_BASE_URL || 'http://localhost:3000';
-  // Ensure it's a complete URL
+  const baseURL =
+    process.env.AUTH0_BASE_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.RENDER_EXTERNAL_URL ||
+    'http://localhost:3000';
   if (!baseURL.startsWith('http://') && !baseURL.startsWith('https://')) {
     return `http://${baseURL}`;
   }
