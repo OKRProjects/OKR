@@ -46,7 +46,7 @@ export function FieldLabel({
   return (
     <label
       htmlFor={htmlFor}
-      className={`block text-sm font-medium text-slate-700 dark:text-slate-300 ${className}`}
+      className={`block text-sm font-medium text-foreground ${className}`}
     >
       <span className="inline-flex items-center gap-1.5">
         {children}

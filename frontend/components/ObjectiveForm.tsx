@@ -27,8 +27,9 @@ const LEVELS: { value: ObjectiveLevel; label: string; hint: string }[] = [
 
 const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'];
 
+/** Matches `Input` styling so native selects/textareas behave in light and dark mode. */
 const inputClass =
-  'flex h-9 w-full min-w-0 rounded-md border border-input bg-input-background px-3 py-1 text-base transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:opacity-50 md:text-sm';
+  'flex h-9 w-full min-w-0 rounded-md border border-input bg-input-background px-3 py-1 text-base text-foreground transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] disabled:opacity-50 md:text-sm dark:bg-input/30';
 
 export default function ObjectiveForm({
   objective,
