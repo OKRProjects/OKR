@@ -15,6 +15,8 @@ export interface User {
   okrCreateDisabled?: boolean;
   /** When true, User management nav is hidden for this account (admin / org owner only). */
   hideUserManagementNav?: boolean;
+  /** From /auth/me: true when the server allows User management APIs (admin/org_owner, or dev bypass). */
+  canManageAppUsers?: boolean;
 }
 
 let currentUser: User | null = null;

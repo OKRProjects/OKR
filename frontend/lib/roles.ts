@@ -49,9 +49,12 @@ export function isOrgOwnerAccount(u: { role?: string } | null | undefined): bool
 }
 
 /**
- * True when `/auth/me` allows User management APIs (admin or org owner on the server).
+ * True when `/auth/me` allows User management APIs (admin/org_owner, or dev bypass flag on the server).
  */
-export function canManageUsersAccount(u: { role?: string } | null | undefined): boolean {
+export function canManageUsersAccount(
+  u: { role?: string; canManageAppUsers?: boolean } | null | undefined
+): boolean {
+  if (u?.canManageAppUsers === true) return true;
   return isAdminAccount(u) || isOrgOwnerAccount(u);
 }
 

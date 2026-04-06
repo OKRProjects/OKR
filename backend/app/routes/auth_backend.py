@@ -636,6 +636,7 @@ def get_current_user(user_id):
                 is_bootstrap_org_owner_email,
                 ROLE_ADMIN,
                 ROLE_ORG_OWNER,
+                session_may_manage_app_users,
             )
 
             db = get_db()
@@ -708,6 +709,7 @@ def get_current_user(user_id):
                 app_user = db.users.find_one({'_id': user_id})
 
             user_info['role'] = get_user_role(db, user_id, _session_email or None)
+            user_info['canManageAppUsers'] = session_may_manage_app_users(db, user_id, _session_email or None)
             if user_info['role'] == ROLE_ADMIN:
                 user_info['okrCreateDisabled'] = False
             else:
@@ -744,6 +746,7 @@ def get_current_user(user_id):
             user_info['role'] = 'developer'
         user_info.setdefault('okrCreateDisabled', False)
         user_info.setdefault('hideUserManagementNav', False)
+        user_info.setdefault('canManageAppUsers', False)
         return jsonify(user_info), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 401
@@ -791,11 +794,11 @@ def require_user_management(f):
         try:
             user_id = get_user_id_from_request()
             from app.db.mongodb import get_db
-            from app.services.permissions import get_user_role, can_manage_app_users
+            from app.services.permissions import session_may_manage_app_users
             db = get_db()
             info = get_user_info_from_request()
             auth_em = (info.get('email') or '').strip() or None
-            if not can_manage_app_users(get_user_role(db, user_id, auth_em)):
+            if not session_may_manage_app_users(db, user_id, auth_em):
                 return jsonify({'error': 'Admin or org owner access required'}), 403
             kwargs['user_id'] = user_id
             return f(*args, **kwargs)

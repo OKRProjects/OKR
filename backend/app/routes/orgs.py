@@ -37,12 +37,12 @@ def _user_can_create_department_in_org(s, user_id: str, org_id: str) -> bool:
         return True
     try:
         from app.db.mongodb import get_db
-        from app.services.permissions import can_manage_app_users, get_user_role
+        from app.services.permissions import session_may_manage_app_users
 
         db = get_db()
         info = get_user_info_from_request()
         auth_em = (info.get('email') or '').strip() or None
-        if can_manage_app_users(get_user_role(db, user_id, auth_em)):
+        if session_may_manage_app_users(db, user_id, auth_em):
             return True
     except Exception:
         pass

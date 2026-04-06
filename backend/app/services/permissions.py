@@ -275,6 +275,25 @@ def can_manage_app_users(role: str) -> bool:
     return role in (ROLE_ADMIN, ROLE_ORG_OWNER)
 
 
+def is_dev_allow_all_user_management() -> bool:
+    """When True, any authenticated user may call user-management list/PATCH APIs.
+
+    Disabled in production. Opt-in via ``APP_DEV_ALLOW_ALL_USER_MANAGEMENT`` for local/hackathon setups
+    where Mongo still has ``view_only`` but you need User management without editing the DB first.
+    """
+    if (os.getenv("FLASK_ENV") or "").strip().lower() == "production":
+        return False
+    v = (os.getenv("APP_DEV_ALLOW_ALL_USER_MANAGEMENT") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
+def session_may_manage_app_users(db, user_id: str, auth_email: Optional[str] = None) -> bool:
+    """Whether this session may use User management APIs (role check or dev bypass)."""
+    if is_dev_allow_all_user_management():
+        return True
+    return can_manage_app_users(get_user_role(db, user_id, auth_email))
+
+
 def can_create_share_link(db, user_id: str, objective: dict) -> bool:
     """True if user can create a share link for this objective. Not view_only; admin, owner, or dept leader in same dept."""
     role = get_user_role(db, user_id)
