@@ -32,6 +32,7 @@ export default function RootLayout({
 }>) {
   const backendOrigin = (
     process.env.NEXT_PUBLIC_API_URL ||
+    process.env.BACKEND_URL ||
     process.env.BACKEND_PUBLIC_URL ||
     ""
   ).replace(/\/$/, "");
