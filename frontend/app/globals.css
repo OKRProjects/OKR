@@ -136,11 +136,13 @@
 
   body {
     @apply bg-background text-foreground;
+    overflow-x: clip;
   }
 
   html {
     font-size: var(--font-size);
     color-scheme: light dark;
+    overflow-x: clip;
   }
 
   h1 {
@@ -237,5 +239,16 @@
 @media (pointer: coarse) {
   .touch-manipulation {
     touch-action: manipulation;
+  }
+}
+
+/* SelectQuote public site typography (homepage only uses these utilities) */
+@layer utilities {
+  .font-sq-body {
+    font-family: var(--font-montserrat), var(--font-geist-sans), system-ui, sans-serif;
+  }
+
+  .font-sq-heading {
+    font-family: var(--font-poppins), var(--font-geist-sans), system-ui, sans-serif;
   }
 }

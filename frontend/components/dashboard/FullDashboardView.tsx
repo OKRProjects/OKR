@@ -8,6 +8,7 @@ import { FilterBar } from './FilterBar';
 import { TierSection } from './TierSection';
 import { Button } from '@/components/ui/button';
 import { UserMenu } from '@/components/UserMenu';
+import { MobileSidebarMenuButton } from '@/components/MobileSidebarMenuButton';
 import { HelpCircle, ClipboardCheck, Users, Presentation } from 'lucide-react';
 import Link from 'next/link';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -110,20 +111,24 @@ export function FullDashboardView(props: DashboardViewProps) {
 
       {/* Reference-style header */}
       <header className="border-b border-border bg-card">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">{headerTitle}</h1>
-              <p className="text-sm text-muted-foreground mt-1">{headerSub}</p>
+        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 items-start gap-2">
+              <MobileSidebarMenuButton className="mt-0.5" />
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold text-foreground sm:text-2xl">{headerTitle}</h1>
+                <p className="mt-1 text-sm text-muted-foreground">{headerSub}</p>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 sm:max-w-[min(100%,28rem)] sm:justify-end">
               {showAdminUserManagementLink && (
                 <Link
                   href="/admin/users"
-                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground touch-manipulation"
                 >
-                  <Users className="h-4 w-4" />
-                  User management
+                  <Users className="h-4 w-4 shrink-0" />
+                  <span className="hidden sm:inline">User management</span>
+                  <span className="sm:hidden">Users</span>
                 </Link>
               )}
               {onShowTutorial && (
@@ -131,10 +136,10 @@ export function FullDashboardView(props: DashboardViewProps) {
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowTutorial?.(true) ?? onShowTutorial()}
-                  className="h-9 text-muted-foreground hover:text-foreground"
+                  className="h-9 touch-manipulation text-muted-foreground hover:text-foreground"
                 >
-                  <HelpCircle className="mr-1.5 h-4 w-4" />
-                  Tour
+                  <HelpCircle className="h-4 w-4 sm:mr-1.5" aria-hidden />
+                  <span className="hidden sm:inline">Tour</span>
                 </Button>
               )}
               {onPresentationMode && (
@@ -142,13 +147,14 @@ export function FullDashboardView(props: DashboardViewProps) {
                   type="button"
                   variant="default"
                   size="sm"
-                  className="h-9 gap-1.5"
+                  className="h-9 gap-1.5 touch-manipulation"
                   onClick={onPresentationMode}
                   disabled={filteredAndSorted.length === 0}
                   aria-label="Open presentation or slide view"
                 >
-                  <Presentation className="h-4 w-4" />
-                  Present / Slide view
+                  <Presentation className="h-4 w-4 shrink-0" />
+                  <span className="hidden min-[400px]:inline">Present / Slide view</span>
+                  <span className="min-[400px]:hidden">Present</span>
                 </Button>
               )}
               {onExport && (
@@ -167,7 +173,7 @@ export function FullDashboardView(props: DashboardViewProps) {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-6 py-6">
+      <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 sm:py-6">
         <DashboardHeader
           variant="reference"
           role={role}

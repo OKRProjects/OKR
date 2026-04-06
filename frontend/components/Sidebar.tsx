@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Home,
   Target,
@@ -21,11 +21,31 @@ import { api } from '@/lib/api';
 import { resolveDepartmentIdForPostgres } from '@/lib/legacyDepartments';
 import { useViewRole } from '@/lib/ViewRoleContext';
 import { userCanCreateObjectives } from '@/lib/roles';
+import { useMobileSidebar } from '@/components/MobileSidebarContext';
+
+const MD_MIN_WIDTH = 768;
+
+function useIsDesktopMd() {
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${MD_MIN_WIDTH}px)`);
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
+  return isDesktop;
+}
 
 export function Sidebar() {
   const { roleForUI, userForPermissions, user: sessionUser } = useViewRole();
   const role = roleForUI;
+  const { mobileOpen, closeMobile } = useMobileSidebar();
+  const isDesktop = useIsDesktopMd();
   const [collapsed, setCollapsed] = useState(false);
+  const effectiveCollapsed = collapsed && isDesktop;
   const [orgs, setOrgs] = useState<Array<{ id: string; name: string; slug: string }>>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [orgTree, setOrgTree] = useState<any | null>(null);
@@ -39,6 +59,14 @@ export function Sidebar() {
   });
   const [departments, setDepartments] = useState<{ _id: string; name: string }[]>([]);
   const pathname = usePathname();
+
+  useEffect(() => {
+    closeMobile();
+  }, [pathname, closeMobile]);
+
+  const onNavActivate = useCallback(() => {
+    if (!isDesktop) closeMobile();
+  }, [isDesktop, closeMobile]);
 
   const mainNavigation = [
     { id: 'my-okrs', name: 'My OKRs', icon: CircleUserRound, href: '/my-okrs' },
@@ -150,13 +178,16 @@ export function Sidebar() {
   return (
     <div
       className={cn(
-        'relative flex flex-col border-r border-border bg-sidebar transition-all duration-300',
-        collapsed ? 'w-[72px]' : 'w-60'
+        'relative z-50 flex h-full flex-col border-r border-border bg-sidebar shadow-xl transition-transform duration-300 ease-out md:shadow-none',
+        'fixed inset-y-0 left-0 w-[min(17.5rem,88vw)] md:relative md:inset-auto md:h-auto',
+        mobileOpen ? 'translate-x-0' : 'max-md:-translate-x-full',
+        'md:translate-x-0',
+        effectiveCollapsed ? 'md:w-[72px]' : 'md:w-60'
       )}
     >
       {/* Logo / Header */}
-      <div className="flex h-14 items-center border-b border-border px-4">
-        {!collapsed && (
+      <div className="flex h-14 shrink-0 items-center border-b border-border px-4">
+        {!effectiveCollapsed && (
           <div className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <Target className="h-5 w-5" />
@@ -164,7 +195,7 @@ export function Sidebar() {
             <span className="font-semibold tracking-tight text-sidebar-foreground">Goals</span>
           </div>
         )}
-        {collapsed && (
+        {effectiveCollapsed && (
           <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <Target className="h-5 w-5" />
           </div>
@@ -174,14 +205,15 @@ export function Sidebar() {
       {/* New objective: any role unless admin disabled creation for this account */}
       {userCanCreateObjectives(sessionUser) && (
         <div className="p-3">
-          <Button asChild className="w-full rounded-lg" size={collapsed ? 'icon' : 'default'}>
+          <Button asChild className="w-full rounded-lg touch-manipulation" size={effectiveCollapsed ? 'icon' : 'default'}>
             <Link
               href="/okrs/new"
               aria-label="New objective"
-              className={cn(collapsed ? 'justify-center' : 'justify-start')}
+              className={cn(effectiveCollapsed ? 'justify-center' : 'justify-start')}
+              onClick={onNavActivate}
             >
               <Plus className="h-4 w-4" />
-              {!collapsed && <span className="ml-2">New objective</span>}
+              {!effectiveCollapsed && <span className="ml-2">New objective</span>}
             </Link>
           </Button>
         </div>
@@ -196,21 +228,22 @@ export function Sidebar() {
             <Link
               key={item.id}
               href={item.href}
+              onClick={onNavActivate}
               className={cn(
-                'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors touch-manipulation',
                 active
                   ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                   : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
               )}
             >
               <Icon className="h-4.5 w-4.5 flex-shrink-0 opacity-90" />
-              {!collapsed && <span>{item.name}</span>}
+              {!effectiveCollapsed && <span>{item.name}</span>}
             </Link>
           );
         })}
 
         {/* Hierarchy navigation (org -> dept -> team -> user) */}
-        {!collapsed && orgs.length > 0 && (
+        {!effectiveCollapsed && orgs.length > 0 && (
           <div className="mt-3 rounded-lg border border-sidebar-border bg-background/40 p-2">
             <div className="mb-2 flex items-center justify-between px-1">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
@@ -234,8 +267,9 @@ export function Sidebar() {
             {selectedOrgId && (
               <Link
                 href={`/okrs/scope/org/${selectedOrgId}`}
+                onClick={onNavActivate}
                 className={cn(
-                  'block rounded-md px-2 py-1.5 text-sm font-medium',
+                  'block rounded-md px-2 py-1.5 text-sm font-medium touch-manipulation',
                   pathname?.startsWith(`/okrs/scope/org/${selectedOrgId}`)
                     ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                     : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
@@ -269,7 +303,8 @@ export function Sidebar() {
                         <div className="ml-2 mt-1 space-y-1 border-l border-sidebar-border pl-2">
                           <Link
                             href={`/okrs/scope/department/${d.id}`}
-                            className="block rounded px-2 py-1 text-xs text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                            onClick={onNavActivate}
+                            className="block rounded px-2 py-1 text-xs text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground touch-manipulation"
                           >
                             View department OKRs
                           </Link>
@@ -294,7 +329,8 @@ export function Sidebar() {
                                   <div className="ml-2 mt-1 space-y-1 border-l border-sidebar-border pl-2">
                                     <Link
                                       href={`/okrs/scope/team/${t.id}`}
-                                      className="block rounded px-2 py-1 text-[11px] text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                                      onClick={onNavActivate}
+                                      className="block rounded px-2 py-1 text-[11px] text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground touch-manipulation"
                                     >
                                       View team OKRs
                                     </Link>
@@ -302,7 +338,8 @@ export function Sidebar() {
                                       <Link
                                         key={u.id}
                                         href={`/okrs/scope/user/${encodeURIComponent(u.id)}`}
-                                        className="block truncate rounded px-2 py-1 text-[11px] text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                                        onClick={onNavActivate}
+                                        className="block truncate rounded px-2 py-1 text-[11px] text-sidebar-foreground/60 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground touch-manipulation"
                                         title={u.email || u.name || u.id}
                                       >
                                         {u.name || u.email || u.id}
@@ -334,7 +371,7 @@ export function Sidebar() {
       </nav>
 
       {/* Overview stats (hidden for view_only) */}
-      {!collapsed && role !== 'view_only' && (
+      {!effectiveCollapsed && role !== 'view_only' && (
         <div className="border-t border-sidebar-border p-3">
           <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
             Overview
@@ -358,8 +395,9 @@ export function Sidebar() {
 
       {/* Collapse Button */}
       <button
+        type="button"
         onClick={() => setCollapsed(!collapsed)}
-        className="absolute -right-3 top-16 flex h-6 w-6 items-center justify-center rounded-full border border-border bg-background shadow-sm hover:bg-muted"
+        className="absolute -right-3 top-16 hidden h-7 w-7 items-center justify-center rounded-full border border-border bg-background shadow-sm hover:bg-muted md:flex touch-manipulation"
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
         {collapsed ? (

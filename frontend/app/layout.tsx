@@ -1,5 +1,5 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Geist, Geist_Mono, Montserrat, Poppins } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { ThemePreference } from "@/components/ThemePreference";
@@ -16,9 +16,29 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+/** SelectQuote marketing site uses Montserrat (body) and Poppins (headlines). */
+const montserrat = Montserrat({
+  variable: "--font-montserrat",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const poppins = Poppins({
+  variable: "--font-poppins",
+  subsets: ["latin"],
+  weight: ["600", "700", "800"],
+});
+
 export const metadata: Metadata = {
-  title: "OKR Tracker",
-  description: "Track organizational objectives and key results. Align strategic goals from leadership to execution.",
+  title: "SelectQuote OKR Management",
+  description:
+    "Internal OKR portal for SelectQuote Insurance Services. Align objectives across teams that help customers find the right coverage.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 /** Ensure layout reads env at request time (Docker/Render set NEXT_PUBLIC_API_URL at runtime, not build). */
@@ -39,7 +59,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${montserrat.variable} ${poppins.variable} antialiased`}
       >
         <script
           dangerouslySetInnerHTML={{
