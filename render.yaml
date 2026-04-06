@@ -1,0 +1,62 @@
+# Render Blueprint: https://render.com/docs/infrastructure-as-code
+# Deploy: New → Blueprint → connect repo → apply this file.
+#
+# Free tier: Web Service + PostgreSQL (free instance limits apply; service may spin down when idle).
+# Set secrets in the Render dashboard (Environment) or link a secret store — do not commit .env.
+
+version: "1"
+
+databases:
+  - name: hackathon-postgres
+    databaseName: hackathon
+    user: hackathon
+    plan: free
+    region: oregon
+
+services:
+  - type: web
+    name: hackathon-backend
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: main
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /live
+    envVars:
+      # PORT is injected by Render; run.py reads it.
+      - key: FLASK_ENV
+        value: production
+      - key: OKR_REPOSITORY
+        value: postgres
+      - key: DATABASE_URL
+        fromDatabase:
+          name: hackathon-postgres
+          property: connectionString
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      # --- Set these in the Render dashboard (Environment) after first deploy ---
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB_NAME
+        sync: false
+      - key: AUTH0_DOMAIN
+        sync: false
+      - key: AUTH0_CLIENT_ID
+        sync: false
+      - key: AUTH0_CLIENT_SECRET
+        sync: false
+      - key: AUTH0_AUDIENCE
+        sync: false
+      - key: AUTH0_BASE_URL
+        sync: false
+      - key: BACKEND_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: APP_ADMIN_USER_IDS
+        sync: false
+      - key: APP_ADMIN_EMAILS
+        sync: false

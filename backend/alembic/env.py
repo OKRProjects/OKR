@@ -24,10 +24,12 @@ if config.config_file_name is not None:
 
 
 def get_url():
+    from app.db.postgres import normalize_database_url
+
     url = os.getenv("DATABASE_URL")
     if not url:
         raise RuntimeError("DATABASE_URL must be set for Alembic")
-    return url
+    return normalize_database_url(url) or url
 
 
 target_metadata = Base.metadata

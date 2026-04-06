@@ -4,6 +4,13 @@ from app.db import mongodb
 
 bp = Blueprint('health', __name__)
 
+
+@bp.route('/live', methods=['GET'])
+def live():
+    """Liveness for load balancers (e.g. Render) — does not require Mongo/Postgres."""
+    return jsonify({'status': 'ok'}), 200
+
+
 @bp.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
