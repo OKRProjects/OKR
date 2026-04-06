@@ -50,6 +50,8 @@ export default function ObjectiveForm({
   );
   const [departments, setDepartments] = useState<{ _id: string; name: string; color?: string }[]>([]);
   const [departmentsLoading, setDepartmentsLoading] = useState(true);
+  const [newDepartmentName, setNewDepartmentName] = useState('');
+  const [creatingDepartment, setCreatingDepartment] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,6 +83,34 @@ export default function ObjectiveForm({
       setDepartmentId((prev) => prev || defaultDepartmentId);
     }
   }, [defaultDepartmentId, objective?._id]);
+
+  const handleCreateDepartment = async () => {
+    const name = newDepartmentName.trim();
+    if (!name || creatingDepartment) return;
+    setError(null);
+    setCreatingDepartment(true);
+    try {
+      let orgId: string | undefined;
+      try {
+        const orgs = await api.getOrgs();
+        orgId = orgs[0]?.id;
+      } catch {
+        orgId = undefined;
+      }
+      const created = await api.createDepartment(orgId ? { name, orgId } : { name });
+      setDepartments((prev) =>
+        [...prev, { _id: created._id, name: created.name }].sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        )
+      );
+      setDepartmentId(created._id);
+      setNewDepartmentName('');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not create department');
+    } finally {
+      setCreatingDepartment(false);
+    }
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -217,9 +247,43 @@ export default function ObjectiveForm({
               </option>
             ))}
           </select>
-          {!departmentsLoading && departments.length === 0 && (
-            <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
-              No departments in the directory yet. Add departments under Organization, or save without one for now.
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1">
+              <FieldLabel htmlFor="new-department-name" tooltip="Creates a department in your organization and selects it for this objective.">
+                New department
+              </FieldLabel>
+              <Input
+                id="new-department-name"
+                type="text"
+                value={newDepartmentName}
+                onChange={(e) => setNewDepartmentName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void handleCreateDepartment();
+                  }
+                }}
+                placeholder="e.g. Platform Engineering"
+                disabled={creatingDepartment || !!objective?._id}
+                className="mt-1.5"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={creatingDepartment || !newDepartmentName.trim() || !!objective?._id}
+              className="shrink-0 sm:mb-0.5"
+              onClick={() => void handleCreateDepartment()}
+            >
+              {creatingDepartment ? 'Adding…' : 'Add department'}
+            </Button>
+          </div>
+          {objective?._id && (
+            <p className="mt-2 text-xs text-muted-foreground">Department list is fixed while editing an existing objective.</p>
+          )}
+          {!departmentsLoading && departments.length === 0 && !newDepartmentName && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              No departments yet — add one above, or save the objective without a department.
             </p>
           )}
         </div>

@@ -1,55 +1,20 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Settings, LogOut, ChevronDown, Check } from 'lucide-react';
+import { Settings, LogOut, ChevronDown } from 'lucide-react';
 import { useViewRole } from '@/lib/ViewRoleContext';
 import { logout } from '@/lib/auth';
-import { api } from '@/lib/api';
 import { cn } from '@/components/ui/utils';
-import { isAdminAccount } from '@/lib/roles';
 
-const ROLE_LABELS: Record<string, string> = {
-  admin: 'Admin',
-  leader: 'Leader',
-  standard: 'Standard',
-  view_only: 'View only',
-  developer: 'Developer',
-};
-
-const ROLE_DESCRIPTIONS: Record<string, string> = {
-  admin: 'Full access; manage users and all objectives.',
-  leader: 'Lead a division; approve objectives and see department metrics.',
-  standard: 'Create and edit objectives; submit for approval.',
-  view_only: 'View objectives only; no edits.',
-  developer: 'Same as standard with developer tools.',
-};
-
-const ROLES: { value: 'actual' | 'admin' | 'leader' | 'standard' | 'view_only' | 'developer'; label: string }[] = [
-  { value: 'actual', label: 'Actual (my real role)' },
-  { value: 'view_only', label: 'View only' },
-  { value: 'standard', label: 'Standard' },
-  { value: 'leader', label: 'Leader' },
-  { value: 'admin', label: 'Admin' },
-  { value: 'developer', label: 'Developer' },
-];
-
+/**
+ * Header account menu: Settings and sign out. Role preview, docs, integrations, and admin tools live on /profile.
+ */
 export function UserMenu() {
-  const { user, rolePreview, setRolePreview } = useViewRole();
+  const { user } = useViewRole();
   const [open, setOpen] = useState(false);
-  const [departments, setDepartments] = useState<{ _id: string; name: string }[]>([]);
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    api.getDepartments().then(setDepartments).catch(() => setDepartments([]));
-  }, []);
-
-  useEffect(() => {
-    if (rolePreview === 'admin' && user && !isAdminAccount(user)) {
-      setRolePreview(null);
-    }
-  }, [rolePreview, user, setRolePreview]);
 
   useEffect(() => {
     if (!open) return;
@@ -67,20 +32,6 @@ export function UserMenu() {
 
   const displayName = user?.name || user?.email || 'User';
   const initial = (displayName.charAt(0) || 'U').toUpperCase();
-  /** Account role from the server (not the UI preview). */
-  const accountRole = user?.role ?? 'standard';
-  const roleLabel = ROLE_LABELS[accountRole] ?? accountRole;
-  const roleDescription = ROLE_DESCRIPTIONS[accountRole] ?? '';
-  const departmentId = user?.departmentId;
-  const departmentName = departmentId && departments.length
-    ? (departments.find((d) => d._id === departmentId)?.name ?? departmentId)
-    : null;
-  const divisionText = departmentName ? departmentName : 'All divisions';
-
-  const previewRoleOptions = useMemo(
-    () => ROLES.filter((r) => r.value !== 'admin' || isAdminAccount(user)),
-    [user]
-  );
 
   if (!user) return null;
 
@@ -116,48 +67,10 @@ export function UserMenu() {
 
       {open && (
         <div
-          className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border bg-popover text-popover-foreground shadow-md"
+          className="absolute right-0 top-full z-50 mt-1 w-56 rounded-lg border bg-popover text-popover-foreground shadow-md"
           role="menu"
         >
-          <div className="p-3">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Role (your account)</p>
-            <p className="mt-0.5 text-sm font-medium">{roleLabel}</p>
-            <p className="text-xs text-muted-foreground">{roleDescription}</p>
-            {rolePreview != null && (
-              <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-                <span className="font-medium">Preview:</span> the UI can show as{' '}
-                <strong>{ROLE_LABELS[rolePreview] ?? rolePreview}</strong>, but APIs and admin pages still use{' '}
-                <strong>{roleLabel}</strong> above.
-              </p>
-            )}
-          </div>
-          <div className="border-t px-3 py-2">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Division</p>
-            <p className="mt-0.5 text-sm">{divisionText}</p>
-          </div>
-          <div className="border-t p-2">
-            <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">Switch role (preview)</p>
-            <div className="space-y-0.5">
-              {previewRoleOptions.map(({ value, label }) => {
-                const isActive = (rolePreview ?? 'actual') === value;
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setRolePreview(value === 'actual' ? null : value)}
-                    className={cn(
-                      'flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm',
-                      isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-muted'
-                    )}
-                  >
-                    {label}
-                    {isActive && <Check className="h-4 w-4 shrink-0" />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div className="border-t p-1">
+          <div className="p-1">
             <Link
               href="/profile"
               onClick={() => setOpen(false)}

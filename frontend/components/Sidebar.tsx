@@ -6,16 +6,11 @@ import {
   Target,
   BarChart3,
   Building2,
-  Settings,
   Plus,
   TrendingUp,
   Calendar,
   ChevronLeft,
   ChevronRight,
-  BookOpen,
-  Plug,
-  Eye,
-  Users,
   CircleUserRound,
 } from 'lucide-react';
 import { Button } from './ui/button';
@@ -25,19 +20,10 @@ import { usePathname } from 'next/navigation';
 import { api } from '@/lib/api';
 import { resolveDepartmentIdForPostgres } from '@/lib/legacyDepartments';
 import { useViewRole } from '@/lib/ViewRoleContext';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { isAdminAccount, shouldShowUserManagementNav, userCanCreateObjectives } from '@/lib/roles';
+import { userCanCreateObjectives } from '@/lib/roles';
 
 export function Sidebar() {
-  const { setRolePreview, roleForUI, rolePreview, userForPermissions, user: sessionUser } = useViewRole();
-  /** Real admin + not previewing leader/IC/etc. (preview would still leave sessionUser as admin). */
-  const showUserManagementLink = shouldShowUserManagementNav(sessionUser, rolePreview);
+  const { roleForUI, userForPermissions, user: sessionUser } = useViewRole();
   const role = roleForUI;
   const [collapsed, setCollapsed] = useState(false);
   const [orgs, setOrgs] = useState<Array<{ id: string; name: string; slug: string }>>([]);
@@ -62,12 +48,6 @@ export function Sidebar() {
     { id: 'analytics', name: 'Analytics', icon: BarChart3, href: '/analytics' },
   ];
 
-  const bottomNavigation = [
-    { id: 'docs', name: 'Documentation', icon: BookOpen, href: '/docs' },
-    ...(role !== 'view_only' ? [{ id: 'integrations', name: 'Integrations', icon: Plug, href: '/integrations' }] : []),
-    { id: 'profile', name: 'Settings', icon: Settings, href: '/profile' },
-  ];
-
   useEffect(() => {
     (async () => {
       try {
@@ -78,13 +58,6 @@ export function Sidebar() {
       }
     })();
   }, []);
-
-  /** Non-admins cannot keep “preview → Admin”; it hid real permissions vs User management. */
-  useEffect(() => {
-    if (rolePreview === 'admin' && sessionUser && !shouldShowUserManagementNav(sessionUser, null)) {
-      setRolePreview(null);
-    }
-  }, [rolePreview, sessionUser, setRolePreview]);
 
   useEffect(() => {
     loadStats();
@@ -164,15 +137,6 @@ export function Sidebar() {
     if (href === '/divisions') {
       return pathname === '/divisions';
     }
-    if (href === '/integrations') {
-      return pathname === '/integrations';
-    }
-    if (href === '/profile') {
-      return pathname === '/profile';
-    }
-    if (href === '/docs') {
-      return pathname === '/docs';
-    }
     return false;
   };
 
@@ -207,7 +171,7 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* New objective: leadership roles only (managers and above) */}
+      {/* New objective: any role unless admin disabled creation for this account */}
       {userCanCreateObjectives(sessionUser) && (
         <div className="p-3">
           <Button asChild className="w-full rounded-lg" size={collapsed ? 'icon' : 'default'}>
@@ -369,29 +333,6 @@ export function Sidebar() {
         )}
       </nav>
 
-      {/* Admin: User management — only when account role from /auth/me is admin */}
-      {showUserManagementLink && (
-        <div className="border-t border-sidebar-border space-y-0.5 px-2 py-2">
-          {!collapsed && (
-            <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
-              Admin
-            </p>
-          )}
-          <Link
-            href="/admin/users"
-            className={cn(
-              'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-              pathname?.startsWith('/admin/users')
-                ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
-            )}
-          >
-            <Users className="h-4.5 w-4.5 flex-shrink-0 opacity-90" />
-            {!collapsed && <span>User management</span>}
-          </Link>
-        </div>
-      )}
-
       {/* Overview stats (hidden for view_only) */}
       {!collapsed && role !== 'view_only' && (
         <div className="border-t border-sidebar-border p-3">
@@ -412,81 +353,6 @@ export function Sidebar() {
               );
             })}
           </div>
-        </div>
-      )}
-
-      {/* Account: Documentation, Integrations, Settings */}
-      <div className="border-t border-sidebar-border space-y-0.5 px-2 py-3">
-        {!collapsed && (
-          <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
-            Account
-          </p>
-        )}
-        {bottomNavigation.map((item: { id: string; name: string; icon: typeof BookOpen; href: string }) => {
-          const Icon = item.icon;
-          const active = isActive(item.href);
-          return (
-            <Link
-              key={item.id}
-              href={item.href}
-              className={cn(
-                'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                active
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                  : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
-              )}
-            >
-              <Icon className="h-4.5 w-4.5 flex-shrink-0 opacity-90" />
-              {!collapsed && <span>{item.name}</span>}
-            </Link>
-          );
-        })}
-      </div>
-
-      {/* Test role — switch between roles to test UI and permissions */}
-      {!collapsed && (
-        <div className="border-t border-sidebar-border p-3">
-          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
-            <Eye className="h-3.5 w-3.5" />
-            Test role
-          </p>
-          <Select
-            value={rolePreview ?? 'actual'}
-            onValueChange={(v) =>
-              setRolePreview(
-                v === 'actual'
-                  ? null
-                  : (v as
-                      | 'admin'
-                      | 'leader'
-                      | 'standard'
-                      | 'view_only'
-                      | 'developer'
-                      | 'manager'
-                      | 'director'
-                      | 'vp'
-                      | 'executive'
-                      | 'org_owner')
-              )
-            }
-          >
-            <SelectTrigger className="h-9 text-xs">
-              <SelectValue placeholder="Actual (my real role)" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="actual">Actual (my real role)</SelectItem>
-              <SelectItem value="view_only">View only</SelectItem>
-              <SelectItem value="standard">Standard (IC)</SelectItem>
-              <SelectItem value="manager">Manager</SelectItem>
-              <SelectItem value="director">Director</SelectItem>
-              <SelectItem value="vp">VP</SelectItem>
-              <SelectItem value="executive">Executive</SelectItem>
-              <SelectItem value="org_owner">Org owner</SelectItem>
-              <SelectItem value="leader">Leader (legacy)</SelectItem>
-              {isAdminAccount(sessionUser) && <SelectItem value="admin">Admin</SelectItem>}
-              <SelectItem value="developer">Developer</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
       )}
 

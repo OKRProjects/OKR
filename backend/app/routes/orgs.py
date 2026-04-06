@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+import re
+from uuid import uuid4
+
 from flask import Blueprint, jsonify, request
 from sqlalchemy import select, text
 
@@ -12,6 +14,12 @@ from app.repositories.okr_repo_postgres import PostgresOKRRepository
 
 
 bp = Blueprint("orgs", __name__)
+
+
+def _canonical_from_display_name(name: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "-", (name or "").strip().lower())
+    s = s.strip("-")[:120]
+    return s or "department"
 
 
 def _require_pg():
@@ -39,6 +47,53 @@ def list_orgs(user_id: str):
             .all()
         )
         return jsonify([{"id": o.id, "name": o.name, "slug": o.slug} for o in rows]), 200
+
+
+@bp.route("/orgs/<org_id>/departments", methods=["POST"])
+@require_auth
+def create_org_department(org_id: str, user_id: str):
+    """Create a department under an org (Postgres). Caller must be an active member."""
+    err = _require_pg()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    display = (data.get("name") or "").strip()
+    if not display:
+        return jsonify({"error": "name is required"}), 400
+
+    with pg_session() as s:
+        mem = s.get(Membership, {"user_id": user_id, "org_id": org_id})
+        if not mem or not mem.active:
+            return jsonify({"error": "No access to this organization"}), 403
+
+        org = s.get(Organization, org_id)
+        if not org:
+            return jsonify({"error": "Organization not found"}), 404
+
+        base = _canonical_from_display_name(display)
+        canonical = base
+        n = 1
+        while True:
+            existing = (
+                s.execute(
+                    select(Department.id).where(Department.org_id == org_id).where(Department.canonical_name == canonical)
+                )
+                .scalar_one_or_none()
+            )
+            if existing is None:
+                break
+            n += 1
+            canonical = f"{base}-{n}"[:120]
+
+        dept = Department(
+            id=str(uuid4()),
+            org_id=org_id,
+            canonical_name=canonical,
+            display_name=display[:200],
+        )
+        s.add(dept)
+        s.commit()
+        return jsonify({"_id": dept.id, "name": dept.display_name}), 201
 
 
 @bp.route("/orgs/<org_id>/tree", methods=["GET"])

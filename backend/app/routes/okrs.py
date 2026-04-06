@@ -75,6 +75,29 @@ def list_departments(user_id):
         return jsonify({'error': str(e)}), 500
 
 
+@bp.route('/departments', methods=['POST'])
+@require_auth
+def create_department(user_id):
+    """Create a department (Mongo OKR store only). Postgres uses POST /api/orgs/:orgId/departments."""
+    if _using_postgres_repo():
+        return jsonify(
+            {'error': 'Use POST /api/orgs/:orgId/departments with your organization id (Postgres).'}
+        ), 400
+    try:
+        data = request.get_json(silent=True) or {}
+        name = (data.get('name') or '').strip()
+        if not name:
+            return jsonify({'error': 'name is required'}), 400
+        db = get_db()
+        now = _now()
+        doc = {'name': name, 'createdAt': now, 'updatedAt': now}
+        result = db.departments.insert_one(doc)
+        out = {'_id': str(result.inserted_id), 'name': name}
+        return jsonify(out), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 # ---- Objectives ----
 
 @bp.route('/objectives', methods=['GET'])

@@ -422,6 +422,22 @@ export const api = {
     return fetchWithAuth('/api/departments');
   },
 
+  /** Create a department. With Postgres, pass orgId from {@link api.getOrgs}. Mongo uses name only. */
+  async createDepartment(body: { name: string; orgId?: string }): Promise<{ _id: string; name: string }> {
+    const name = body.name.trim();
+    if (!name) throw new Error('Department name is required');
+    if (body.orgId) {
+      return fetchWithAuth(`/api/orgs/${encodeURIComponent(body.orgId)}/departments`, {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      });
+    }
+    return fetchWithAuth('/api/departments', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+  },
+
   async getOrgs(): Promise<OrgSummary[]> {
     return fetchWithAuth('/api/orgs');
   },

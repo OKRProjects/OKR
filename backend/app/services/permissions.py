@@ -25,7 +25,7 @@ ROLE_VP = 'vp'
 ROLE_DIRECTOR = 'director'
 ROLE_MANAGER = 'manager'
 
-# Roles allowed to create new objectives (manager is the lowest tier that owns OKRs).
+# Leadership roles used for approval / dept-scoped actions (not for “who may create” — any role may create unless okrCreateDisabled).
 OKR_LEADERSHIP_ROLES = frozenset({
     ROLE_ADMIN,
     ROLE_LEADER,

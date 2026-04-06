@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { IntegrationsSection } from '@/components/IntegrationsSection';
 import { ProfileIntegrationsDemo } from '@/components/ProfileIntegrationsDemo';
+import { SettingsAccountSection } from '@/components/SettingsAccountSection';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useViewPreferences } from '@/lib/useViewPreferences';
@@ -248,7 +249,7 @@ export default function ProfilePage() {
 
   if (isLoading || loading || !user) {
     return (
-      <AppLayout title="Profile" description="Manage your profile information">
+      <AppLayout title="Settings" description="Account, integrations, and preferences">
         <div className="text-center text-muted-foreground">Loading...</div>
       </AppLayout>
     );
@@ -256,15 +257,22 @@ export default function ProfilePage() {
 
   if (!profile && !editing) {
     return (
-      <AppLayout title="Profile" description="Manage your profile information">
-        <Card>
-          <CardContent className="py-8 text-center">
-            <p className="text-muted-foreground mb-4">You haven't created a profile yet.</p>
-            <Button onClick={() => setEditing(true)}>
-              Create Profile
-            </Button>
-          </CardContent>
-        </Card>
+      <AppLayout title="Settings" description="Account, integrations, and preferences">
+        <div className="space-y-6">
+          <Card>
+            <CardContent className="pt-6 pb-6">
+              <SettingsAccountSection />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-8 text-center">
+              <p className="text-muted-foreground mb-4">You haven&apos;t created a profile yet.</p>
+              <Button onClick={() => setEditing(true)}>
+                Create Profile
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </AppLayout>
     );
   }
@@ -291,7 +299,7 @@ export default function ProfilePage() {
   if (!profile) return null;
 
   return (
-    <AppLayout title="Profile" description="Manage your profile information">
+    <AppLayout title="Settings" description="Account, integrations, and preferences">
       <Card className="overflow-hidden">
         {/* Profile Header */}
         <div className="bg-gradient-to-r from-primary to-purple-600 px-6 py-12">
@@ -329,6 +337,9 @@ export default function ProfilePage() {
 
         {/* Profile Content */}
         <CardContent className="px-6 py-8">
+          <SettingsAccountSection />
+
+          <div className="border-t pt-8 mt-8 space-y-6">
           {profile.bio && (
             <div className="mb-6">
               <h2 className="text-xl font-semibold mb-2">About</h2>
@@ -384,6 +395,7 @@ export default function ProfilePage() {
             <Button variant="outline" onClick={() => setEditing(true)}>
               Edit Profile
             </Button>
+          </div>
           </div>
         </CardContent>
       </Card>

@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { usePathname } from 'next/navigation';
 import { clearUserCache, setCurrentUserCache, type User } from '@/lib/auth';
 import { api } from '@/lib/api';
+import { isAdminAccount } from '@/lib/roles';
 
 const VIEW_AS_KEY = 'viewAsRole';
 const ROLE_PREVIEW_KEY = 'okrRolePreview';
@@ -122,6 +123,13 @@ export function ViewRoleProvider({ children }: { children: React.ReactNode }) {
     }
     setRolePreviewState(role);
   }, []);
+
+  /** Non-admins cannot keep “preview → Admin” in localStorage. */
+  useEffect(() => {
+    if (rolePreview === 'admin' && user && !isAdminAccount(user)) {
+      setRolePreview(null);
+    }
+  }, [rolePreview, user, setRolePreview]);
 
   const actualRole = user?.role;
   const roleForUI = rolePreview ?? actualRole;

@@ -8,17 +8,11 @@ import ObjectiveForm from '@/components/ObjectiveForm';
 import { isAdminAccount, userCanCreateObjectives } from '@/lib/roles';
 import { api, Objective } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { TutorialOverlay } from '@/components/shared/TutorialOverlay';
-import { useFirstTimeTutorial, getNewOKRTutorialSteps } from '@/lib/tutorial';
-import { Button } from '@/components/ui/button';
-import { HelpCircle } from 'lucide-react';
 
 export default function NewObjectivePage() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [parentOptions, setParentOptions] = useState<Objective[]>([]);
-  const { shouldShowTutorial, dismissTutorial } = useFirstTimeTutorial('new_okr');
-  const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
     loadUser();
@@ -110,17 +104,6 @@ export default function NewObjectivePage() {
       title="Create objective"
       description="Define the outcome, department, and period — saved to your org database"
     >
-      <div className="flex items-center justify-between gap-2 mb-6">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setShowTutorial(true)}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <HelpCircle className="mr-2 h-4 w-4" />
-          Take the tour
-        </Button>
-      </div>
       <Card className="max-w-3xl shadow-sm">
         <CardHeader className="border-b border-border pb-4">
           <CardTitle className="text-xl font-semibold tracking-tight">New objective</CardTitle>
@@ -133,13 +116,6 @@ export default function NewObjectivePage() {
           <ObjectiveForm parentOptions={parentOptions} defaultDepartmentId={user.departmentId} />
         </CardContent>
       </Card>
-      {(showTutorial || shouldShowTutorial) && (
-        <TutorialOverlay
-          steps={getNewOKRTutorialSteps()}
-          contextName="New OKR"
-          onDismiss={() => { setShowTutorial(false); dismissTutorial(); }}
-        />
-      )}
     </AppLayout>
   );
 }

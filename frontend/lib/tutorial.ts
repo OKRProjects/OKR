@@ -55,18 +55,3 @@ export function getDashboardTutorialSteps(): TutorialStep[] {
     },
   ];
 }
-
-export function getNewOKRTutorialSteps(): TutorialStep[] {
-  return [
-    {
-      id: 'form',
-      title: 'Create your objective',
-      body: 'Enter a clear title and optional description. Choose the level (Strategic, Functional, or Tactical) and fiscal year. For Tactical objectives, select a quarter.',
-    },
-    {
-      id: 'key-results',
-      title: 'Add key results after saving',
-      body: 'Once the objective is created, open it and add measurable key results with targets and units. Update their scores in the Progress tab as you go.',
-    },
-  ];
-}

@@ -1,6 +1,6 @@
 /**
  * App roles aligned with backend app/services/permissions.py.
- * Any role may create objectives unless an admin sets ``okrCreateDisabled`` on the user (User management).
+ * Every role (including view_only) may create objectives unless an admin sets ``okrCreateDisabled`` on the user.
  */
 
 export const OKR_LEADERSHIP_ROLES = [
@@ -56,7 +56,7 @@ export function shouldShowUserManagementNav(
   return normalizeAppRole(rolePreview) === 'admin';
 }
 
-/** True if this account may create objectives. Admins always can; others blocked when ``okrCreateDisabled``. */
+/** True if this account may create objectives (all roles; only blocked when ``okrCreateDisabled``). Admins ignore the flag. */
 export function userCanCreateObjectives(
   u: { role?: string; okrCreateDisabled?: boolean } | null | undefined
 ): boolean {
