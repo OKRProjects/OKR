@@ -5,7 +5,6 @@ import base64
 import json
 import re
 import requests
-from openai import OpenAI
 from app.prompts.roast import ROAST_CHAT_SYSTEM
 from app.prompts.support import SUPPORT_SYSTEM
 from app.prompts.assistant_web import ASSISTANT_WEB_SYSTEM
@@ -13,6 +12,14 @@ from app.prompts.tutor import SYSTEM as TUTOR_SYSTEM, build_user_prompt as build
 from app.services.web_search import search_web
 
 bp = Blueprint('chat', __name__)
+
+
+def _openai_client(api_key: str):
+    """Lazy import so the API can boot if the optional ``openai`` package is missing."""
+    from openai import OpenAI
+
+    return OpenAI(api_key=api_key)
+
 
 # Tool definition for web search (OpenRouter/OpenAI-style)
 def _normalize_text(s: str) -> str:
@@ -486,7 +493,7 @@ def _transcribe_audio(file_storage) -> str:
         raise ValueError('OPENAI_API_KEY not configured')
     file_bytes = file_storage.read()
     file_like = io.BytesIO(file_bytes)
-    client = OpenAI(api_key=api_key)
+    client = _openai_client(api_key)
     transcription = client.audio.transcriptions.create(
         model='whisper-1',
         file=(file_storage.filename, file_like),
@@ -504,7 +511,7 @@ def _text_to_speech(text: str, voice: str = 'coral') -> bytes:
         api_key = os.getenv('OPENAI_API_KEY')
         if not api_key:
             raise ValueError('OPENAI_API_KEY not configured')
-        client = OpenAI(api_key=api_key)
+        client = _openai_client(api_key)
         response = client.audio.speech.create(
             model='tts-1-hd',
             voice=voice,

@@ -1,6 +1,5 @@
 from flask import Blueprint, request, Response, jsonify
 import os
-from openai import OpenAI
 
 bp = Blueprint('speech', __name__)
 
@@ -29,6 +28,8 @@ def text_to_speech():
             api_key = os.getenv('OPENAI_API_KEY')
             if not api_key:
                 return jsonify({'error': 'OPENAI_API_KEY not configured'}), 500
+            from openai import OpenAI
+
             client = OpenAI(api_key=api_key)
             response = client.audio.speech.create(
                 model=model,

@@ -1,7 +1,6 @@
 from flask import Blueprint, request, jsonify
 import os
 import io
-from openai import OpenAI
 
 bp = Blueprint('transcription', __name__)
 
@@ -50,6 +49,8 @@ def transcribe():
         # Convert FileStorage to bytes for OpenAI SDK (expects io.IOBase, bytes or tuple)
         file_bytes = file.read()
         file_like = io.BytesIO(file_bytes)
+
+        from openai import OpenAI
 
         client = OpenAI(api_key=api_key)
 
