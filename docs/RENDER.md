@@ -4,11 +4,11 @@
 
 The repo root [`render.yaml`](../render.yaml) defines:
 
-- **Web service** `hackathon-backend`: Docker build from [`backend/Dockerfile`](../backend/Dockerfile), **Free** plan.
-- **Web service** `hackathon-frontend`: Docker build from [`frontend/Dockerfile`](../frontend/Dockerfile) (Next.js `standalone`), **Free** plan.
-- **PostgreSQL** `hackathon-postgres`: **Free** plan (limits apply; check [Render pricing](https://render.com/pricing)).
+- **Web service** `okr-backend`: Docker build from [`backend/Dockerfile`](../backend/Dockerfile), **Free** plan.
+- **Web service** `okr-frontend`: Docker build from [`frontend/Dockerfile`](../frontend/Dockerfile) (Next.js `standalone`), **Free** plan.
+- **PostgreSQL** `okr-postgres`: **Free** plan (limits apply; check [Render pricing](https://render.com/pricing)).
 
-`hackathon-frontend` gets **`BACKEND_URL`** from the backend service’s `RENDER_EXTERNAL_URL` (same blueprint). Set **`AUTH0_*`** and **`AUTH0_BASE_URL`** to your frontend URL (e.g. `https://hackathon-frontend.onrender.com`).
+`okr-frontend` gets **`BACKEND_URL`** from the backend service’s `RENDER_EXTERNAL_URL` (same blueprint). Set **`AUTH0_*`** and **`AUTH0_BASE_URL`** to your frontend URL (e.g. `https://okr-frontend.onrender.com`).
 
 ## Deploy
 

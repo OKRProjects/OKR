@@ -28,7 +28,7 @@ services:
       - ./backend/.env
     environment:
       # Compose network: DB host is the postgres service name, not localhost
-      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/hackathon
+      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/okr
       - OKR_REPOSITORY=postgres
       # Comma-separated Auth0 subs (e.g. auth0|abc) that always get admin (User management, etc.)
       - APP_ADMIN_USER_IDS=${APP_ADMIN_USER_IDS:-}
@@ -46,7 +46,7 @@ services:
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_DB=${POSTGRES_DB:-hackathon}
+      - POSTGRES_DB=${POSTGRES_DB:-okr}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
     volumes:

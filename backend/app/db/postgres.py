@@ -64,7 +64,7 @@ def init_pg():
     """
     Initialize SQLAlchemy engine + session factory.
 
-    Uses DATABASE_URL, e.g. postgresql+psycopg://user:pass@localhost:5432/hackathon
+    Uses DATABASE_URL, e.g. postgresql+psycopg://user:pass@localhost:5432/okr
     """
     global _engine, _SessionLocal
     database_url = normalize_database_url(os.getenv("DATABASE_URL"))

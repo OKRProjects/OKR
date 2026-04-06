@@ -5,7 +5,7 @@
 version: 1
 
 project:
-  name: hackathon-frontend
+  name: okr
 
 build:
   # Repository root is the monorepo; only build this app.

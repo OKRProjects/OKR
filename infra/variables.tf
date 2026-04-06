@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "project_name" {
   type        = string
   description = "Name prefix for resources"
-  default     = "hackathon-okr"
+  default     = "okr"
 }
 
 variable "backend_image" {
@@ -18,7 +18,7 @@ variable "backend_image" {
 variable "db_name" {
   type        = string
   description = "Postgres database name"
-  default     = "hackathon"
+  default     = "okr"
 }
 
 variable "db_username" {

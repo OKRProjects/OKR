@@ -9,10 +9,10 @@ All values below are **Render dashboard → Environment** unless the blueprint w
 | `PORT` | Render injects for the listening port. |
 | `RENDER_EXTERNAL_URL` | Public `https://…onrender.com` URL for **each** web service. |
 | `DATABASE_URL` | Backend only: from Postgres via `render.yaml` `fromDatabase`. |
-| `FRONTEND_URL` | Backend only: from `render.yaml` `fromService` → `hackathon-frontend` `RENDER_EXTERNAL_URL`. |
-| `BACKEND_URL` | Frontend only: from `render.yaml` → `hackathon-backend` `RENDER_EXTERNAL_URL`. |
+| `FRONTEND_URL` | Backend only: from `render.yaml` `fromService` → `okr-frontend` `RENDER_EXTERNAL_URL`. |
+| `BACKEND_URL` | Frontend only: from `render.yaml` → `okr-backend` `RENDER_EXTERNAL_URL`. |
 
-## Backend (`hackathon-backend`)
+## Backend (`okr-backend`)
 
 | Variable | Required | Notes |
 |----------|----------|--------|
@@ -39,12 +39,12 @@ All values below are **Render dashboard → Environment** unless the blueprint w
 - `AUTH0_BASE_URL` — use `FRONTEND_URL` instead (same meaning).
 - `CORS_ORIGINS` — omit to allow **only** `FRONTEND_URL`; set `CORS_ORIGINS` only if you need comma-separated extra origins.
 
-## Frontend (`hackathon-frontend`)
+## Frontend (`okr-frontend`)
 
 | Variable | Required | Notes |
 |----------|----------|--------|
 | `NODE_ENV` | Yes | `production` in blueprint. |
-| `BACKEND_URL` | Auto | Blueprint: `fromService` → `hackathon-backend` `RENDER_EXTERNAL_URL`. |
+| `BACKEND_URL` | Auto | Blueprint: `fromService` → `okr-backend` `RENDER_EXTERNAL_URL`. |
 | `AUTH0_SECRET` | No* | Random string if you use Auth0 SDK routes; omit when not using Auth0 on the frontend. |
 | `AUTH0_ISSUER_BASE_URL` | No* | Same issuer as backend when using Auth0. |
 | `AUTH0_CLIENT_ID` | No* | Same as backend when using Auth0. |
@@ -63,7 +63,7 @@ All values below are **Render dashboard → Environment** unless the blueprint w
 
 This app completes OAuth on the **Flask** service. Add:
 
-- **Allowed Callback URLs:** `{BACKEND_URL}/api/auth/callback` (copy `RENDER_EXTERNAL_URL` from `hackathon-backend` + path).
-- **Allowed Logout URLs** and **Allowed Web Origins:** `{FRONTEND_URL}` (auto from blueprint on the backend, or copy from `hackathon-frontend`).
+- **Allowed Callback URLs:** `{BACKEND_URL}/api/auth/callback` (copy `RENDER_EXTERNAL_URL` from `okr-backend` + path).
+- **Allowed Logout URLs** and **Allowed Web Origins:** `{FRONTEND_URL}` (auto from blueprint on the backend, or copy from `okr-frontend`).
 
 After the first deploy, copy the two `https://…onrender.com` URLs from Render into Auth0.

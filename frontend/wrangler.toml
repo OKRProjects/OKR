@@ -2,7 +2,7 @@
 # Install: npm i -D wrangler
 # Docs: https://developers.cloudflare.com/workers/wrangler/configuration/
 
-name = "hackathon-frontend"
+name = "okr"
 compatibility_date = "2025-01-01"
 
 # For Next.js on Cloudflare via OpenNext (recommended for this repo):

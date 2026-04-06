@@ -15,7 +15,7 @@ Create `terraform.tfvars`:
 
 ```hcl
 aws_region             = "us-east-1"
-project_name           = "hackathon-okr"
+project_name           = "okr"
 backend_image          = "REPLACE_WITH_YOUR_IMAGE_URI"
 db_password            = "REPLACE_WITH_STRONG_PASSWORD"
 auth0_domain           = "YOUR_AUTH0_DOMAIN"

@@ -64,4 +64,4 @@ migrate-mongo-okrs-docker:
 	@$(COMPOSE) exec -T backend sh -c 'cd /app && python migrate_mongo_okrs_to_postgres.py'
 
 verify-pg-okrs:
-	@$(COMPOSE) exec -T postgres psql -U postgres -d hackathon -c "SELECT (SELECT COUNT(*) FROM objectives) AS objectives, (SELECT COUNT(*) FROM key_results) AS key_results;"
+	@$(COMPOSE) exec -T postgres psql -U postgres -d okr -c "SELECT (SELECT COUNT(*) FROM objectives) AS objectives, (SELECT COUNT(*) FROM key_results) AS key_results;"
