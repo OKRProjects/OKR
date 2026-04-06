@@ -4,8 +4,9 @@
 # Free tier: Web Services + PostgreSQL (limits apply; services may spin down when idle).
 # Set secrets in the Render dashboard — do not commit .env.
 #
+# Cross-links (same blueprint): BACKEND_URL on frontend + FRONTEND_URL on backend use
+# each service’s RENDER_EXTERNAL_URL. Auth0 callback URLs still must be set in Auth0 once URLs exist.
 # Env reference: docs/RENDER_ENV.md
-# Render injects PORT, RENDER_EXTERNAL_URL per service; DATABASE_URL is linked from Postgres.
 
 version: "1"
 
@@ -37,6 +38,12 @@ services:
           property: connectionString
       - key: FLASK_SECRET_KEY
         generateValue: true
+      # Auto: public URL of hackathon-frontend (CORS + OAuth redirect to dashboard).
+      - key: FRONTEND_URL
+        fromService:
+          name: hackathon-frontend
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
       # --- Set in dashboard (see docs/RENDER_ENV.md) ---
       - key: MONGODB_URI
         sync: false
@@ -49,9 +56,6 @@ services:
       - key: AUTH0_CLIENT_SECRET
         sync: false
       - key: AUTH0_AUDIENCE
-        sync: false
-      # Public Next URL (CORS + OAuth redirects). Same as hackathon-frontend RENDER_EXTERNAL_URL.
-      - key: FRONTEND_URL
         sync: false
       - key: APP_ADMIN_USER_IDS
         sync: false
@@ -70,6 +74,7 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Auto: public URL of hackathon-backend (Next rewrites /api → Flask).
       - key: BACKEND_URL
         fromService:
           name: hackathon-backend

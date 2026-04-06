@@ -9,6 +9,8 @@ All values below are **Render dashboard → Environment** unless the blueprint w
 | `PORT` | Render injects for the listening port. |
 | `RENDER_EXTERNAL_URL` | Public `https://…onrender.com` URL for **each** web service. |
 | `DATABASE_URL` | Backend only: from Postgres via `render.yaml` `fromDatabase`. |
+| `FRONTEND_URL` | Backend only: from `render.yaml` `fromService` → `hackathon-frontend` `RENDER_EXTERNAL_URL`. |
+| `BACKEND_URL` | Frontend only: from `render.yaml` → `hackathon-backend` `RENDER_EXTERNAL_URL`. |
 
 ## Backend (`hackathon-backend`)
 
@@ -23,11 +25,11 @@ All values below are **Render dashboard → Environment** unless the blueprint w
 | `AUTH0_CLIENT_ID` | Yes* | Same **application** as the frontend. |
 | `AUTH0_CLIENT_SECRET` | Yes* | Same as frontend. |
 | `AUTH0_AUDIENCE` | Optional | API audience; backend derives Management API audience from domain if empty. |
-| `FRONTEND_URL` | Yes* | Public URL of the **Next** app, e.g. `https://hackathon-frontend.onrender.com`. Used for OAuth redirects and CORS. |
+| `FRONTEND_URL` | Auto | Blueprint wires it from the frontend service (`fromService`). |
 | `APP_ADMIN_USER_IDS` | Optional | Comma-separated Auth0 `sub` values. |
 | `APP_ADMIN_EMAILS` | Optional | Comma-separated emails → admin on login. |
 
-\* Marked secrets / URLs must be set in the dashboard.
+\* Marked secrets must be set in the dashboard.
 
 **Not needed on the backend** (handled in code or Render):
 
@@ -40,7 +42,7 @@ All values below are **Render dashboard → Environment** unless the blueprint w
 | Variable | Required | Notes |
 |----------|----------|--------|
 | `NODE_ENV` | Yes | `production` in blueprint. |
-| `BACKEND_URL` | Auto | Blueprint: `fromService` → backend `RENDER_EXTERNAL_URL`. |
+| `BACKEND_URL` | Auto | Blueprint: `fromService` → `hackathon-backend` `RENDER_EXTERNAL_URL`. |
 | `AUTH0_SECRET` | Yes* | Session cookie secret for Next Auth0 SDK. |
 | `AUTH0_ISSUER_BASE_URL` | Yes* | Same issuer string as backend. |
 | `AUTH0_CLIENT_ID` | Yes* | Same as backend. |
@@ -55,9 +57,9 @@ All values below are **Render dashboard → Environment** unless the blueprint w
 
 ## Auth0 Dashboard
 
-Add **Allowed Callback URLs** and **Allowed Logout URLs** for:
+This app completes OAuth on the **Flask** service. Add:
 
-- Frontend: `{FRONTEND_URL}/api/auth/callback`, `{FRONTEND_URL}`
-- Backend OAuth (if using Auth0’s classic API): `{BACKEND_URL}/api/auth/callback`
+- **Allowed Callback URLs:** `{BACKEND_URL}/api/auth/callback` (copy `RENDER_EXTERNAL_URL` from `hackathon-backend` + path).
+- **Allowed Logout URLs** and **Allowed Web Origins:** `{FRONTEND_URL}` (auto from blueprint on the backend, or copy from `hackathon-frontend`).
 
-Use the exact `https://…onrender.com` URLs from each service after deploy.
+After the first deploy, copy the two `https://…onrender.com` URLs from Render into Auth0.
