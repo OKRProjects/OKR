@@ -50,8 +50,10 @@ export function SettingsAccountSection() {
           Test role (preview)
         </p>
         <p className="text-xs text-muted-foreground mb-3">
-          Switch how much of the UI behaves for demos. User management and other protected APIs always use your real
-          server role (admin or org owner can open User management).
+          Switch how much of the UI behaves for demos. Choose <strong className="text-foreground">Org owner</strong> to
+          show User management in the app; listing and editing users still requires an{' '}
+          <strong className="text-foreground">admin</strong> or <strong className="text-foreground">org owner</strong>{' '}
+          role on the server.
         </p>
         <Select
           value={rolePreview ?? 'actual'}

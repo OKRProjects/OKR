@@ -14,7 +14,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useViewPreferences } from '@/lib/useViewPreferences';
 import { useViewRole } from '@/lib/ViewRoleContext';
-import { shouldShowUserManagementNav } from '@/lib/roles';
+import { canManageUsersAccount, shouldShowUserManagementProfileLink } from '@/lib/roles';
 import { RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
@@ -26,6 +26,34 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { DashboardSortField, SortDirection } from '@/lib/api';
+
+function UserManagementProfileSection({
+  sessionUser,
+}: {
+  sessionUser: { role?: string; hideUserManagementNav?: boolean } | null | undefined;
+}) {
+  if (!shouldShowUserManagementProfileLink(sessionUser)) return null;
+  const canEditPermissions = canManageUsersAccount(sessionUser);
+  return (
+    <div className="space-y-2">
+      <Button
+        asChild
+        className="w-full sm:w-auto"
+        size="lg"
+        variant={canEditPermissions ? 'default' : 'outline'}
+      >
+        <Link href="/admin/users">User management</Link>
+      </Button>
+      {!canEditPermissions && (
+        <p className="text-sm text-muted-foreground max-w-xl">
+          Roles and permissions can only be changed by accounts with <strong className="text-foreground">admin</strong>{' '}
+          or <strong className="text-foreground">org owner</strong> on the server. You can still open this page to review
+          access requirements or ask an administrator.
+        </p>
+      )}
+    </div>
+  );
+}
 
 const OKR_TAB_LABELS: Record<string, string> = {
   overview: 'Overview',
@@ -171,7 +199,7 @@ function ProfileCustomizableViews() {
 }
 
 export default function ProfilePage() {
-  const { user: sessionUser, rolePreview } = useViewRole();
+  const { user: sessionUser } = useViewRole();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
@@ -263,11 +291,9 @@ export default function ProfilePage() {
           <Card>
             <CardContent className="pt-6 pb-6">
               <SettingsAccountSection />
-              {shouldShowUserManagementNav(sessionUser, rolePreview) && (
-                <Button asChild className="mt-6 w-full" size="lg">
-                  <Link href="/admin/users">User management</Link>
-                </Button>
-              )}
+              <div className="mt-6">
+                <UserManagementProfileSection sessionUser={sessionUser} />
+              </div>
             </CardContent>
           </Card>
           <Card>
@@ -288,12 +314,13 @@ export default function ProfilePage() {
       <AppLayout title={profile ? 'Edit Profile' : 'Create Profile'} description="Update your profile information">
         <Card>
           <CardContent className="pt-6">
-            <div className="mb-6 flex items-center justify-between">
+            <div className="mb-6 space-y-4">
               {profile && (
                 <Button variant="ghost" onClick={() => setEditing(false)}>
                   Cancel
                 </Button>
               )}
+              <UserManagementProfileSection sessionUser={sessionUser} />
             </div>
             <ProfileForm profile={profile || undefined} onSuccess={handleProfileUpdate} />
           </CardContent>
@@ -345,13 +372,9 @@ export default function ProfilePage() {
         <CardContent className="px-6 py-8">
           <SettingsAccountSection />
 
-          {shouldShowUserManagementNav(sessionUser, rolePreview) && (
-            <div className="mt-6">
-              <Button asChild className="w-full sm:w-auto" size="lg">
-                <Link href="/admin/users">User management</Link>
-              </Button>
-            </div>
-          )}
+          <div className="mt-6">
+            <UserManagementProfileSection sessionUser={sessionUser} />
+          </div>
 
           <div className="border-t pt-8 mt-8 space-y-6">
           {profile.bio && (

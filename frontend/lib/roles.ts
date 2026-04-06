@@ -56,18 +56,36 @@ export function canManageUsersAccount(u: { role?: string } | null | undefined): 
 }
 
 /**
- * User management nav: real account must be admin or org owner and not opted out via User management.
- * When previewing another role, only show the link if the preview is admin or org owner (so IC/viewer demos hide it).
+ * User management in nav, dashboard, and Settings: hidden if the account opted out.
+ * Real admin/org_owner: always show unless previewing a non-management role (IC demos).
+ * Everyone else: show only when “Test role (preview)” is org owner (UI only; APIs still use the real server role).
  */
 export function shouldShowUserManagementNav(
   user: { role?: string; hideUserManagementNav?: boolean } | null | undefined,
   rolePreview: string | null | undefined
 ): boolean {
-  if (!canManageUsersAccount(user)) return false;
-  if (user?.hideUserManagementNav === true) return false;
-  if (rolePreview == null) return true;
-  const p = normalizeAppRole(rolePreview);
-  return p === 'admin' || p === 'org_owner';
+  if (!user) return false;
+  if (user.hideUserManagementNav === true) return false;
+
+  const preview = rolePreview != null ? normalizeAppRole(rolePreview) : null;
+
+  if (canManageUsersAccount(user)) {
+    if (preview == null) return true;
+    return preview === 'admin' || preview === 'org_owner';
+  }
+
+  return preview === 'org_owner';
+}
+
+/**
+ * Profile (and similar) link to User management: any signed-in user unless the account opted out of the nav.
+ * Actual list/edit APIs remain restricted to admin / org_owner on the server.
+ */
+export function shouldShowUserManagementProfileLink(
+  user: { hideUserManagementNav?: boolean } | null | undefined
+): boolean {
+  if (!user) return false;
+  return user.hideUserManagementNav !== true;
 }
 
 /** True if this account may create objectives (all roles; only blocked when ``okrCreateDisabled``). Admins ignore the flag. */

@@ -70,9 +70,9 @@ export function Sidebar() {
   }, [isDesktop, closeMobile]);
 
   const mainNavigation = [
+    { id: 'dashboard', name: 'Company dashboard', icon: Home, href: '/dashboard' },
     { id: 'my-okrs', name: 'My OKRs', icon: CircleUserRound, href: '/my-okrs' },
     { id: 'organization', name: 'Organization', icon: Building2, href: '/divisions' },
-    { id: 'dashboard', name: 'Company dashboard', icon: Home, href: '/dashboard' },
     { id: 'objectives', name: 'Objectives', icon: Target, href: '/okrs' },
     { id: 'analytics', name: 'Analytics', icon: BarChart3, href: '/analytics' },
   ];
