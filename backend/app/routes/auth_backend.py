@@ -45,6 +45,30 @@ BACKEND_URL = (
 if not AUTH0_AUDIENCE and AUTH0_DOMAIN:
     AUTH0_AUDIENCE = f'https://{AUTH0_DOMAIN}/api/v2/'
 
+
+def is_auth0_configured() -> bool:
+    """OAuth + JWT flows need issuer, client id, and client secret. If any is missing, run in demo mode."""
+    return bool(AUTH0_DOMAIN and AUTH0_CLIENT_ID and AUTH0_CLIENT_SECRET)
+
+
+def _fallback_user_id() -> str:
+    return (os.getenv('AUTH_DISABLED_USER_ID') or 'auth0|demo_u1').strip()
+
+
+def _fallback_user_info() -> dict:
+    """Synthetic user when Auth0 is not configured (aligns with seed_data demo admin by default)."""
+    uid = _fallback_user_id()
+    name = (os.getenv('AUTH_DISABLED_USER_NAME') or 'Sarah Chen').strip()
+    email = (os.getenv('AUTH_DISABLED_USER_EMAIL') or 'sarah@company.com').strip()
+    return {
+        'sub': uid,
+        'name': name,
+        'email': email,
+        'picture': (os.getenv('AUTH_DISABLED_USER_PICTURE') or '').strip(),
+        'nickname': name,
+    }
+
+
 # Cache for Auth0 Management API token (short-lived, avoid hitting token endpoint every request)
 _management_token_cache = {'token': None, 'expires': 0}
 
@@ -188,6 +212,8 @@ def get_user_from_session():
 
 def get_user_id_from_request() -> str:
     """Extract user ID from session or Authorization header"""
+    if not is_auth0_configured():
+        return _fallback_user_id()
     # First try session
     user = get_user_from_session()
     if user and user.get('sub'):
@@ -207,6 +233,8 @@ def get_user_id_from_request() -> str:
 
 def get_user_info_from_request() -> dict:
     """Get user info from session or token"""
+    if not is_auth0_configured():
+        return _fallback_user_info()
     # First try session
     user = get_user_from_session()
     if user:
@@ -281,11 +309,15 @@ def _ensure_pg_user_row(user_info: dict) -> None:
 @bp.route('/auth/login', methods=['GET'])
 def login():
     """Redirect to Auth0 login (OAuth flow)"""
-    if not AUTH0_DOMAIN or not AUTH0_CLIENT_ID:
-        error_msg = 'Auth0 not configured. Set AUTH0_ISSUER_BASE_URL (or AUTH0_DOMAIN) and AUTH0_CLIENT_ID.'
-        print(f"ERROR: {error_msg}")
-        return jsonify({'error': error_msg}), 500
-    
+    if not is_auth0_configured():
+        return jsonify(
+            {
+                'auth_url': None,
+                'auth_disabled': True,
+                'message': 'Auth0 is not configured; the API uses a single demo user. See AUTH_DISABLED_USER_* env vars.',
+            }
+        ), 200
+
     # Use backend callback URL since backend handles the OAuth flow
     redirect_uri = f'{BACKEND_URL}/api/auth/callback'
     auth_url = (
@@ -302,8 +334,12 @@ def login():
 @bp.route('/auth/login', methods=['POST'])
 def login_email_password():
     """Email/password login using Auth0"""
-    if not AUTH0_DOMAIN or not AUTH0_CLIENT_ID or not AUTH0_CLIENT_SECRET:
-        return jsonify({'error': 'Auth0 not configured'}), 500
+    if not is_auth0_configured():
+        return jsonify(
+            {
+                'error': 'Email/password login requires Auth0. Set AUTH0_ISSUER_BASE_URL, AUTH0_CLIENT_ID, and AUTH0_CLIENT_SECRET.',
+            }
+        ), 400
     
     data = request.get_json()
     email = data.get('email')
@@ -372,8 +408,12 @@ def login_email_password():
 @bp.route('/auth/register', methods=['POST'])
 def register():
     """Register new user with email/password"""
-    if not AUTH0_DOMAIN or not AUTH0_CLIENT_ID or not AUTH0_CLIENT_SECRET:
-        return jsonify({'error': 'Auth0 not configured'}), 500
+    if not is_auth0_configured():
+        return jsonify(
+            {
+                'error': 'Registration requires Auth0. Set AUTH0_ISSUER_BASE_URL, AUTH0_CLIENT_ID, and AUTH0_CLIENT_SECRET.',
+            }
+        ), 400
     
     data = request.get_json()
     email = data.get('email')
@@ -481,6 +521,9 @@ def register():
 def callback():
     """Handle Auth0 callback"""
     from flask import redirect as flask_redirect
+
+    if not is_auth0_configured():
+        return flask_redirect(f'{AUTH0_BASE_URL}?error=auth0_not_configured')
     
     code = request.args.get('code')
     if not code:
@@ -543,7 +586,7 @@ def logout():
     session.clear()
     
     # Redirect to Auth0 logout
-    if AUTH0_DOMAIN:
+    if AUTH0_DOMAIN and is_auth0_configured():
         logout_url = (
             f'https://{AUTH0_DOMAIN}/v2/logout?'
             f'client_id={AUTH0_CLIENT_ID}&'

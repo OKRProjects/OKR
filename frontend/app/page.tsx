@@ -107,7 +107,7 @@ export default function Home() {
         {error && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded text-sm">
             {error === 'auth0_not_configured' || error.includes('Auth0 not configured')
-              ? 'Auth0 is not configured. Please set AUTH0_DOMAIN, AUTH0_CLIENT_ID, and AUTH0_CLIENT_SECRET in backend .env file.'
+              ? 'Auth0 is not configured. Without Auth0 credentials the app runs in demo mode (single demo user). Add AUTH0_ISSUER_BASE_URL, AUTH0_CLIENT_ID, and AUTH0_CLIENT_SECRET to enable login.'
               : `Error: ${error}`}
           </div>
         )}

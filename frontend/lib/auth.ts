@@ -21,9 +21,12 @@ let userPromise: Promise<User | null> | null = null;
 export async function login(): Promise<void> {
   try {
     const response = await api.login();
-    // Redirect to Auth0 login
-    if (typeof window !== 'undefined' && response.auth_url) {
-      window.location.href = response.auth_url;
+    if (typeof window !== 'undefined') {
+      if (response.auth_url) {
+        window.location.href = response.auth_url;
+      } else if (response.auth_disabled) {
+        window.location.href = '/my-okrs';
+      }
     }
   } catch (error) {
     console.error('Login error:', error);

@@ -272,24 +272,23 @@ export class ApiConflictError extends Error {
 
 async function fetchWithAuth(url: string, options: RequestInit = {}) {
   let token = await getAccessToken();
-  
+
   // If token fetch failed, try once more after a short delay
   if (!token) {
     await new Promise(resolve => setTimeout(resolve, 500));
     token = await getAccessToken();
   }
-  
-  if (!token) {
-    throw new Error('Unable to get access token. Please check your authentication configuration.');
-  }
-  
+
   const isFormData = options.body instanceof FormData;
   const headers: HeadersInit = {
-    Authorization: `Bearer ${token}`,
     ...(!isFormData && { 'Content-Type': 'application/json' }),
     ...options.headers,
   };
+  if (token) {
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+  }
 
+  // When Auth0 is not configured, the backend accepts cookie-only requests as a demo user.
   const response = await fetch(apiFetchUrl(url), {
     ...options,
     headers,
@@ -335,7 +334,12 @@ async function fetchPublic(url: string, options: RequestInit = {}) {
 
 export const api = {
   // Auth API
-  async login(): Promise<{ auth_url: string }> {
+  async login(): Promise<{
+    auth_url?: string | null;
+    auth_disabled?: boolean;
+    message?: string;
+    error?: string;
+  }> {
     return fetchPublic('/api/auth/login');
   },
 

@@ -21,15 +21,17 @@ All values below are **Render dashboard → Environment** unless the blueprint w
 | `FLASK_SECRET_KEY` | Yes | Blueprint uses `generateValue: true`. |
 | `MONGODB_URI` | Yes* | MongoDB Atlas connection string. |
 | `MONGODB_DB_NAME` | Optional | Defaults in app if unset. |
-| `AUTH0_ISSUER_BASE_URL` | Yes* | e.g. `https://YOUR_TENANT.us.auth0.com` (same as Next). Replaces separate `AUTH0_DOMAIN`. |
-| `AUTH0_CLIENT_ID` | Yes* | Same **application** as the frontend. |
-| `AUTH0_CLIENT_SECRET` | Yes* | Same as frontend. |
+| `AUTH0_ISSUER_BASE_URL` | No* | Omit all three Auth0 vars below to run **without Auth0** (single demo API user; see `AUTH_DISABLED_USER_*`). |
+| `AUTH0_CLIENT_ID` | No* | Same **application** as the frontend when using Auth0. |
+| `AUTH0_CLIENT_SECRET` | No* | Same as frontend when using Auth0. |
 | `AUTH0_AUDIENCE` | Optional | API audience; backend derives Management API audience from domain if empty. |
 | `FRONTEND_URL` | Auto | Blueprint wires it from the frontend service (`fromService`). |
 | `APP_ADMIN_USER_IDS` | Optional | Comma-separated Auth0 `sub` values. |
 | `APP_ADMIN_EMAILS` | Optional | Comma-separated emails → admin on login. |
+| `AUTH_DISABLED_USER_ID` | Optional | When Auth0 is unset: synthetic user id (default `auth0|demo_u1`). |
+| `AUTH_DISABLED_USER_NAME` / `EMAIL` / `PICTURE` | Optional | Demo profile fields when Auth0 is unset. |
 
-\* Marked secrets must be set in the dashboard.
+\* Secrets: set `MONGODB_URI` in the dashboard. Auth0 triple is optional; if omitted, the API uses demo mode (not for production-facing multi-tenant use).
 
 **Not needed on the backend** (handled in code or Render):
 
@@ -43,10 +45,10 @@ All values below are **Render dashboard → Environment** unless the blueprint w
 |----------|----------|--------|
 | `NODE_ENV` | Yes | `production` in blueprint. |
 | `BACKEND_URL` | Auto | Blueprint: `fromService` → `hackathon-backend` `RENDER_EXTERNAL_URL`. |
-| `AUTH0_SECRET` | Yes* | Session cookie secret for Next Auth0 SDK. |
-| `AUTH0_ISSUER_BASE_URL` | Yes* | Same issuer string as backend. |
-| `AUTH0_CLIENT_ID` | Yes* | Same as backend. |
-| `AUTH0_CLIENT_SECRET` | Yes* | Same as backend. |
+| `AUTH0_SECRET` | No* | Random string if you use Auth0 SDK routes; omit when not using Auth0 on the frontend. |
+| `AUTH0_ISSUER_BASE_URL` | No* | Same issuer as backend when using Auth0. |
+| `AUTH0_CLIENT_ID` | No* | Same as backend when using Auth0. |
+| `AUTH0_CLIENT_SECRET` | No* | Same as backend when using Auth0. |
 | `AUTH0_AUDIENCE` | Optional | Often same as backend. |
 
 **Not needed on the frontend** (unless you override):
@@ -56,6 +58,8 @@ All values below are **Render dashboard → Environment** unless the blueprint w
 - `NEXT_PUBLIC_APP_URL` — optional; only if the client must know the public URL at build time.
 
 ## Auth0 Dashboard
+
+**Only if** you configure `AUTH0_ISSUER_BASE_URL`, `AUTH0_CLIENT_ID`, and `AUTH0_CLIENT_SECRET` on both services.
 
 This app completes OAuth on the **Flask** service. Add:
 
