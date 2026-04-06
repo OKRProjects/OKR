@@ -31,10 +31,11 @@ All values below are **Render dashboard → Environment** unless the blueprint w
 | `AUTH0_CLIENT_SECRET` | Yes | Auth0 application secret. |
 | `AUTH0_AUDIENCE` | Optional | API audience; defaults if omitted when domain is set. |
 | `AUTH0_DOMAIN` | Optional | Alternative to deriving host from `AUTH0_ISSUER_BASE_URL`. |
+| `ALLOW_INSECURE_AUTH0_DEV` | **Do not set** | Only for local Flask (`FLASK_ENV` ≠ `production`). Never on Render production. |
 
 \* Set `MONGODB_URI` in the dashboard.
 
-**Auth0** must be set on the backend or the app will not start. Use your `*.onrender.com` URLs in Auth0’s callback / logout / web origins, not localhost.
+**Auth0** must be set on the backend in production, or the app will not start. Use your `*.onrender.com` URLs in Auth0’s callback / logout / web origins, not localhost.
 
 **Atlas / MongoDB:** allow Render’s outbound IPs or temporarily `0.0.0.0/0` under Network Access if you see TLS or timeout errors from Render.
 

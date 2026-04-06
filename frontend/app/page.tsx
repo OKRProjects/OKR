@@ -164,7 +164,7 @@ export default function Home() {
 
   const errorDisplay =
     error === 'auth0_not_configured' || error?.includes('Auth0 not configured')
-      ? 'Auth0 is not configured on the server. Set AUTH0_ISSUER_BASE_URL (or AUTH0_DOMAIN), AUTH0_CLIENT_ID, and AUTH0_CLIENT_SECRET on the API service, then restart.'
+      ? 'Auth0 is not configured on the server. Set AUTH0_ISSUER_BASE_URL (or AUTH0_DOMAIN), AUTH0_CLIENT_ID, and AUTH0_CLIENT_SECRET on the API (or for local dev only, ALLOW_INSECURE_AUTH0_DEV=1 with FLASK_ENV=development), then restart.'
       : error ? `Error: ${error}` : null;
 
   return (

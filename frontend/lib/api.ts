@@ -366,6 +366,8 @@ export const api = {
   // Auth API
   async login(): Promise<{
     auth_url?: string | null;
+    /** Set when API runs with ALLOW_INSECURE_AUTH0_DEV (local only). */
+    auth_disabled?: boolean;
     message?: string;
     error?: string;
   }> {

@@ -18,11 +18,23 @@ export interface User {
 let currentUser: User | null = null;
 let userPromise: Promise<User | null> | null = null;
 
+/** Same shell routes as backend insecure-dev login redirect (avoid reloading the page you are already on). */
+function isAuthShellPath(pathname: string): boolean {
+  const p = (pathname.replace(/\/$/, '') || '/').split('?')[0] ?? '/';
+  return p === '/my-okrs' || p === '/dashboard';
+}
+
 export async function login(): Promise<void> {
   try {
     const response = await api.login();
-    if (typeof window !== 'undefined' && response.auth_url) {
-      window.location.href = response.auth_url;
+    if (typeof window !== 'undefined') {
+      if (response.auth_url) {
+        window.location.href = response.auth_url;
+      } else if (response.auth_disabled) {
+        if (!isAuthShellPath(window.location.pathname)) {
+          window.location.assign('/my-okrs');
+        }
+      }
     }
   } catch (error) {
     console.error('Login error:', error);
