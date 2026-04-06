@@ -6,6 +6,20 @@ import { api } from '@/lib/api';
 
 type Message = { role: 'user' | 'assistant'; content: string };
 
+/** Minimal Web Speech API shapes (DOM lib may omit them). */
+type SpeechRecognitionResultEvent = {
+  resultIndex: number;
+  results: {
+    length: number;
+    [index: number]: {
+      isFinal: boolean;
+      [0]: { transcript: string };
+    };
+  };
+};
+
+type SpeechRecognitionErrorLike = { error: string };
+
 const VOICES = [
   'alloy',
   'coral',
@@ -66,12 +80,13 @@ function isLikelyNoise(text: string): boolean {
 
 declare global {
   interface Window {
-    SpeechRecognition?: typeof SpeechRecognition;
-    webkitSpeechRecognition?: typeof SpeechRecognition;
+    /** Web Speech API (types not always in TS lib). */
+    SpeechRecognition?: new () => unknown;
+    webkitSpeechRecognition?: new () => unknown;
   }
 }
 
-function getSpeechRecognition(): typeof SpeechRecognition | null {
+function getSpeechRecognition(): (new () => unknown) | null {
   if (typeof window === 'undefined') return null;
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
 }
@@ -134,7 +149,16 @@ export default function VoiceAssistantPage() {
   const [hasWokenOnce, setHasWokenOnce] = useState(false);
   const [wakePhrase, setWakePhrase] = useState(DEFAULT_WAKE_PHRASE);
   const [sleepPhrase, setSleepPhrase] = useState(DEFAULT_SLEEP_PHRASE);
-  const recognitionRef = useRef<InstanceType<typeof SpeechRecognition> | null>(null);
+  const recognitionRef = useRef<{
+    continuous: boolean;
+    interimResults: boolean;
+    lang: string;
+    start: () => void;
+    stop: () => void;
+    onresult: ((ev: SpeechRecognitionResultEvent) => void) | null;
+    onerror: ((ev: SpeechRecognitionErrorLike) => void) | null;
+    onend: (() => void) | null;
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isBusyRef = useRef(false);
   const isPausedRef = useRef(false);
@@ -190,7 +214,8 @@ export default function VoiceAssistantPage() {
       if (response.audio_base64 && response.audio_format) {
         setStatus('speaking');
         setLiveTranscript(''); // clear so we don't show echoed TTS while ignoring mic
-        await playBase64Audio(response.audio_base64, response.audio_format, currentPlayingRef);
+        const fmt = response.audio_format === 'wav' ? 'wav' : 'mp3';
+        await playBase64Audio(response.audio_base64, fmt, currentPlayingRef);
       }
       setStatus('listening');
     } catch (err) {
@@ -214,12 +239,13 @@ export default function VoiceAssistantPage() {
       return;
     }
 
-    const recognition = new Recognition();
+    type Rec = NonNullable<(typeof recognitionRef)['current']>;
+    const recognition = new Recognition() as Rec;
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (event: SpeechRecognitionResultEvent) => {
       if (isPausedRef.current || isBusyRef.current) return;
       const awake = isAwakeRef.current;
       const wake = wakePhraseRef.current;
@@ -291,7 +317,7 @@ export default function VoiceAssistantPage() {
       }
     };
 
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+    recognition.onerror = (event: SpeechRecognitionErrorLike) => {
       if (event.error === 'no-speech' || event.error === 'aborted') return;
       if (event.error === 'not-allowed') {
         setStatus('idle');

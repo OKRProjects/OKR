@@ -80,7 +80,7 @@ export async function detectPoseFromImage(
 
   const tryDetect = (source: HTMLVideoElement | HTMLCanvasElement): PoseLandmarkerResult | null => {
     try {
-      const result = detector.detectForImage(source);
+      const result = detector.detectForVideo(source, performance.now());
       if (result?.landmarks?.length && result.landmarks[0]?.length) return result;
       return null;
     } catch {

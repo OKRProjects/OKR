@@ -332,6 +332,18 @@ async function fetchPublic(url: string, options: RequestInit = {}) {
   return response.json();
 }
 
+async function fetchPublicBlob(url: string, options: RequestInit = {}): Promise<Blob> {
+  const response = await fetch(apiFetchUrl(url), {
+    ...options,
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error((err as { message?: string }).message || (err as { error?: string }).error || `HTTP error! status: ${response.status}`);
+  }
+  return response.blob();
+}
+
 export const api = {
   // Auth API
   async login(): Promise<{
@@ -556,10 +568,107 @@ export const api = {
   },
 
   // Chat API (public endpoint, no auth required)
-  async sendChatMessage(messages: Array<{ role: string; content: string }>, model?: string): Promise<{ message: string; usage?: any }> {
+  async sendChatMessage(
+    messages: Array<{ role: string; content: string }>,
+    model?: string,
+    images?: string[],
+    mode?: string,
+    video_b64?: string,
+    video_mime?: string
+  ): Promise<{ message: string; usage?: any }> {
     return fetchPublic('/api/chat', {
       method: 'POST',
-      body: JSON.stringify({ messages, model: model || 'openai/gpt-3.5-turbo' }),
+      body: JSON.stringify({
+        messages,
+        model: model || 'openai/gpt-3.5-turbo',
+        images: images ?? [],
+        mode: mode ?? 'assistant',
+        video_b64: video_b64 ?? '',
+        video_mime: video_mime ?? 'video/mp4',
+      }),
+    });
+  },
+
+  async chatPipeline(params: {
+    audio?: Blob;
+    text?: string;
+    images?: File[];
+    video?: File;
+    messages: Array<{ role: string; content: string }>;
+    tts: boolean;
+    voice: string;
+    mode: string;
+  }): Promise<{
+    message?: string;
+    transcribed_text?: string;
+    usage?: unknown;
+    audio_base64?: string;
+    audio_format?: string;
+    tts_error?: string;
+  }> {
+    const fd = new FormData();
+    if (params.text) fd.append('text', params.text);
+    fd.append('messages', JSON.stringify(params.messages));
+    fd.append('tts', params.tts ? 'true' : 'false');
+    fd.append('voice', params.voice);
+    fd.append('mode', params.mode);
+    if (params.audio) fd.append('audio', params.audio, 'audio.webm');
+    if (params.images?.length) {
+      params.images.forEach((f) => fd.append('images', f));
+    }
+    if (params.video) fd.append('video', params.video);
+    return fetchPublic('/api/chat/pipeline', { method: 'POST', body: fd });
+  },
+
+  async textToSpeech(text: string, opts?: { voice?: string }): Promise<Blob> {
+    return fetchPublicBlob('/api/speech', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, voice: opts?.voice ?? 'coral' }),
+    });
+  },
+
+  async askTutor(
+    question: string,
+    opts: {
+      images?: string[];
+      video_b64?: string;
+      video_mime?: string;
+    }
+  ): Promise<{ fun: string; help: string[]; raw?: string }> {
+    const now = new Date();
+    return fetchPublic('/api/tutor', {
+      method: 'POST',
+      body: JSON.stringify({
+        question,
+        images: opts.images ?? [],
+        video_b64: opts.video_b64 ?? '',
+        video_mime: opts.video_mime ?? 'video/mp4',
+        weekday: now.toLocaleDateString('en-US', { weekday: 'long' }),
+        time: now.toLocaleTimeString(),
+      }),
+    });
+  },
+
+  async transcribeAudio(file: File): Promise<{ text: string }> {
+    const fd = new FormData();
+    fd.append('file', file);
+    return fetchPublic('/api/transcribe', { method: 'POST', body: fd });
+  },
+
+  async generateVoice(params: {
+    text: string;
+    provider: 'openai' | 'magic_hour';
+    voice?: string;
+    model?: string;
+    speed?: number;
+    voice_name?: string;
+    name?: string;
+  }): Promise<Blob> {
+    return fetchPublicBlob('/api/voice/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
     });
   },
 
