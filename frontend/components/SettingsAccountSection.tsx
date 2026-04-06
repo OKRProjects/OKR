@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BookOpen, Eye, Plug, Users } from 'lucide-react';
+import { Eye, Plug, Users } from 'lucide-react';
 import { useViewRole, type AppRole } from '@/lib/ViewRoleContext';
 import { isAdminAccount, shouldShowUserManagementNav } from '@/lib/roles';
 import {
@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/components/ui/utils';
 
 /**
- * Role preview, docs/integrations shortcuts, admin user management — lives on Settings (/profile).
+ * Role preview, integrations shortcut, admin user management — lives on Settings (/profile).
  */
 export function SettingsAccountSection() {
   const { setRolePreview, roleForUI, rolePreview, user: sessionUser } = useViewRole();
@@ -29,18 +29,11 @@ export function SettingsAccountSection() {
       <div>
         <h2 className="text-lg font-semibold mb-1">Account &amp; access</h2>
         <p className="text-sm text-muted-foreground mb-4">
-          Preview roles for testing UI, open documentation and integrations, and manage users (admins and org owners on
-          the server).
+          Preview roles for testing UI, open integrations, and manage users (admins and org owners on the server).
         </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Button variant="outline" className="justify-start gap-2 h-auto py-3" asChild>
-          <Link href="/docs">
-            <BookOpen className="h-4 w-4 shrink-0" />
-            Documentation
-          </Link>
-        </Button>
         {role !== 'view_only' && (
           <Button variant="outline" className="justify-start gap-2 h-auto py-3" asChild>
             <Link href="/integrations">
@@ -50,26 +43,6 @@ export function SettingsAccountSection() {
           </Button>
         )}
       </div>
-
-      {showUserManagement && (
-        <div className="rounded-lg border border-border bg-muted/30 p-4">
-          <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            User management
-          </h3>
-          <p className="text-sm text-muted-foreground mb-3">
-            Assign roles and permissions (admin and org owner accounts). Org owners cannot grant the admin role.
-          </p>
-          <Button asChild className="w-full sm:w-auto">
-            <Link
-              href="/admin/users"
-              className={cn(pathname?.startsWith('/admin/users') && 'ring-2 ring-primary ring-offset-2')}
-            >
-              User management
-            </Link>
-          </Button>
-        </div>
-      )}
 
       <div className="rounded-lg border border-border p-4">
         <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
@@ -102,6 +75,27 @@ export function SettingsAccountSection() {
           </SelectContent>
         </Select>
       </div>
+
+      {showUserManagement && (
+        <div className="rounded-lg border border-primary/30 bg-muted/30 p-4">
+          <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            User management
+          </h3>
+          <p className="text-sm text-muted-foreground mb-3">
+            Assign roles and permissions for people who use the app. Org owners can manage everyone except promoting
+            users to admin (only admins can assign admin).
+          </p>
+          <Button asChild className="w-full sm:w-auto">
+            <Link
+              href="/admin/users"
+              className={cn(pathname?.startsWith('/admin/users') && 'ring-2 ring-primary ring-offset-2')}
+            >
+              Open user management
+            </Link>
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

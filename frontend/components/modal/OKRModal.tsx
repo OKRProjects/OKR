@@ -382,7 +382,7 @@ export function OKRModal({ objectiveId, onClose, className }: OKRModalProps) {
           )}
           {error && (
             <div className="p-4">
-              <ErrorMessage message={error} learnMoreHref="/docs" />
+              <ErrorMessage message={error} />
               <Button variant="outline" size="sm" className="mt-3 min-h-[44px] min-w-[44px] touch-manipulation" onClick={() => load()}>
                 Retry
               </Button>

@@ -10,7 +10,6 @@ import {
   type PresentationDeckStats,
 } from '@/components/presentation/PresentationMode';
 import { defaultFilters, type DashboardFilters } from './FilterBar';
-import { useFirstTimeTutorial } from '@/lib/tutorial';
 import { useViewPreferences } from '@/lib/useViewPreferences';
 import { useViewRole } from '@/lib/ViewRoleContext';
 import {
@@ -56,8 +55,6 @@ export function OKRDashboard() {
   const [presentationChoiceOpen, setPresentationChoiceOpen] = useState(false);
   const [presentationNarrative, setPresentationNarrative] = useState<string | null>(null);
   const { preferences, updatePreferences, resetToDefault } = useViewPreferences();
-  const { shouldShowTutorial, dismissTutorial } = useFirstTimeTutorial('dashboard');
-  const [showTutorial, setShowTutorial] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportingSlides, setExportingSlides] = useState(false);
   const [departments, setDepartments] = useState<{ _id: string; name: string; color?: string }[]>([]);
@@ -543,11 +540,6 @@ export function OKRDashboard() {
     onPresentationMode: handleOpenPresentationChoice,
     exporting,
     exportingSlides,
-    onShowTutorial: role !== 'view_only' ? () => {} : undefined,
-    shouldShowTutorial,
-    onDismissTutorial: dismissTutorial,
-    showTutorial,
-    setShowTutorial,
     currentUserName: user?.name ?? user?.email ?? 'User',
     dashboardTitle: isPersonalHome ? 'My OKRs' : undefined,
     dashboardSubtitle: isPersonalHome

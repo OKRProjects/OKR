@@ -9,7 +9,7 @@ import { logout } from '@/lib/auth';
 import { cn } from '@/components/ui/utils';
 
 /**
- * Header account menu: Settings and sign out. Role preview, docs, integrations, and admin tools live on /profile.
+ * Header account menu: Settings and sign out. Role preview, integrations, and admin tools live on /profile.
  */
 export function UserMenu() {
   const { user } = useViewRole();

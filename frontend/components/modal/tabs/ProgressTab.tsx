@@ -291,7 +291,7 @@ function KRProgressRow({
           ) : null}
           {!readOnly && (
             <>
-              <InlineHelp learnMoreHref="/docs#scoring" className="mb-3">
+              <InlineHelp className="mb-3">
                 Score is 0–100% of target achieved. Update regularly so roll-ups and dashboards stay accurate. Use 10% steps.
               </InlineHelp>
               <div className="flex flex-wrap items-end gap-4">
@@ -299,7 +299,6 @@ function KRProgressRow({
                   <FieldLabel
                     className="text-muted-foreground mb-1"
                     tooltip="Completion as a share of the KR target (0–100%). Drives roll-up scores and status colors on the dashboard."
-                    learnMoreHref="/docs#scoring"
                   >
                     Score (0–100%)
                   </FieldLabel>
@@ -609,7 +608,6 @@ export function ProgressTab({
           icon="target"
           title="No key results yet"
           description="Add key results to this objective to track progress. Each key result can have a score and notes."
-          secondaryLink={{ label: 'Learn how to write good key results', href: '/docs#okrs' }}
         />
       ) : (
         <div className="space-y-2">

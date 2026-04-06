@@ -25,6 +25,7 @@ All values below are **Render dashboard → Environment** unless the blueprint w
 | `APP_ADMIN_USER_IDS` | Optional | Comma-separated Auth0 `sub` values. |
 | `APP_ADMIN_EMAILS` | Optional | Comma-separated emails → admin on login. |
 | `APP_ORG_OWNER_EMAILS` | Optional | Comma-separated emails → `org_owner` on login (admin list wins if the same email is in both). |
+| `APP_DEFAULT_ORG_NAME` | Optional | Display name for the auto-created Postgres org (e.g. `Select Quote`). Replaces names ending in `'s organization` when listing orgs. |
 | `AUTH_DISABLED_USER_ID` | Optional | When Auth0 is unset: synthetic user id (default `auth0|demo_u1`). |
 | `AUTH_DISABLED_USER_NAME` / `EMAIL` / `PICTURE` | Optional | Demo profile fields when Auth0 is unset. |
 

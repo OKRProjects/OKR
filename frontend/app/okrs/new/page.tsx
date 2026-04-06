@@ -88,11 +88,6 @@ export default function NewObjectivePage() {
                 <>Ask your organization administrator to re-enable creating objectives if you need to create OKRs.</>
               )}
             </p>
-            <p>
-              <Link href="/docs#ownership" className="text-primary font-medium">
-                Who owns and edits OKRs →
-              </Link>
-            </p>
           </CardContent>
         </Card>
       </AppLayout>

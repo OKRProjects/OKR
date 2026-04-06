@@ -108,11 +108,6 @@ export function ViewOnlyDashboardView(props: DashboardViewProps) {
               ? 'Create your first objective to get started. Use the OKRs page to add strategic, divisional, or tactical objectives.'
               : 'Try changing or clearing filters to see more objectives.'
           }
-          secondaryLink={
-            objectives.length === 0
-              ? { label: 'Learn more about OKRs', href: '/docs#okrs' }
-              : undefined
-          }
         />
       )}
     </div>

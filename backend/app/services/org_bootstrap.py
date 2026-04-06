@@ -36,9 +36,14 @@ def ensure_default_org_membership_in_session(s: Session, user_id: str) -> None:
         s.add(u)
         s.flush()
 
-    label = (u.name or "").strip() or (u.email or "").split("@")[0].strip() or "My"
-    org_name = f"{label}'s organization"[:200]
-    slug_base = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")[:40] or "org"
+    configured = (os.getenv("APP_DEFAULT_ORG_NAME") or "").strip()
+    if configured:
+        org_name = configured[:200]
+        slug_base = re.sub(r"[^a-z0-9]+", "-", configured.lower()).strip("-")[:40] or "org"
+    else:
+        label = (u.name or "").strip() or (u.email or "").split("@")[0].strip() or "My"
+        org_name = f"{label}'s organization"[:200]
+        slug_base = re.sub(r"[^a-z0-9]+", "-", label.lower()).strip("-")[:40] or "org"
     slug = f"{slug_base}-{uuid4().hex[:8]}"[:100]
     n = 0
     while s.execute(select(Organization.id).where(Organization.slug == slug)).scalar_one_or_none() is not None:

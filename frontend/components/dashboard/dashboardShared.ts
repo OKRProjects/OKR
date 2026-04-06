@@ -172,7 +172,6 @@ export interface DashboardViewProps {
   onPresentationMode?: () => void;
   exporting?: boolean;
   exportingSlides?: boolean;
-  onShowTutorial?: () => void;
   /** Current user display name for reference-style header */
   currentUserName?: string;
   /** Override default "OKR Dashboard" title (e.g. My OKRs). */
@@ -181,10 +180,6 @@ export interface DashboardViewProps {
   dashboardSubtitle?: string;
   /** When true, empty state does not offer "Create objective" (viewers / personal scope with no items). */
   hideEmptyStateCreate?: boolean;
-  shouldShowTutorial?: boolean;
-  onDismissTutorial?: () => void;
-  showTutorial?: boolean;
-  setShowTutorial?: (v: boolean) => void;
   /** True only when the signed-in account is admin (not role preview). Drives User management links. */
   showAdminUserManagement?: boolean;
 }

@@ -73,7 +73,7 @@ export default function KeyResultProgress({ keyResult, onUpdate }: KeyResultProg
         </p>
       )}
       {error && <ErrorMessage message={error} className="mt-2" />}
-      <InlineHelp learnMoreHref="/docs#scoring" className="mt-2">
+      <InlineHelp className="mt-2">
         Score is 0–100% of target achieved. Enter a number and click Save.
       </InlineHelp>
       <form onSubmit={handleSaveScore} className="mt-2 flex items-center gap-2">

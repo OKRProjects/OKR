@@ -40,11 +40,10 @@ export default function KeyResultForm({ objectiveId, keyResult, onSuccess, onCan
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 rounded-md border border-gray-200 bg-gray-50 p-4">
-      {error && <ErrorMessage message={error} learnMoreHref="/docs#okrs" />}
+      {error && <ErrorMessage message={error} />}
       <div>
         <FieldLabel
           tooltip="A measurable outcome that indicates progress toward the objective."
-          learnMoreHref="/docs#okrs"
           required
         >
           Key Result Title

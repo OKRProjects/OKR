@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleUserRound,
+  Users,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from './ui/utils';
@@ -20,7 +21,7 @@ import { usePathname } from 'next/navigation';
 import { api } from '@/lib/api';
 import { resolveDepartmentIdForPostgres } from '@/lib/legacyDepartments';
 import { useViewRole } from '@/lib/ViewRoleContext';
-import { userCanCreateObjectives } from '@/lib/roles';
+import { shouldShowUserManagementNav, userCanCreateObjectives } from '@/lib/roles';
 import { useMobileSidebar } from '@/components/MobileSidebarContext';
 
 const MD_MIN_WIDTH = 768;
@@ -40,7 +41,7 @@ function useIsDesktopMd() {
 }
 
 export function Sidebar() {
-  const { roleForUI, userForPermissions, user: sessionUser } = useViewRole();
+  const { roleForUI, userForPermissions, user: sessionUser, rolePreview } = useViewRole();
   const role = roleForUI;
   const { mobileOpen, closeMobile } = useMobileSidebar();
   const isDesktop = useIsDesktopMd();
@@ -241,6 +242,22 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        {shouldShowUserManagementNav(sessionUser, rolePreview) && (
+          <Link
+            href="/admin/users"
+            onClick={onNavActivate}
+            className={cn(
+              'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors touch-manipulation',
+              pathname?.startsWith('/admin/users')
+                ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+            )}
+          >
+            <Users className="h-4.5 w-4.5 flex-shrink-0 opacity-90" />
+            {!effectiveCollapsed && <span>User management</span>}
+          </Link>
+        )}
 
         {/* Hierarchy navigation (org -> dept -> team -> user) */}
         {!effectiveCollapsed && orgs.length > 0 && (

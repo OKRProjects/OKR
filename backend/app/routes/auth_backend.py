@@ -674,7 +674,16 @@ def get_current_user(user_id):
             if app_user and app_user.get('departmentId') is not None:
                 user_info['departmentId'] = str(app_user['departmentId'])
 
-            user_info['role'] = get_user_role(db, user_id)
+            # Keep Mongo email aligned with IdP so bootstrap env lists and listings stay correct.
+            _session_email = (user_info.get('email') or '').strip()
+            if app_user and _session_email and (app_user.get('email') or '').strip() != _session_email:
+                db.users.update_one(
+                    {'_id': user_id},
+                    {'$set': {'email': _session_email, 'updatedAt': datetime.utcnow().isoformat() + 'Z'}},
+                )
+                app_user = db.users.find_one({'_id': user_id})
+
+            user_info['role'] = get_user_role(db, user_id, _session_email or None)
             if user_info['role'] == ROLE_ADMIN:
                 user_info['okrCreateDisabled'] = False
             else:
@@ -736,7 +745,9 @@ def require_admin(f):
             from app.db.mongodb import get_db
             from app.services.permissions import get_user_role, ROLE_ADMIN
             db = get_db()
-            if get_user_role(db, user_id) != ROLE_ADMIN:
+            info = get_user_info_from_request()
+            auth_em = (info.get('email') or '').strip() or None
+            if get_user_role(db, user_id, auth_em) != ROLE_ADMIN:
                 return jsonify({'error': 'Admin access required'}), 403
             kwargs['user_id'] = user_id
             return f(*args, **kwargs)
@@ -756,7 +767,9 @@ def require_user_management(f):
             from app.db.mongodb import get_db
             from app.services.permissions import get_user_role, can_manage_app_users
             db = get_db()
-            if not can_manage_app_users(get_user_role(db, user_id)):
+            info = get_user_info_from_request()
+            auth_em = (info.get('email') or '').strip() or None
+            if not can_manage_app_users(get_user_role(db, user_id, auth_em)):
                 return jsonify({'error': 'Admin or org owner access required'}), 403
             kwargs['user_id'] = user_id
             return f(*args, **kwargs)
@@ -879,7 +892,10 @@ def update_user(user_id, uid):
         data = request.get_json() or {}
         update = {}
         from app.services.permissions import USER_APP_ROLES, get_user_role, ROLE_ADMIN
-        caller_role = get_user_role(db, user_id)
+
+        caller_info = get_user_info_from_request()
+        caller_auth_em = (caller_info.get('email') or '').strip() or None
+        caller_role = get_user_role(db, user_id, caller_auth_em)
         if 'role' in data and data['role'] in USER_APP_ROLES:
             if data['role'] == ROLE_ADMIN and caller_role != ROLE_ADMIN:
                 return jsonify({'error': 'Only administrators can assign the admin role'}), 403

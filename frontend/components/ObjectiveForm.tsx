@@ -156,7 +156,7 @@ export default function ObjectiveForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
-      {error && <ErrorMessage message={error} learnMoreHref="/docs" className="mb-2" />}
+      {error && <ErrorMessage message={error} className="mb-2" />}
 
       {/* What */}
       <section className="space-y-4" aria-labelledby="obj-section-what">
@@ -173,7 +173,6 @@ export default function ObjectiveForm({
           <FieldLabel
             htmlFor="objective-title"
             tooltip="A clear, outcome-focused statement of what you want to achieve."
-            learnMoreHref="/docs#okrs"
             required
           >
             Title
@@ -222,7 +221,6 @@ export default function ObjectiveForm({
           <FieldLabel
             htmlFor="objective-department"
             tooltip="Stored on the objective so dashboards and leader views can filter by org structure."
-            learnMoreHref="/docs#ownership"
           >
             Department
           </FieldLabel>
@@ -295,7 +293,7 @@ export default function ObjectiveForm({
         <p className="text-sm text-muted-foreground -mt-1">{levelMeta?.hint}</p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <FieldLabel tooltip="Strategic = org-wide; Functional = division; Tactical = quarterly team." learnMoreHref="/docs#okrs">
+            <FieldLabel tooltip="Strategic = org-wide; Functional = division; Tactical = quarterly team.">
               Level
             </FieldLabel>
             <select

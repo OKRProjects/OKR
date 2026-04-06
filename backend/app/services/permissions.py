@@ -88,16 +88,21 @@ def is_bootstrap_org_owner_email(email: Optional[str]) -> bool:
     return str(email).strip().lower() in _bootstrap_org_owner_emails()
 
 
-def get_user_role(db, user_id: str) -> str:
-    """Get role for user_id (Auth0 sub). Bootstrap IDs/emails force admin; org-owner emails; else Mongo ``users.role``."""
+def get_user_role(db, user_id: str, auth_email: Optional[str] = None) -> str:
+    """Get role for user_id (Auth0 sub). Bootstrap IDs/emails force admin; org-owner emails; else Mongo ``users.role``.
+
+    ``auth_email`` should be the email from the current session or JWT when available so bootstrap lists apply even if
+    Mongo ``users.email`` is missing or outdated.
+    """
     if user_id in _bootstrap_admin_ids():
         return ROLE_ADMIN
     user = db.users.find_one({'_id': user_id})
     if not user:
         return ROLE_DEVELOPER
-    if is_bootstrap_admin_email(user.get("email")):
+    email = (auth_email or user.get("email") or "").strip()
+    if is_bootstrap_admin_email(email):
         return ROLE_ADMIN
-    if is_bootstrap_org_owner_email(user.get("email")):
+    if is_bootstrap_org_owner_email(email):
         return ROLE_ORG_OWNER
     return user.get('role', ROLE_DEVELOPER)
 

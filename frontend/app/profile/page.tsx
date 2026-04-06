@@ -9,11 +9,12 @@ import { api, Profile } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { IntegrationsSection } from '@/components/IntegrationsSection';
-import { ProfileIntegrationsDemo } from '@/components/ProfileIntegrationsDemo';
 import { SettingsAccountSection } from '@/components/SettingsAccountSection';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useViewPreferences } from '@/lib/useViewPreferences';
+import { useViewRole } from '@/lib/ViewRoleContext';
+import { shouldShowUserManagementNav } from '@/lib/roles';
 import { RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
@@ -54,7 +55,7 @@ function ProfileCustomizableViews() {
 
   const handleTabToggle = (id: string, checked: boolean) => {
     if (!checked && visibleTabCount <= 1) {
-      toast.error('Debe quedar al menos una pestaña visible en el detalle del OKR.');
+      toast.error('At least one tab must stay visible on the OKR detail view.');
       return;
     }
     void updatePreferences({ visibleTabs: { [id]: checked } });
@@ -65,17 +66,16 @@ function ProfileCustomizableViews() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-lg font-semibold mb-1">Vistas personalizables</h2>
+        <h2 className="text-lg font-semibold mb-1">Customizable views</h2>
         <p className="text-sm text-muted-foreground mb-4">
-          Se guardan en tu perfil: última pestaña del modal OKR, pestañas visibles, orden del listado del
-          dashboard y filtros.
+          Stored on your profile: last OKR detail tab, which tabs are visible, dashboard list order, and filters.
         </p>
       </div>
 
       <div>
-        <h3 className="text-base font-medium mb-2">Pestañas del detalle OKR</h3>
+        <h3 className="text-base font-medium mb-2">OKR detail tabs</h3>
         <p className="text-sm text-muted-foreground mb-3">
-          Oculta secciones (por ejemplo Historial). La última pestaña que elijas se recordará al abrir otro OKR.
+          Hide sections (for example History). The last tab you choose is remembered when you open another OKR.
         </p>
         <div className="flex flex-wrap gap-x-6 gap-y-2">
           {Object.entries(OKR_TAB_LABELS).map(([id, label]) => (
@@ -93,13 +93,13 @@ function ProfileCustomizableViews() {
       </div>
 
       <div>
-        <h3 className="text-base font-medium mb-2">Listado del dashboard</h3>
+        <h3 className="text-base font-medium mb-2">Dashboard list</h3>
         <p className="text-sm text-muted-foreground mb-3">
-          Mismo criterio que la barra de filtros del dashboard: orden y actividad reciente.
+          Same options as the dashboard filter bar: sort order and recent activity.
         </p>
         <div className="flex flex-col sm:flex-row flex-wrap gap-4 max-w-xl">
           <div className="space-y-2 flex-1 min-w-[200px]">
-            <Label htmlFor="profile-sort">Ordenar por</Label>
+            <Label htmlFor="profile-sort">Sort by</Label>
             <Select
               value={sortCombo}
               onValueChange={(v) => {
@@ -111,17 +111,17 @@ function ProfileCustomizableViews() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="score-desc">Puntuación (mayor primero)</SelectItem>
-                <SelectItem value="score-asc">Puntuación (menor primero)</SelectItem>
-                <SelectItem value="owner-asc">Propietario (A–Z)</SelectItem>
-                <SelectItem value="owner-desc">Propietario (Z–A)</SelectItem>
-                <SelectItem value="updated-desc">Actualizado (más reciente)</SelectItem>
-                <SelectItem value="updated-asc">Actualizado (más antiguo)</SelectItem>
+                <SelectItem value="score-desc">Score (high to low)</SelectItem>
+                <SelectItem value="score-asc">Score (low to high)</SelectItem>
+                <SelectItem value="owner-asc">Owner (A–Z)</SelectItem>
+                <SelectItem value="owner-desc">Owner (Z–A)</SelectItem>
+                <SelectItem value="updated-desc">Updated (newest first)</SelectItem>
+                <SelectItem value="updated-asc">Updated (oldest first)</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2 flex-1 min-w-[200px]">
-            <Label htmlFor="profile-update-filter">Filtro por actividad</Label>
+            <Label htmlFor="profile-update-filter">Activity filter</Label>
             <Select
               value={preferences.dashboardFilterUpdateType}
               onValueChange={(v) => void updatePreferences({ dashboardFilterUpdateType: v })}
@@ -130,8 +130,8 @@ function ProfileCustomizableViews() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Cualquier actividad</SelectItem>
-                <SelectItem value="recent">Actualizado en los últimos 7 días</SelectItem>
+                <SelectItem value="all">Any activity</SelectItem>
+                <SelectItem value="recent">Updated in the last 7 days</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -139,9 +139,9 @@ function ProfileCustomizableViews() {
       </div>
 
       <div>
-        <h3 className="text-base font-medium mb-2">Pestaña Historial (por defecto)</h3>
+        <h3 className="text-base font-medium mb-2">History tab (default)</h3>
         <p className="text-sm text-muted-foreground mb-3">
-          Tipo de evento de workflow mostrado al abrir la pestaña Historial en un OKR.
+          Workflow event type shown when you open the History tab on an OKR.
         </p>
         <div className="max-w-xs">
           <Select
@@ -164,13 +164,14 @@ function ProfileCustomizableViews() {
 
       <Button variant="outline" size="sm" onClick={() => void resetToDefault()} className="gap-2">
         <RotateCcw className="h-4 w-4" />
-        Restablecer todo a valores por defecto
+        Reset all to defaults
       </Button>
     </div>
   );
 }
 
 export default function ProfilePage() {
+  const { user: sessionUser, rolePreview } = useViewRole();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
@@ -384,17 +385,18 @@ export default function ProfilePage() {
             <IntegrationsSection />
           </div>
 
-          <div className="border-t pt-6 mt-6">
-            <ProfileIntegrationsDemo />
-          </div>
-
-          <div className="mt-8 flex space-x-4">
+          <div className="mt-8 flex flex-wrap gap-3">
             <Button asChild>
               <Link href="/dashboard">Go to Dashboard</Link>
             </Button>
             <Button variant="outline" onClick={() => setEditing(true)}>
               Edit Profile
             </Button>
+            {shouldShowUserManagementNav(sessionUser, rolePreview) && (
+              <Button variant="outline" asChild>
+                <Link href="/admin/users">User management</Link>
+              </Button>
+            )}
           </div>
           </div>
         </CardContent>

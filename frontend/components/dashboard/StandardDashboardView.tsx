@@ -5,11 +5,7 @@ import { DashboardHeader } from './DashboardHeader';
 import { ExportDropdown } from './ExportDropdown';
 import { FilterBar } from './FilterBar';
 import { TierSection } from './TierSection';
-import { Button } from '@/components/ui/button';
-import { HelpCircle } from 'lucide-react';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { TutorialOverlay } from '@/components/shared/TutorialOverlay';
-import { getDashboardTutorialSteps } from '@/lib/tutorial';
 import type { DashboardViewProps } from './dashboardShared';
 
 export function StandardDashboardView(props: DashboardViewProps) {
@@ -39,11 +35,6 @@ export function StandardDashboardView(props: DashboardViewProps) {
     onExportGoogleSlides,
     exporting,
     exportingSlides,
-    onShowTutorial,
-    shouldShowTutorial,
-    onDismissTutorial,
-    showTutorial,
-    setShowTutorial,
   } = props;
 
   return (
@@ -92,22 +83,14 @@ export function StandardDashboardView(props: DashboardViewProps) {
           viewPreferences={viewPreferences}
         />
         <div className="flex flex-wrap items-center gap-2">
-          {onShowTutorial && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowTutorial?.(true) ?? onShowTutorial()}
-              className="h-9 text-muted-foreground hover:text-foreground"
-            >
-              <HelpCircle className="mr-1.5 h-4 w-4" />
-              Tour
-            </Button>
-          )}
           {onExport && (
             <ExportDropdown
               onExport={onExport}
               onExportGoogleSlides={onExportGoogleSlides}
-              onPresentationMode={() => { setPresentationIndex(0); setPresentationActive(true); }}
+              onPresentationMode={() => {
+                setPresentationIndex(0);
+                setPresentationActive(true);
+              }}
               exporting={exporting}
               exportingSlides={exportingSlides}
               disabled={filteredAndSorted.length === 0}
@@ -149,23 +132,8 @@ export function StandardDashboardView(props: DashboardViewProps) {
               ? { label: 'Create objective', onClick: () => (window.location.href = '/okrs/new') }
               : undefined
           }
-          secondaryLink={
-            objectives.length === 0 ? { label: 'Learn more about OKRs', href: '/docs#okrs' } : undefined
-          }
         />
       )}
-      {((showTutorial ?? false) ||
-        (shouldShowTutorial && filteredAndSorted.length > 0)) &&
-        onDismissTutorial && (
-          <TutorialOverlay
-            steps={getDashboardTutorialSteps()}
-            contextName="Dashboard"
-            onDismiss={() => {
-              setShowTutorial?.(false);
-              onDismissTutorial();
-            }}
-          />
-        )}
     </div>
   );
 }

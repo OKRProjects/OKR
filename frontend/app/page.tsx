@@ -13,7 +13,6 @@ import {
   Shield,
   Clock,
   ArrowRight,
-  CheckCircle2,
 } from 'lucide-react';
 import { getCurrentUser, login, loginEmailPassword, register, User } from '@/lib/auth';
 import { ImageWithFallback } from '@/components/ImageWithFallback';
@@ -25,10 +24,6 @@ const SQ_LOGO_SVG =
 /** Hero imagery aligned with SelectQuote’s consumer site (Contentful CDN). */
 const HERO_IMG =
   'https://images.ctfassets.net/vr7x4vru4gls/4wJst9HFtFM6FIHplmaCUu/3fbd3e919a0ffccb267bdc8703675958/Hero-2-min.jpg?fm=jpg&w=1200&q=80';
-const DASH_IMG =
-  'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?w=1080&q=80';
-const TEAM_IMG =
-  'https://images.unsplash.com/photo-1758691736975-9f7f643d178e?w=1080&q=80';
 const SERVICE_IMG =
   'https://images.unsplash.com/photo-1739527324181-e02978b400c0?w=1080&q=80';
 
@@ -323,14 +318,6 @@ export default function Home() {
                     <Shield className="w-5 h-5" aria-hidden />
                     Access your OKRs
                   </motion.a>
-                  <motion.a
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    href="#how-it-works"
-                    className="font-sq-heading px-8 py-4 bg-white text-[#231F20] rounded font-semibold hover:bg-gray-50 transition-colors shadow border-2 border-[#231F20]/10 text-lg flex items-center justify-center cursor-pointer"
-                  >
-                    Learn more
-                  </motion.a>
                 </div>
                 <p className="text-sm text-[#646464] mb-4 font-medium">
                   We do the shopping. You do the saving —{' '}
@@ -410,118 +397,6 @@ export default function Home() {
             ))}
           </div>
         </motion.div>
-
-        <div id="how-it-works" className="py-16">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            viewport={{ once: true }}
-            className="text-center mb-12"
-          >
-            <h3 className="font-sq-heading text-2xl sm:text-3xl md:text-4xl font-bold text-[#231F20] mb-4 text-balance px-1">
-              How SelectQuote uses OKRs
-            </h3>
-            <p className="text-base sm:text-lg max-w-3xl mx-auto leading-relaxed px-1">
-              Leaders set objectives with measurable key results; teams update progress daily; the org sees how Sales,
-              Service, Ops, and Tech connect to the experience we deliver. Ownership stays clear; alignment stays real.
-            </p>
-          </motion.div>
-
-          <div className="grid lg:grid-cols-2 gap-12 items-center mb-16">
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6 }}
-              viewport={{ once: true }}
-            >
-              <div className="rounded-2xl overflow-hidden shadow-xl">
-                <ImageWithFallback src={DASH_IMG} alt="OKR dashboards" className="w-full h-auto block" />
-              </div>
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, x: 30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6 }}
-              viewport={{ once: true }}
-              className="space-y-6"
-            >
-              <h4 className="font-sq-heading text-2xl font-bold text-[#231F20] mb-4">Real-time performance tracking</h4>
-              <p className="mb-6 leading-relaxed">
-                Monitor objectives and key results with clear scoring and history—whether you own the goal or support
-                customers from another team.
-              </p>
-              <ul className="space-y-3">
-                {[
-                  'Progress updates on key results you follow',
-                  'Scope views: my OKRs, team, and org roll-up',
-                  'Check-ins and status without spreadsheet chaos',
-                ].map((item, index) => (
-                  <motion.li
-                    key={item}
-                    initial={{ opacity: 0, x: -20 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.4, delay: index * 0.1 }}
-                    viewport={{ once: true }}
-                    className="flex items-start gap-3"
-                  >
-                    <div className="w-6 h-6 bg-[#FFE8D6] rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <CheckCircle2 className="w-4 h-4 text-[#F47B20]" aria-hidden />
-                    </div>
-                    <span className="text-[#231F20]">{item}</span>
-                  </motion.li>
-                ))}
-              </ul>
-            </motion.div>
-          </div>
-
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6 }}
-              viewport={{ once: true }}
-              className="space-y-6 order-2 lg:order-1"
-            >
-              <h4 className="font-sq-heading text-2xl font-bold text-[#231F20] mb-4">Collaboration &amp; alignment</h4>
-              <p className="mb-6 leading-relaxed">
-                Break down silos between departments. See how initiatives in Sales, Service, Technology, and Operations
-                support company objectives and, ultimately, customer outcomes.
-              </p>
-              <div className="grid sm:grid-cols-2 gap-4">
-                {[
-                  { title: 'Sales teams', desc: 'Acquisition, retention, and growth goals' },
-                  { title: 'Service teams', desc: 'Satisfaction and resolution metrics' },
-                  { title: 'Technology', desc: 'Platform reliability and innovation' },
-                  { title: 'Operations', desc: 'Efficiency and quality standards' },
-                ].map((dept, index) => (
-                  <motion.div
-                    key={dept.title}
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: index * 0.1 }}
-                    viewport={{ once: true }}
-                    className="bg-[#F3F3F3] rounded-lg p-4 border border-gray-200"
-                  >
-                    <div className="font-sq-heading font-semibold text-[#231F20] mb-1">{dept.title}</div>
-                    <div className="text-sm text-[#646464]">{dept.desc}</div>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, x: 30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.6 }}
-              viewport={{ once: true }}
-              className="order-1 lg:order-2"
-            >
-              <div className="rounded-2xl overflow-hidden shadow-xl">
-                <ImageWithFallback src={TEAM_IMG} alt="Team collaboration" className="w-full h-auto block" />
-              </div>
-            </motion.div>
-          </div>
-        </div>
 
         <motion.div
           initial={{ opacity: 0, y: 30 }}
@@ -876,11 +751,6 @@ export default function Home() {
                 <li>
                   <Link href="/dashboard" className="hover:text-white transition-colors">
                     Dashboard
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/docs" className="hover:text-white transition-colors">
-                    Docs
                   </Link>
                 </li>
                 <li>

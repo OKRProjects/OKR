@@ -6,7 +6,7 @@ import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { ScoreRing, getScoreStatusLabel } from '@/components/shared/ScoreRing';
 import { StatusPill } from '@/components/shared/StatusPill';
-import { Building2, User, Target, Calendar, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { Building2, User, Target, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import { api, type Objective, type KeyResult } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -63,11 +63,6 @@ export function OverviewTab({
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted-foreground">
-        <a href="/docs#workflow" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
-          Learn more about workflow and status <ExternalLink className="h-3.5 w-3.5" />
-        </a>
-      </p>
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-4">

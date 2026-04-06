@@ -9,11 +9,9 @@ import { TierSection } from './TierSection';
 import { Button } from '@/components/ui/button';
 import { UserMenu } from '@/components/UserMenu';
 import { MobileSidebarMenuButton } from '@/components/MobileSidebarMenuButton';
-import { HelpCircle, ClipboardCheck, Users, Presentation } from 'lucide-react';
+import { ClipboardCheck, Users, Presentation } from 'lucide-react';
 import Link from 'next/link';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { TutorialOverlay } from '@/components/shared/TutorialOverlay';
-import { getDashboardTutorialSteps } from '@/lib/tutorial';
 import type { DashboardViewProps } from './dashboardShared';
 
 export function FullDashboardView(props: DashboardViewProps) {
@@ -52,11 +50,6 @@ export function FullDashboardView(props: DashboardViewProps) {
     onExportGoogleSlides,
     exporting,
     exportingSlides,
-    onShowTutorial,
-    shouldShowTutorial,
-    onDismissTutorial,
-    showTutorial,
-    setShowTutorial,
     currentUserName,
     dashboardTitle,
     dashboardSubtitle,
@@ -130,17 +123,6 @@ export function FullDashboardView(props: DashboardViewProps) {
                   <span className="hidden sm:inline">User management</span>
                   <span className="sm:hidden">Users</span>
                 </Link>
-              )}
-              {onShowTutorial && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowTutorial?.(true) ?? onShowTutorial()}
-                  className="h-9 touch-manipulation text-muted-foreground hover:text-foreground"
-                >
-                  <HelpCircle className="h-4 w-4 sm:mr-1.5" aria-hidden />
-                  <span className="hidden sm:inline">Tour</span>
-                </Button>
               )}
               {onPresentationMode && (
                 <Button
@@ -246,22 +228,10 @@ export function FullDashboardView(props: DashboardViewProps) {
               : undefined
           }
           secondaryLink={
-            objectives.length === 0
-              ? hideEmptyStateCreate
-                ? { label: 'Open organization view', href: '/divisions' }
-                : { label: 'Learn more about OKRs', href: '/docs#okrs' }
+            objectives.length === 0 && hideEmptyStateCreate
+              ? { label: 'Open organization view', href: '/divisions' }
               : undefined
           }
-        />
-      )}
-      {((showTutorial ?? false) || (shouldShowTutorial && filteredAndSorted.length > 0)) && onDismissTutorial && (
-        <TutorialOverlay
-          steps={getDashboardTutorialSteps()}
-          contextName="Dashboard"
-          onDismiss={() => {
-            setShowTutorial?.(false);
-            onDismissTutorial();
-          }}
         />
       )}
       </div>

@@ -55,6 +55,8 @@ services:
         sync: false
       - key: APP_ORG_OWNER_EMAILS
         sync: false
+      - key: APP_DEFAULT_ORG_NAME
+        sync: false
 
   - type: web
     name: okr-frontend

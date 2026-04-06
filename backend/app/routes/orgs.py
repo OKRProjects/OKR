@@ -7,7 +7,7 @@ from uuid import uuid4
 from flask import Blueprint, jsonify, request
 from sqlalchemy import and_, func, select, text
 
-from app.routes.auth_backend import require_auth
+from app.routes.auth_backend import get_user_info_from_request, require_auth
 from app.db.postgres import pg_session
 from app.models_sql import Department, Membership, Objective, Organization, Team, User
 from app.repositories.okr_repo_postgres import PostgresOKRRepository
@@ -40,7 +40,9 @@ def _user_can_create_department_in_org(s, user_id: str, org_id: str) -> bool:
         from app.services.permissions import can_manage_app_users, get_user_role
 
         db = get_db()
-        if can_manage_app_users(get_user_role(db, user_id)):
+        info = get_user_info_from_request()
+        auth_em = (info.get('email') or '').strip() or None
+        if can_manage_app_users(get_user_role(db, user_id, auth_em)):
             return True
     except Exception:
         pass
@@ -78,6 +80,13 @@ def list_orgs(user_id: str):
             .scalars()
             .all()
         )
+        # Single-tenant display: replace auto-generated "*'s organization" with APP_DEFAULT_ORG_NAME (e.g. "Select Quote").
+        display_name = (os.getenv("APP_DEFAULT_ORG_NAME") or "").strip()
+        if display_name:
+            for o in rows:
+                if (o.name or "").endswith("'s organization"):
+                    o.name = display_name[:200]
+            s.flush()
         return jsonify([{"id": o.id, "name": o.name, "slug": o.slug} for o in rows]), 200
 
 

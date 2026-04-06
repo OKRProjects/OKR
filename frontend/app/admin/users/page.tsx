@@ -32,20 +32,20 @@ type UserRecord = {
 
 const ROLES = ASSIGNABLE_APP_ROLES as unknown as readonly string[];
 
-/** Short hint for permission column (Spanish copy for admins). */
+/** Short hint for the role column in User management. */
 function rolePermissionSummary(role: string): string {
   switch (role) {
     case 'admin':
-      return 'Acceso total: usuarios, datos, configuración.';
+      return 'Full access: users, data, and configuration.';
     case 'org_owner':
-      return 'Gestión de organización: usuarios y permisos (no puede asignar administradores).';
+      return 'Organization management: users and permissions (cannot assign admin).';
     case 'view_only':
-      return 'Solo lectura: no edita OKRs ni integraciones.';
+      return 'Read-only: cannot edit OKRs or integrations.';
     case 'standard':
     case 'developer':
-      return 'Colaborador: crea/edita según políticas (objetivos si no están bloqueados).';
+      return 'Contributor: create and edit per policy (objectives unless creation is blocked).';
     default:
-      return 'Liderazgo: crea y revisa OKRs en su ámbito.';
+      return 'Leadership: create and review OKRs in scope.';
   }
 }
 
@@ -106,27 +106,27 @@ function UserRow({
     >
       <div className="min-w-0 space-y-1">
         <p className="font-medium leading-snug truncate" title={u.name || u.email}>
-          {u.name || u.email || 'Sin nombre'}
+          {u.name || u.email || 'No name'}
         </p>
         {u.email && u.name && <p className="text-xs text-muted-foreground truncate">{u.email}</p>}
         <p className="font-mono text-[11px] text-muted-foreground truncate" title={u._id}>
           {u._id}
         </p>
         <div className="flex flex-wrap gap-1 pt-1">
-          {role === 'admin' && <Badge>Administrador</Badge>}
+          {role === 'admin' && <Badge>Admin</Badge>}
           {role === 'view_only' && (
-            <Badge variant="secondary">Solo lectura</Badge>
+            <Badge variant="secondary">View only</Badge>
           )}
           {!isAdminRole && (
             <Badge variant={canCreateObjectives ? 'outline' : 'destructive'}>
-              {canCreateObjectives ? 'Puede crear OKRs' : 'Sin crear OKRs'}
+              {canCreateObjectives ? 'Can create OKRs' : 'Cannot create OKRs'}
             </Badge>
           )}
         </div>
       </div>
 
       <div className="space-y-2">
-        <Label className="text-xs text-muted-foreground">Rol (nivel de acceso)</Label>
+        <Label className="text-xs text-muted-foreground">Role (access level)</Label>
         {roleEditLocked ? (
           <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm font-medium">{role}</div>
         ) : (
@@ -148,11 +148,11 @@ function UserRow({
 
       <div className="space-y-3">
         <div>
-          <Label className="text-xs text-muted-foreground">Departamento (ID)</Label>
+          <Label className="text-xs text-muted-foreground">Department (ID)</Label>
           <Input
             className="mt-1 h-9"
             value={departmentId}
-            placeholder="Opcional — UUID o vacío"
+            placeholder="Optional — UUID or empty"
             onChange={(e) => setDepartmentId(e.target.value)}
             disabled={saving}
           />
@@ -168,12 +168,12 @@ function UserRow({
                 if (isAdminRole) return;
                 setOkrCreateDisabled(!e.target.checked);
               }}
-              title={isAdminRole ? 'Los administradores siempre pueden crear objetivos' : undefined}
+              title={isAdminRole ? 'Admins can always create objectives' : undefined}
             />
             <span>
-              <span className="font-medium">Permitir crear objetivos</span>
+              <span className="font-medium">Allow creating objectives</span>
               <span className="block text-xs text-muted-foreground">
-                Desactiva para quitar solo la creación de OKRs (el rol sigue aplicando lo demás).
+                Turn off to block only OKR creation; other role permissions still apply.
               </span>
             </span>
           </label>
@@ -182,7 +182,7 @@ function UserRow({
 
       <div className="flex items-end lg:justify-end">
         <Button size="sm" onClick={handleSave} disabled={saving || !hasChanges} className="min-w-[88px]">
-          {saving ? 'Guardando…' : 'Guardar'}
+          {saving ? 'Saving…' : 'Save'}
         </Button>
       </div>
     </div>
@@ -200,6 +200,14 @@ export default function AdminUsersPage() {
   const router = useRouter();
   const canAccessUserManagement = canManageUsersAccount(user);
 
+  const assignableRoles = useMemo(() => {
+    if (!user) return ROLES;
+    if (user.role === 'org_owner') {
+      return ROLES.filter((r) => r !== 'admin');
+    }
+    return ROLES;
+  }, [user]);
+
   useEffect(() => {
     loadUser();
   }, []);
@@ -208,7 +216,7 @@ export default function AdminUsersPage() {
     try {
       setIsLoading(true);
       clearUserCache();
-      // Llamada directa a la API: evita caché en memoria de getCurrentUser() que dejaba rol antiguo.
+      // Direct API call avoids stale in-memory getCurrentUser() cache after role changes.
       const me = (await api.getCurrentUser()) as User;
       if (!me) {
         await login();
@@ -270,8 +278,8 @@ export default function AdminUsersPage() {
 
   if (isLoading) {
     return (
-      <AppLayout title="Gestión de usuarios" description="Cargando…">
-        <div className="text-center text-muted-foreground py-8">Cargando…</div>
+      <AppLayout title="User management" description="Loading…">
+        <div className="text-center text-muted-foreground py-8">Loading…</div>
       </AppLayout>
     );
   }
@@ -280,35 +288,28 @@ export default function AdminUsersPage() {
     return null;
   }
 
-  const assignableRoles = useMemo(() => {
-    if (user.role === 'org_owner') {
-      return ROLES.filter((r) => r !== 'admin');
-    }
-    return ROLES;
-  }, [user.role]);
-
   if (!canAccessUserManagement) {
     return (
-      <AppLayout title="Acceso restringido" description="Se requiere administrador u organizador en el servidor">
+      <AppLayout title="Access restricted" description="Admin or org owner role required on the server">
         <Card className="max-w-lg">
           <CardHeader>
-            <CardTitle>Sin permiso de gestión de usuarios</CardTitle>
+            <CardTitle>No permission for user management</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Tu sesión es válida, pero el rol en el servidor no es <code className="text-xs">admin</code> ni{' '}
+              Your session is valid, but your server role is not <code className="text-xs">admin</code> or{' '}
               <code className="text-xs">org_owner</code>.
             </p>
           </CardHeader>
           <CardContent className="space-y-4 text-sm text-muted-foreground">
             <p>
-              <strong className="text-foreground">Rol en el servidor (cuenta real):</strong>{' '}
-              <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{user.role ?? 'sin definir'}</code>
+              <strong className="text-foreground">Server role (real account):</strong>{' '}
+              <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{user.role ?? 'unset'}</code>
             </p>
             {rolePreview != null && (
               <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
-                <p className="font-medium text-amber-950 dark:text-amber-50">Vista previa de rol activa</p>
+                <p className="font-medium text-amber-950 dark:text-amber-50">Role preview is on</p>
                 <p className="mt-1">
-                  La vista previa solo cambia partes de la interfaz; los permisos reales siguen siendo los de{' '}
-                  <code className="text-xs">{user.role}</code> en el servidor.
+                  Preview only changes parts of the UI; APIs still use your real server role{' '}
+                  <code className="text-xs">{user.role}</code>.
                 </p>
                 <Button
                   type="button"
@@ -320,22 +321,23 @@ export default function AdminUsersPage() {
                     void loadUser();
                   }}
                 >
-                  Quitar vista previa y reintentar
+                  Clear preview and retry
                 </Button>
               </div>
             )}
             <p>
-              Para acceder aquí hace falta <code className="text-xs">role: &quot;admin&quot;</code> o{' '}
-              <code className="text-xs">role: &quot;org_owner&quot;</code> en MongoDB para tu usuario (Auth0{' '}
-              <code className="text-xs">sub</code>), o usar <code className="text-xs">APP_ADMIN_USER_IDS</code> /{' '}
-              <code className="text-xs">APP_ADMIN_EMAILS</code> para administradores.
+              To access this page you need <code className="text-xs">role: &quot;admin&quot;</code> or{' '}
+              <code className="text-xs">role: &quot;org_owner&quot;</code> in MongoDB for your user (Auth0{' '}
+              <code className="text-xs">sub</code>), or set bootstrap env vars:{' '}
+              <code className="text-xs">APP_ADMIN_USER_IDS</code> / <code className="text-xs">APP_ADMIN_EMAILS</code> for
+              admins, or <code className="text-xs">APP_ORG_OWNER_EMAILS</code> for org owners (comma-separated emails).
             </p>
             <div className="flex flex-wrap gap-2 pt-2">
               <Button type="button" onClick={() => router.push('/dashboard')}>
-                Ir al dashboard
+                Go to dashboard
               </Button>
               <Button type="button" variant="outline" onClick={() => void loadUser()}>
-                Reintentar
+                Retry
               </Button>
             </div>
           </CardContent>
@@ -345,14 +347,14 @@ export default function AdminUsersPage() {
   }
 
   return (
-    <AppLayout title="Gestión de usuarios" description="Roles, departamento y permisos (admin u org owner)">
+    <AppLayout title="User management" description="Roles, department, and permissions (admin or org owner)">
       <div className="space-y-6 max-w-6xl">
         {rolePreview && sessionUser && rolePreview !== sessionUser.role && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-            <strong>Vista previa de rol activa.</strong> La UI simula <strong>{rolePreview}</strong>; las API siguen
-            usando tu rol real (<strong>{sessionUser.role}</strong>). Listado y cambios requieren{' '}
-            <strong className="text-foreground">admin</strong> u <strong className="text-foreground">org_owner</strong> en
-            el servidor.
+            <strong>Role preview is on.</strong> The UI simulates <strong>{rolePreview}</strong>; APIs still use your real
+            role (<strong>{sessionUser.role}</strong>). Listing and edits require{' '}
+            <strong className="text-foreground">admin</strong> or <strong className="text-foreground">org_owner</strong>{' '}
+            on the server.
           </div>
         )}
         {error && (
@@ -364,33 +366,34 @@ export default function AdminUsersPage() {
           <CardHeader className="border-b border-border">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <CardTitle>Usuarios</CardTitle>
+                <CardTitle>Users</CardTitle>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Listado unión <strong className="text-foreground">Auth0 + MongoDB</strong>: verás a quienes aparecen
-                  en el directorio y a quienes ya tienen fila en la app. El <strong>rol</strong> define el nivel general;{' '}
-                  <strong>Permitir crear objetivos</strong> añade o quita solo ese permiso.
+                  Combined <strong className="text-foreground">Auth0 + MongoDB</strong> list: people in your directory
+                  plus anyone with an app record. <strong>Role</strong> sets the baseline;{' '}
+                  <strong>Allow creating objectives</strong> toggles only that permission.
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <Badge variant="secondary" className="text-xs font-normal">
-                  {loadingUsers ? '…' : `${users.length} usuario${users.length !== 1 ? 's' : ''}`}
+                  {loadingUsers ? '…' : `${users.length} user${users.length !== 1 ? 's' : ''}`}
                 </Badge>
                 <Button variant="outline" size="sm" onClick={loadUsers} disabled={loadingUsers}>
-                  Actualizar lista
+                  Refresh list
                 </Button>
               </div>
             </div>
           </CardHeader>
           <CardContent className="pt-6">
             {loadingUsers ? (
-              <div className="text-center text-muted-foreground py-12">Cargando usuarios…</div>
+              <div className="text-center text-muted-foreground py-12">Loading users…</div>
             ) : users.length === 0 ? (
               <div className="space-y-3 text-center text-muted-foreground py-10 text-sm max-w-lg mx-auto">
-                <p>No hay usuarios en la lista.</p>
+                <p>No users in the list.</p>
                 <p>
-                  Tras el primer inicio de sesión debería crearse un documento en Mongo. Configura{' '}
-                  <code className="text-xs rounded bg-muted px-1">APP_ADMIN_USER_IDS</code> o{' '}
-                  <code className="text-xs rounded bg-muted px-1">role: &quot;admin&quot;</code>, luego{' '}
+                  After first sign-in a MongoDB user document should appear. Set{' '}
+                  <code className="text-xs rounded bg-muted px-1">APP_ADMIN_USER_IDS</code>,{' '}
+                  <code className="text-xs rounded bg-muted px-1">APP_ORG_OWNER_EMAILS</code>, or{' '}
+                  <code className="text-xs rounded bg-muted px-1">role: &quot;admin&quot;</code>, then{' '}
                   <button
                     type="button"
                     className="text-primary underline underline-offset-4 font-medium"
@@ -399,7 +402,7 @@ export default function AdminUsersPage() {
                       loadUsers();
                     }}
                   >
-                    actualizar
+                    refresh
                   </button>
                   .
                 </p>
@@ -407,10 +410,10 @@ export default function AdminUsersPage() {
             ) : (
               <div className="space-y-4">
                 <div className="hidden lg:grid lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,1fr)_auto] gap-4 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  <span>Usuario</span>
-                  <span>Rol</span>
-                  <span>Departamento y permisos</span>
-                  <span className="text-right">Acción</span>
+                  <span>User</span>
+                  <span>Role</span>
+                  <span>Department &amp; permissions</span>
+                  <span className="text-right">Action</span>
                 </div>
                 {users.map((u) => (
                   <UserRow

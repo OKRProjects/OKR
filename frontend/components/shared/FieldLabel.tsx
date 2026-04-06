@@ -1,17 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { HelpCircle, ExternalLink } from 'lucide-react';
+import { HelpCircle } from 'lucide-react';
 
 export interface FieldLabelProps {
   htmlFor?: string;
   children: React.ReactNode;
   /** Hover tooltip text */
   tooltip?: string;
-  /** URL for "Learn more" link (opens in new tab) */
-  learnMoreHref?: string;
-  /** Optional label for the learn more link (default: "Learn more") */
-  learnMoreLabel?: string;
   required?: boolean;
   className?: string;
 }
@@ -20,8 +16,6 @@ export function FieldLabel({
   htmlFor,
   children,
   tooltip,
-  learnMoreHref,
-  learnMoreLabel = 'Learn more',
   required,
   className = '',
 }: FieldLabelProps) {
@@ -74,17 +68,6 @@ export function FieldLabel({
               </div>
             )}
           </span>
-        )}
-        {learnMoreHref && (
-          <a
-            href={learnMoreHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            {learnMoreLabel}
-          </a>
         )}
       </span>
     </label>

@@ -6,8 +6,6 @@ export interface ErrorMessageProps {
   message: string;
   /** Actionable steps to resolve the error */
   suggestions?: string[];
-  /** Optional link for more help (e.g. /docs/troubleshooting) */
-  learnMoreHref?: string;
   className?: string;
 }
 
@@ -38,7 +36,6 @@ export function getErrorSuggestions(message: string): string[] {
 export function ErrorMessage({
   message,
   suggestions: propSuggestions,
-  learnMoreHref,
   className = '',
 }: ErrorMessageProps) {
   const suggestions = propSuggestions ?? getErrorSuggestions(message);
@@ -58,16 +55,6 @@ export function ErrorMessage({
                 <li key={i}>{s}</li>
               ))}
             </ul>
-          )}
-          {learnMoreHref && (
-            <a
-              href={learnMoreHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 inline-block text-sm font-medium underline hover:no-underline"
-            >
-              Learn more about troubleshooting
-            </a>
           )}
         </div>
       </div>
