@@ -1,4 +1,22 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+/**
+ * Build absolute URL for API calls.
+ * Prefer NEXT_PUBLIC_API_URL (e.g. http://localhost:5001) so the browser talks to Flask directly;
+ * CORS + session cookies are configured on the backend.
+ * If empty in the browser, use window.location.origin + path (never a bare "/api/..." — Turbopack/some
+ * browsers surface that as TypeError: Failed to fetch).
+ */
+function apiFetchUrl(path: string): string {
+  const p = path.startsWith('/') ? path : `/${path}`;
+  const raw = process.env.NEXT_PUBLIC_API_URL;
+  if (raw === '' || raw === undefined) {
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin}${p}`;
+    }
+    const internal = process.env.INTERNAL_API_URL || 'http://127.0.0.1:5001';
+    return `${internal.replace(/\/$/, '')}${p}`;
+  }
+  return `${raw.replace(/\/$/, '')}${p}`;
+}
 
 export interface Item {
   _id?: string;
@@ -77,6 +95,8 @@ export interface Objective {
   nextReviewDate?: string | null;
   /** Short narrative for slides and overview; persisted on the objective. */
   latestUpdateSummary?: string | null;
+  /** Organization id (Postgres); sent on create when known. */
+  orgId?: string;
   /** Present on objectives returned from the dependencies graph API. */
   linkHealth?: number | null;
 }
@@ -211,7 +231,7 @@ export interface ObjectiveAncestor {
 
 async function getAccessToken(): Promise<string | null> {
   try {
-    const response = await fetch(`${API_URL}/api/auth/token`, {
+    const response = await fetch(apiFetchUrl('/api/auth/token'), {
       credentials: 'include', // Include cookies for session
     });
     if (response.ok) {
@@ -270,7 +290,7 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
     ...options.headers,
   };
 
-  const response = await fetch(`${API_URL}${url}`, {
+  const response = await fetch(apiFetchUrl(url), {
     ...options,
     headers,
     credentials: 'include', // Include cookies
@@ -299,7 +319,7 @@ async function fetchPublic(url: string, options: RequestInit = {}) {
     ...options.headers,
   };
 
-  const response = await fetch(`${API_URL}${url}`, {
+  const response = await fetch(apiFetchUrl(url), {
     ...options,
     headers,
     credentials: 'include',
@@ -347,7 +367,16 @@ export const api = {
     return fetchWithAuth('/api/auth/me');
   },
 
-  async getUsers(): Promise<{ _id: string; role: string; departmentId?: string; name?: string; email?: string }[]> {
+  async getUsers(): Promise<
+    {
+      _id: string;
+      role: string;
+      departmentId?: string;
+      name?: string;
+      email?: string;
+      okrCreateDisabled?: boolean;
+    }[]
+  > {
     return fetchWithAuth('/api/auth/users');
   },
 
@@ -381,8 +410,8 @@ export const api = {
 
   async updateUser(
     uid: string,
-    body: { role?: string; departmentId?: string | null }
-  ): Promise<{ _id: string; role: string; departmentId?: string }> {
+    body: { role?: string; departmentId?: string | null; okrCreateDisabled?: boolean }
+  ): Promise<{ _id: string; role: string; departmentId?: string; okrCreateDisabled?: boolean }> {
     return fetchWithAuth(`/api/auth/users/${encodeURIComponent(uid)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -627,7 +656,7 @@ export const api = {
   async updateKeyResult(id: string, kr: Partial<KeyResult>): Promise<KeyResult> {
     const token = await getAccessToken();
     if (!token) throw new Error('Unable to get access token.');
-    const response = await fetch(`${API_URL}/api/key-results/${id}`, {
+    const response = await fetch(apiFetchUrl(`/api/key-results/${id}`), {
       method: 'PUT',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -835,7 +864,7 @@ export const api = {
   async exportToPowerPoint(objectiveIds: string[], narrative?: string | null): Promise<void> {
     const token = await getAccessToken();
     if (!token) throw new Error('Unable to get access token.');
-    const response = await fetch(`${API_URL}/api/objectives/export-pptx`, {
+    const response = await fetch(apiFetchUrl('/api/objectives/export-pptx'), {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -871,7 +900,7 @@ export const api = {
 
   /** Resolve share token (public, no auth). Returns { objective, keyResults }. */
   async getShareByToken(token: string): Promise<{ objective: Objective; keyResults: KeyResult[] }> {
-    const res = await fetch(`${API_URL}/api/shares/${encodeURIComponent(token)}`, { credentials: 'include' });
+    const res = await fetch(apiFetchUrl(`/api/shares/${encodeURIComponent(token)}`), { credentials: 'include' });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || `Failed to load shared OKR: ${res.status}`);
@@ -901,7 +930,7 @@ export const api = {
     if (params.status) search.set('status', params.status);
     if (params.ownerId) search.set('ownerId', params.ownerId);
     if (params.parentObjectiveId !== undefined) search.set('parentObjectiveId', params.parentObjectiveId ?? '');
-    const url = `${API_URL}/api/objectives/export?${search.toString()}`;
+    const url = apiFetchUrl(`/api/objectives/export?${search.toString()}`);
     const token = await getAccessToken();
     if (!token) throw new Error('Unable to get access token.');
     const response = await fetch(url, {

@@ -9,6 +9,7 @@ import { api, Profile } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { IntegrationsSection } from '@/components/IntegrationsSection';
+import { ProfileIntegrationsDemo } from '@/components/ProfileIntegrationsDemo';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useViewPreferences } from '@/lib/useViewPreferences';
@@ -370,6 +371,10 @@ export default function ProfilePage() {
 
           <div className="border-t pt-6 mt-6">
             <IntegrationsSection />
+          </div>
+
+          <div className="border-t pt-6 mt-6">
+            <ProfileIntegrationsDemo />
           </div>
 
           <div className="mt-8 flex space-x-4">

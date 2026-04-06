@@ -1,4 +1,12 @@
 import os
+import sys
+from pathlib import Path
+
+# The `alembic` CLI does not put the backend root on sys.path (unlike `python run.py`).
+_backend_root = Path(__file__).resolve().parent.parent
+if str(_backend_root) not in sys.path:
+    sys.path.insert(0, str(_backend_root))
+
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config

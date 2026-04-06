@@ -2,60 +2,6 @@ import type { Objective, KeyResult } from '@/lib/api';
 import type { DashboardFilters } from './FilterBar';
 import type { DashboardRole } from './DashboardHeader';
 import type { PresentationSlide, PresentationDeckStats } from '@/components/presentation/PresentationMode';
-import { isDeptScopedLeaderRole } from '@/lib/roles';
-
-/** User shape for visibility: sub (id) and optional departmentId, role */
-export interface UserForVisibility {
-  sub?: string;
-  departmentId?: string | null;
-  role?: string;
-}
-
-/**
- * Returns objectives visible to the user based on role and team.
- * - view_only: objectives in user's department (if departmentId set); otherwise all (read-only).
- * - standard: objectives user owns OR where user owns at least one key result (IC / contributor scope).
- * - leader, manager, director, vp, executive, org_owner: objectives in user's department when departmentId is set; otherwise all.
- * - admin: all objectives.
- * - developer: same as standard (narrow) when in DB as developer; callers often override via test role.
- */
-export function getVisibleObjectivesByRole(
-  objectives: Objective[],
-  keyResultsByObjective: Record<string, KeyResult[]>,
-  user: UserForVisibility | null,
-  role: string
-): Objective[] {
-  if (!user) return objectives;
-  const userId = user.sub ?? '';
-  const userDept = user.departmentId ?? null;
-  const norm = (s: string | undefined | null) => (s == null ? '' : String(s));
-
-  if (role === 'admin') return objectives;
-
-  if (isDeptScopedLeaderRole(role)) {
-    if (!userDept) return objectives;
-    return objectives.filter(
-      (o) => norm(o.departmentId) === norm(userDept)
-    );
-  }
-
-  if (role === 'view_only') {
-    if (!userDept) return objectives;
-    return objectives.filter(
-      (o) => norm(o.departmentId) === norm(userDept)
-    );
-  }
-
-  if (role === 'standard' || role === 'developer') {
-    return objectives.filter((o) => {
-      if (norm(o.ownerId) === userId) return true;
-      const krs = o._id ? keyResultsByObjective[o._id] ?? [] : [];
-      return krs.some((kr) => norm(kr.ownerId) === userId);
-    });
-  }
-
-  return objectives;
-}
 
 /**
  * Objectives tied to the signed-in user: owned, key-result contributor, plus roll-up/down the parent/child chain.
@@ -239,4 +185,6 @@ export interface DashboardViewProps {
   onDismissTutorial?: () => void;
   showTutorial?: boolean;
   setShowTutorial?: (v: boolean) => void;
+  /** True only when the signed-in account is admin (not role preview). Drives User management links. */
+  showAdminUserManagement?: boolean;
 }

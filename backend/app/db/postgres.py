@@ -1,5 +1,7 @@
 import os
+import time
 from contextlib import contextmanager
+from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -7,6 +9,40 @@ from sqlalchemy.orm import sessionmaker
 
 _engine = None
 _SessionLocal = None
+
+
+def run_alembic_migrations(max_retries: int = 30, delay_sec: float = 1.0) -> None:
+    """
+    Apply Alembic migrations to head. Retries while Postgres is still starting (e.g. Docker).
+    """
+    from alembic import command
+    from alembic.config import Config
+
+    backend_dir = Path(__file__).resolve().parent.parent.parent
+    ini_path = backend_dir / "alembic.ini"
+    cfg = Config(str(ini_path))
+    cfg.set_main_option("script_location", str(backend_dir / "alembic"))
+
+    for attempt in range(max_retries):
+        try:
+            command.upgrade(cfg, "head")
+            print("Alembic: database schema is up to date (head).", flush=True)
+            return
+        except Exception as e:
+            msg = str(e).lower()
+            transient = any(
+                x in msg
+                for x in (
+                    "connection refused",
+                    "could not connect",
+                    "server closed",
+                    "timeout",
+                    "name or service not known",
+                )
+            )
+            if not transient or attempt == max_retries - 1:
+                raise
+            time.sleep(delay_sec)
 
 
 def init_pg():

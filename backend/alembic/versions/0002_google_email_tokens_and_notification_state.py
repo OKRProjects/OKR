@@ -1,8 +1,10 @@
 """google email tokens and notification state
 
-Revision ID: 0002_google_email_tokens_and_notification_state
+Revision ID: 0002_google_email_notif
 Revises: 0001_init_org_hierarchy_okrs
 Create Date: 2026-03-30
+
+Note: revision id must fit alembic_version.version_num (VARCHAR(32)).
 
 """
 
@@ -10,7 +12,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0002_google_email_tokens_and_notification_state"
+revision = "0002_google_email_notif"
 down_revision = "0001_init_org_hierarchy_okrs"
 branch_labels = None
 depends_on = None

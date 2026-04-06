@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Settings, LogOut, ChevronDown, Check } from 'lucide-react';
@@ -8,6 +8,7 @@ import { useViewRole } from '@/lib/ViewRoleContext';
 import { logout } from '@/lib/auth';
 import { api } from '@/lib/api';
 import { cn } from '@/components/ui/utils';
+import { isAdminAccount } from '@/lib/roles';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin',
@@ -35,7 +36,7 @@ const ROLES: { value: 'actual' | 'admin' | 'leader' | 'standard' | 'view_only' |
 ];
 
 export function UserMenu() {
-  const { user, roleForUI, rolePreview, setRolePreview } = useViewRole();
+  const { user, rolePreview, setRolePreview } = useViewRole();
   const [open, setOpen] = useState(false);
   const [departments, setDepartments] = useState<{ _id: string; name: string }[]>([]);
   const ref = useRef<HTMLDivElement>(null);
@@ -43,6 +44,12 @@ export function UserMenu() {
   useEffect(() => {
     api.getDepartments().then(setDepartments).catch(() => setDepartments([]));
   }, []);
+
+  useEffect(() => {
+    if (rolePreview === 'admin' && user && !isAdminAccount(user)) {
+      setRolePreview(null);
+    }
+  }, [rolePreview, user, setRolePreview]);
 
   useEffect(() => {
     if (!open) return;
@@ -60,14 +67,20 @@ export function UserMenu() {
 
   const displayName = user?.name || user?.email || 'User';
   const initial = (displayName.charAt(0) || 'U').toUpperCase();
-  const role = roleForUI ?? 'standard';
-  const roleLabel = ROLE_LABELS[role] ?? role;
-  const roleDescription = ROLE_DESCRIPTIONS[role] ?? '';
+  /** Account role from the server (not the UI preview). */
+  const accountRole = user?.role ?? 'standard';
+  const roleLabel = ROLE_LABELS[accountRole] ?? accountRole;
+  const roleDescription = ROLE_DESCRIPTIONS[accountRole] ?? '';
   const departmentId = user?.departmentId;
   const departmentName = departmentId && departments.length
     ? (departments.find((d) => d._id === departmentId)?.name ?? departmentId)
     : null;
   const divisionText = departmentName ? departmentName : 'All divisions';
+
+  const previewRoleOptions = useMemo(
+    () => ROLES.filter((r) => r.value !== 'admin' || isAdminAccount(user)),
+    [user]
+  );
 
   if (!user) return null;
 
@@ -107,9 +120,16 @@ export function UserMenu() {
           role="menu"
         >
           <div className="p-3">
-            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Role</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Role (your account)</p>
             <p className="mt-0.5 text-sm font-medium">{roleLabel}</p>
             <p className="text-xs text-muted-foreground">{roleDescription}</p>
+            {rolePreview != null && (
+              <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                <span className="font-medium">Preview:</span> the UI can show as{' '}
+                <strong>{ROLE_LABELS[rolePreview] ?? rolePreview}</strong>, but APIs and admin pages still use{' '}
+                <strong>{roleLabel}</strong> above.
+              </p>
+            )}
           </div>
           <div className="border-t px-3 py-2">
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Division</p>
@@ -118,7 +138,7 @@ export function UserMenu() {
           <div className="border-t p-2">
             <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">Switch role (preview)</p>
             <div className="space-y-0.5">
-              {ROLES.map(({ value, label }) => {
+              {previewRoleOptions.map(({ value, label }) => {
                 const isActive = (rolePreview ?? 'actual') === value;
                 return (
                   <button

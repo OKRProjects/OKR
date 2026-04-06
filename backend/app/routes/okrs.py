@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from app.db.mongodb import get_db
 from app.routes.auth_backend import require_auth
-from app.repositories.okr_repo_factory import get_okr_repository
+from app.repositories.okr_repo_factory import get_okr_repository, is_postgres_okr_repository
 from app.services.permissions import (
     get_user_role,
     ROLE_VIEW_ONLY,
@@ -58,11 +58,7 @@ def _parse_object_id(value, param_name='id'):
 
 
 def _using_postgres_repo():
-    try:
-        # Keep this logic aligned with okr_repo_factory.py
-        return (os.getenv("OKR_REPOSITORY") or "mongo").strip().lower() == "postgres"
-    except Exception:
-        return False
+    return is_postgres_okr_repository()
 
 
 # ---- Departments (for dashboard display: name, color) ----
@@ -139,12 +135,57 @@ def list_objectives(user_id):
 def objectives_stats(user_id):
     """Lightweight counts for sidebar: strategic, functional, tactical, keyResults. Optional fiscalYear."""
     try:
-        db = get_db()
         fiscal_year = request.args.get('fiscalYear', type=int)
         if fiscal_year is None:
             fiscal_year = datetime.now(timezone.utc).year
-        base = {'fiscalYear': fiscal_year}
         department_id = request.args.get('departmentId')
+
+        if _using_postgres_repo():
+            from sqlalchemy import and_, false, func, select
+            from app.db.postgres import pg_session
+            from app.models_sql import Objective, KeyResult
+            from app.repositories.okr_repo_postgres import resolve_department_id_for_filter
+
+            with pg_session() as s:
+                base_filters = [Objective.fiscal_year == fiscal_year]
+                if department_id:
+                    dept_resolved = resolve_department_id_for_filter(s, department_id)
+                    if dept_resolved:
+                        base_filters.append(Objective.department_id == dept_resolved)
+                    else:
+                        base_filters.append(false())
+                no_parent = Objective.parent_objective_id.is_(None)
+
+                def count_level(level: str, require_no_parent: bool):
+                    parts = [Objective.level == level, *base_filters]
+                    if require_no_parent:
+                        parts.append(no_parent)
+                    return s.execute(select(func.count()).select_from(Objective).where(and_(*parts))).scalar() or 0
+
+                strategic = count_level('strategic', True)
+                functional = count_level('functional', True)
+                tactical = count_level('tactical', False)
+
+                oids = s.execute(select(Objective.id).where(and_(*base_filters))).scalars().all()
+                if oids:
+                    kr_count = (
+                        s.execute(
+                            select(func.count()).select_from(KeyResult).where(KeyResult.objective_id.in_(oids))
+                        ).scalar()
+                        or 0
+                    )
+                else:
+                    kr_count = 0
+
+            return jsonify({
+                'strategic': strategic,
+                'functional': functional,
+                'tactical': tactical,
+                'keyResults': kr_count,
+            }), 200
+
+        db = get_db()
+        base = {'fiscalYear': fiscal_year}
         if department_id:
             base['departmentId'] = department_id
         no_parent = {'$or': [{'parentObjectiveId': None}, {'parentObjectiveId': {'$exists': False}}]}
@@ -510,6 +551,17 @@ def post_leave(objective_id, user_id):
 def create_objective(user_id):
     """Create a new objective."""
     try:
+        from app.services.permissions import can_create_objective
+
+        db = get_db()
+        if not can_create_objective(db, user_id):
+            return jsonify({
+                'error': (
+                    'Creating objectives is disabled for your account. '
+                    'Ask an administrator to update your access in User management.'
+                ),
+            }), 403
+
         repo = get_okr_repository()
         if _using_postgres_repo():
             data = request.get_json() or {}
@@ -519,17 +571,32 @@ def create_objective(user_id):
             fiscal_year = data.get('fiscalYear')
             if fiscal_year is None:
                 return jsonify({'error': 'fiscalYear is required'}), 400
-            # orgId is required in Postgres mode
+            # orgId: accept body or first membership (same as /api/orgs)
             if not (data.get("orgId") or data.get("org_id")):
-                return jsonify({'error': 'orgId is required'}), 400
+                from sqlalchemy import select
+                from app.db.postgres import pg_session
+                from app.models_sql import Membership, Organization
+                with pg_session() as s:
+                    org_id = s.execute(
+                        select(Membership.org_id).where(
+                            Membership.user_id == user_id,
+                            Membership.active.is_(True),
+                        ).limit(1)
+                    ).scalar_one_or_none()
+                    if not org_id:
+                        org_id = s.execute(select(Organization.id).limit(1)).scalar_one_or_none()
+                if org_id:
+                    data = {**data, "orgId": org_id}
+                else:
+                    return jsonify({
+                        'error': (
+                            'orgId is required (no organization in database). '
+                            'Run migrations or migrate Mongo OKRs to Postgres.'
+                        ),
+                    }), 400
             created = repo.create_objective(user_id, data)
             return jsonify(created), 201
 
-        db = get_db()
-        if not can_create_objective(db, user_id):
-            return jsonify({
-                'error': 'Only leadership roles (admin, manager, director, VP, executive, org owner, or department leader) can create objectives. Ask an admin to assign the right role.'
-            }), 403
         data = request.get_json() or {}
         title = data.get('title')
         if not title:

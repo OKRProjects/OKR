@@ -1,7 +1,9 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { getCurrentUser, clearUserCache, type User } from '@/lib/auth';
+import React, { createContext, useContext, useState, useCallback, useEffect, useLayoutEffect } from 'react';
+import { usePathname } from 'next/navigation';
+import { clearUserCache, setCurrentUserCache, type User } from '@/lib/auth';
+import { api } from '@/lib/api';
 
 const VIEW_AS_KEY = 'viewAsRole';
 const ROLE_PREVIEW_KEY = 'okrRolePreview';
@@ -66,6 +68,7 @@ function getStoredRolePreview(): AppRole | null {
 }
 
 export function ViewRoleProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
   const [override, setOverrideState] = useState<ViewRole | null>(null);
   const [rolePreview, setRolePreviewState] = useState<AppRole | null>(null);
@@ -76,19 +79,26 @@ export function ViewRoleProvider({ children }: { children: React.ReactNode }) {
     setRolePreviewState(getStoredRolePreview());
   }, []);
 
+  // Drop stale /auth/me cache before children run effects that call getCurrentUser (avoids missing `role` after role change).
+  useLayoutEffect(() => {
+    clearUserCache();
+  }, []);
+
   const refetchUser = useCallback(async () => {
     try {
       clearUserCache();
-      const u = await getCurrentUser();
+      const u = (await api.getCurrentUser()) as User | null;
+      setCurrentUserCache(u);
       setUser(u);
     } catch {
+      setCurrentUserCache(null);
       setUser(null);
     }
   }, []);
 
   useEffect(() => {
     refetchUser();
-  }, [refetchUser]);
+  }, [refetchUser, pathname]);
 
   useEffect(() => {
     const onVisibilityChange = () => {

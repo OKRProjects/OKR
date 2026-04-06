@@ -1,13 +1,66 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import false, select
 
 from app.db.postgres import pg_session
+from app.legacy_department_ids import LEGACY_MONGO_ID_TO_DISPLAY_NAME
 from app.models_sql import Department, KeyResult, Objective
+
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.I,
+)
+
+
+def resolve_department_id_for_filter(session, raw: str) -> str | None:
+    """
+    Map API departmentId to Postgres UUID. Accepts UUID strings, canonical_name, or legacy
+    Mongo department ids (e.g. d1) via Mongo lookup + display_name match.
+    """
+    if not raw:
+        return None
+    rs = str(raw).strip()
+    if _UUID_RE.match(rs):
+        return rs
+    row = session.execute(select(Department.id).where(Department.canonical_name == rs)).scalar_one_or_none()
+    if row:
+        return row
+    legacy_name = LEGACY_MONGO_ID_TO_DISPLAY_NAME.get(rs)
+    if legacy_name:
+        rid = session.execute(
+            select(Department.id).where(Department.display_name == legacy_name[:200])
+        ).scalars().first()
+        if rid:
+            return rid
+    try:
+        from app.db.mongodb import get_db
+
+        db = get_db()
+        doc = db.departments.find_one({"_id": rs})
+        if doc is None:
+            from bson import ObjectId
+            from bson.errors import InvalidId
+
+            try:
+                doc = db.departments.find_one({"_id": ObjectId(rs)})
+            except (InvalidId, TypeError):
+                doc = None
+        if doc:
+            name = (doc.get("name") or "").strip()
+            if name:
+                rid = session.execute(
+                    select(Department.id).where(Department.display_name == name[:200])
+                ).scalars().first()
+                if rid:
+                    return rid
+    except Exception:
+        pass
+    return None
 
 
 def _utcnow():
@@ -18,6 +71,24 @@ def _iso(dt: datetime | None):
     if not dt:
         return None
     return dt.astimezone(timezone.utc).isoformat()
+
+
+def _normalize_quarter(q: Any) -> int | None:
+    if q is None:
+        return None
+    if isinstance(q, int):
+        return q
+    if isinstance(q, str):
+        s = q.strip().upper()
+        if s.startswith("Q") and len(s) >= 2:
+            try:
+                return int(s[1:])
+            except ValueError:
+                return None
+    try:
+        return int(q)
+    except (TypeError, ValueError):
+        return None
 
 
 class PostgresOKRRepository:
@@ -48,7 +119,11 @@ class PostgresOKRRepository:
                 elif k == "ownerId":
                     stmt = stmt.where(Objective.owner_user_id == v)
                 elif k == "departmentId":
-                    stmt = stmt.where(Objective.department_id == v)
+                    resolved = resolve_department_id_for_filter(s, str(v))
+                    if resolved:
+                        stmt = stmt.where(Objective.department_id == resolved)
+                    else:
+                        stmt = stmt.where(false())
                 elif k == "parentObjectiveId":
                     stmt = stmt.where(Objective.parent_objective_id == v)
                 elif k == "__no_parent__":
@@ -81,7 +156,7 @@ class PostgresOKRRepository:
                 status=data.get("status") or "draft",
                 timeline=data.get("timeline") or "annual",
                 fiscal_year=int(data["fiscalYear"]),
-                quarter=data.get("quarter"),
+                quarter=_normalize_quarter(data.get("quarter")),
                 division=data.get("division"),
                 parent_objective_id=data.get("parentObjectiveId") or None,
                 next_review_date=data.get("nextReviewDate"),
@@ -105,7 +180,7 @@ class PostgresOKRRepository:
                 ("level", lambda v: setattr(obj, "level", v)),
                 ("timeline", lambda v: setattr(obj, "timeline", v)),
                 ("fiscalYear", lambda v: setattr(obj, "fiscal_year", int(v))),
-                ("quarter", lambda v: setattr(obj, "quarter", v)),
+                ("quarter", lambda v: setattr(obj, "quarter", _normalize_quarter(v))),
                 ("division", lambda v: setattr(obj, "division", v)),
                 ("status", lambda v: setattr(obj, "status", v)),
                 ("departmentId", lambda v: setattr(obj, "department_id", v)),

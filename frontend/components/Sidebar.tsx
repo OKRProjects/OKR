@@ -23,6 +23,7 @@ import { cn } from './ui/utils';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { api } from '@/lib/api';
+import { resolveDepartmentIdForPostgres } from '@/lib/legacyDepartments';
 import { useViewRole } from '@/lib/ViewRoleContext';
 import {
   Select,
@@ -31,14 +32,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { userCanCreateObjectives } from '@/lib/roles';
+import { isAdminAccount, shouldShowUserManagementNav, userCanCreateObjectives } from '@/lib/roles';
 
-interface SidebarProps {
-  onNewObjective?: () => void;
-}
-
-export function Sidebar({ onNewObjective }: SidebarProps) {
-  const { setRolePreview, roleForUI, rolePreview, userForPermissions } = useViewRole();
+export function Sidebar() {
+  const { setRolePreview, roleForUI, rolePreview, userForPermissions, user: sessionUser } = useViewRole();
+  /** Real admin + not previewing leader/IC/etc. (preview would still leave sessionUser as admin). */
+  const showUserManagementLink = shouldShowUserManagementNav(sessionUser, rolePreview);
   const role = roleForUI;
   const [collapsed, setCollapsed] = useState(false);
   const [orgs, setOrgs] = useState<Array<{ id: string; name: string; slug: string }>>([]);
@@ -52,6 +51,7 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
     tactical: 0,
     keyResults: 0,
   });
+  const [departments, setDepartments] = useState<{ _id: string; name: string }[]>([]);
   const pathname = usePathname();
 
   const mainNavigation = [
@@ -69,8 +69,26 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
   ];
 
   useEffect(() => {
+    (async () => {
+      try {
+        const d = await api.getDepartments();
+        setDepartments(d);
+      } catch {
+        setDepartments([]);
+      }
+    })();
+  }, []);
+
+  /** Non-admins cannot keep “preview → Admin”; it hid real permissions vs User management. */
+  useEffect(() => {
+    if (rolePreview === 'admin' && sessionUser && !shouldShowUserManagementNav(sessionUser, null)) {
+      setRolePreview(null);
+    }
+  }, [rolePreview, sessionUser, setRolePreview]);
+
+  useEffect(() => {
     loadStats();
-  }, [userForPermissions?.departmentId]);
+  }, [userForPermissions?.departmentId, departments, role]);
 
   useEffect(() => {
     loadOrgHierarchy();
@@ -114,7 +132,10 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
           role === 'org_owner') ||
           role === 'view_only') &&
         userForPermissions?.departmentId;
-      const departmentId = isScoped ? userForPermissions!.departmentId! : undefined;
+      const rawDept = isScoped ? userForPermissions!.departmentId! : undefined;
+      const departmentId = rawDept
+        ? resolveDepartmentIdForPostgres(rawDept, departments) ?? rawDept
+        : undefined;
       const data = await api.getObjectivesStats({ fiscalYear, departmentId: departmentId ?? undefined });
       setStats({
         strategic: data.strategic,
@@ -187,15 +208,17 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
       </div>
 
       {/* New objective: leadership roles only (managers and above) */}
-      {userCanCreateObjectives(role) && (
+      {userCanCreateObjectives(sessionUser) && (
         <div className="p-3">
-          <Button
-            onClick={onNewObjective || (() => (window.location.href = '/okrs/new'))}
-            className="w-full rounded-lg"
-            size={collapsed ? 'icon' : 'default'}
-          >
-            <Plus className="h-4 w-4" />
-            {!collapsed && <span className="ml-2">New objective</span>}
+          <Button asChild className="w-full rounded-lg" size={collapsed ? 'icon' : 'default'}>
+            <Link
+              href="/okrs/new"
+              aria-label="New objective"
+              className={cn(collapsed ? 'justify-center' : 'justify-start')}
+            >
+              <Plus className="h-4 w-4" />
+              {!collapsed && <span className="ml-2">New objective</span>}
+            </Link>
           </Button>
         </div>
       )}
@@ -346,8 +369,8 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
         )}
       </nav>
 
-      {/* Admin: User management */}
-      {role === 'admin' && (
+      {/* Admin: User management — only when account role from /auth/me is admin */}
+      {showUserManagementLink && (
         <div className="border-t border-sidebar-border space-y-0.5 px-2 py-2">
           {!collapsed && (
             <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
@@ -460,7 +483,7 @@ export function Sidebar({ onNewObjective }: SidebarProps) {
               <SelectItem value="executive">Executive</SelectItem>
               <SelectItem value="org_owner">Org owner</SelectItem>
               <SelectItem value="leader">Leader (legacy)</SelectItem>
-              <SelectItem value="admin">Admin</SelectItem>
+              {isAdminAccount(sessionUser) && <SelectItem value="admin">Admin</SelectItem>}
               <SelectItem value="developer">Developer</SelectItem>
             </SelectContent>
           </Select>

@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
-
-// Proxy to backend auth me endpoint
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+import { getServerBackendUrl } from '@/lib/serverBackendUrl';
 
 export async function GET(request: Request) {
   try {
-    // Get token from backend first
-    const tokenResponse = await fetch(`${API_URL}/api/auth/token`, {
+    const backend = getServerBackendUrl();
+    const tokenResponse = await fetch(`${backend}/api/auth/token`, {
       method: 'GET',
       headers: {
         'Cookie': request.headers.get('cookie') || '',
@@ -25,7 +23,7 @@ export async function GET(request: Request) {
     const accessToken = tokenData.accessToken;
 
     // Get user info from backend
-    const userResponse = await fetch(`${API_URL}/api/auth/me`, {
+    const userResponse = await fetch(`${backend}/api/auth/me`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${accessToken}`,

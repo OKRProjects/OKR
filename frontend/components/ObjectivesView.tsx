@@ -115,7 +115,6 @@ export function ObjectivesView({ onUpdateProgress, prefetchedApiObjectives, hide
   const [levelFilter, setLevelFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [rootPage, setRootPage] = useState(1);
-  const fiscalYear = new Date().getFullYear();
 
   const filteredRoots = useMemo(() => {
     let list = objectives;
@@ -163,13 +162,19 @@ export function ObjectivesView({ onUpdateProgress, prefetchedApiObjectives, hide
 
   const loadData = async (apiObjectivesOverride?: ApiObjective[]) => {
     try {
-      const allObjs = apiObjectivesOverride ?? (await api.getObjectives({ fiscalYear }));
-      
-      // Find root objectives (no parent)
-      const rootObjs = allObjs.filter(o => !o.parentObjectiveId);
+      const allObjs = apiObjectivesOverride ?? (await api.getObjectives({}));
+
+      // Roots: no parent, or parent id not in this list (broken / cross-store link after migration)
+      const idSet = new Set(allObjs.map((o) => String(o._id)).filter(Boolean));
+      const rootObjs = allObjs.filter((o) => {
+        const p = o.parentObjectiveId;
+        if (p == null || p === '') return true;
+        return !idSet.has(String(p));
+      });
+      const rootsToFetch = rootObjs.length > 0 ? rootObjs : allObjs;
 
       // Build tree structure by fetching full tree for each root
-      const rootTrees = await Promise.all(rootObjs.map(async (obj) => {
+      const rootTrees = await Promise.all(rootsToFetch.map(async (obj) => {
         if (!obj._id) return null;
         try {
           const tree = await api.getObjectiveTree(obj._id);

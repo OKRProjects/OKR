@@ -17,10 +17,10 @@ import {
   filterObjective,
   getDaysLeftInQuarter,
   getPersonalObjectiveIds,
-  getVisibleObjectivesByRole,
   type DashboardViewProps,
 } from './dashboardShared';
-import { isDeptScopedLeaderRole, userCanCreateObjectives } from '@/lib/roles';
+import { isDeptScopedLeaderRole, shouldShowUserManagementNav, userCanCreateObjectives } from '@/lib/roles';
+import { resolveDepartmentIdForPostgres } from '@/lib/legacyDepartments';
 import { FullDashboardView } from './FullDashboardView';
 
 /** Text for presentation slides: saved leadership update, else newest KR note, else description. */
@@ -43,7 +43,7 @@ function presentationLatestSummary(objective: Objective, krs: KeyResult[]): stri
 export function OKRDashboard() {
   const pathname = usePathname();
   const isPersonalHome = pathname === '/my-okrs';
-  const { userForPermissions } = useViewRole();
+  const { userForPermissions, user: sessionUser, rolePreview } = useViewRole();
   const user = userForPermissions;
   const role = user?.role;
   const fiscalYear = new Date().getFullYear();
@@ -76,17 +76,24 @@ export function OKRDashboard() {
     return () => { cancelled = true; };
   }, []);
 
-  // Fetch objectives scoped by role/team: leader and view_only with departmentId see only their department
+  const effectiveDepartmentId = useMemo(
+    () => resolveDepartmentIdForPostgres(user?.departmentId, departments),
+    [user?.departmentId, departments]
+  );
+
+  const visibilityUser = useMemo(() => {
+    if (!user) return null;
+    const dept = effectiveDepartmentId ?? user.departmentId;
+    return { ...user, departmentId: dept };
+  }, [user, effectiveDepartmentId]);
+
+  // List all objectives for the org (no departmentId: unresolved legacy ids made Postgres return zero rows;
+  // no fiscalYear: migrated FY may differ from the current calendar year).
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const isScopedByDept =
-          (isDeptScopedLeaderRole(role) || role === 'view_only') && user?.departmentId;
-        const objs = await api.getObjectives({
-          fiscalYear,
-          ...(isScopedByDept ? { departmentId: user!.departmentId! } : {}),
-        });
+        const objs = await api.getObjectives({});
         if (cancelled) return;
         setObjectives(objs);
         const krMap: Record<string, KeyResult[]> = {};
@@ -113,7 +120,7 @@ export function OKRDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [fiscalYear, role, user?.departmentId]);
+  }, []);
 
   const scoreByObjectiveId = useMemo(() => {
     const out: Record<string, number> = {};
@@ -125,21 +132,15 @@ export function OKRDashboard() {
     return out;
   }, [keyResultsByObjective]);
 
-  const visibleObjectives = useMemo(
-    () =>
-      getVisibleObjectivesByRole(objectives, keyResultsByObjective, user, role ?? ''),
-    [objectives, keyResultsByObjective, user, role]
-  );
-
   const personalIds = useMemo(() => {
     if (!isPersonalHome || !user?.sub) return null;
-    return getPersonalObjectiveIds(visibleObjectives, keyResultsByObjective, user.sub);
-  }, [isPersonalHome, user?.sub, visibleObjectives, keyResultsByObjective]);
+    return getPersonalObjectiveIds(objectives, keyResultsByObjective, user.sub);
+  }, [isPersonalHome, user?.sub, objectives, keyResultsByObjective]);
 
   const scopeObjectives = useMemo(() => {
-    if (!personalIds) return visibleObjectives;
-    return visibleObjectives.filter((o) => o._id && personalIds.has(String(o._id)));
-  }, [visibleObjectives, personalIds]);
+    if (!personalIds) return objectives;
+    return objectives.filter((o) => o._id && personalIds.has(String(o._id)));
+  }, [personalIds, objectives]);
 
   const filtered = useMemo(() => {
     return scopeObjectives.filter((o) => filterObjective(o, scoreByObjectiveId, filters));
@@ -199,19 +200,20 @@ export function OKRDashboard() {
   );
 
   const needsReviewObjectives = useMemo(() => {
-    if (!isDeptScopedLeaderRole(role) || !user?.departmentId) return [];
-    const pool = isPersonalHome ? scopeObjectives : visibleObjectives;
+    if (!isDeptScopedLeaderRole(role) || !visibilityUser?.departmentId) return [];
+    const pool = isPersonalHome ? scopeObjectives : objectives;
+    const ud = visibilityUser.departmentId;
     return pool.filter(
       (o) =>
         (o.status ?? 'draft') === 'in_review' &&
-        (o.departmentId === user.departmentId || String(o.departmentId) === user.departmentId)
+        (o.departmentId === ud || String(o.departmentId) === ud)
     );
-  }, [visibleObjectives, scopeObjectives, isPersonalHome, role, user?.departmentId]);
+  }, [objectives, scopeObjectives, isPersonalHome, role, visibilityUser?.departmentId]);
 
   const myObjectivesCount = useMemo(() => {
     if (!user?.sub) return 0;
-    return visibleObjectives.filter((o) => o.ownerId === user.sub).length;
-  }, [visibleObjectives, user?.sub]);
+    return objectives.filter((o) => o.ownerId === user.sub).length;
+  }, [objectives, user?.sub]);
 
   const myWorkObjectives = useMemo(() => {
     if (!user?.sub) return [];
@@ -219,10 +221,10 @@ export function OKRDashboard() {
   }, [user?.sub, filteredAndSorted]);
 
   const departmentStats = useMemo(() => {
-    if (!isDeptScopedLeaderRole(role) || !user?.departmentId) return null;
-    const dept = visibleObjectives.filter(
-      (o) =>
-        o.departmentId === user.departmentId || String(o.departmentId) === user.departmentId
+    if (!isDeptScopedLeaderRole(role) || !visibilityUser?.departmentId) return null;
+    const ud = visibilityUser.departmentId;
+    const dept = objectives.filter(
+      (o) => o.departmentId === ud || String(o.departmentId) === ud
     );
     const withScores = dept.filter((o) => o._id && scoreByObjectiveId[o._id] !== undefined);
     const onTrack = withScores.filter(
@@ -230,7 +232,7 @@ export function OKRDashboard() {
     ).length;
     const onTrackPct = withScores.length > 0 ? (onTrack / withScores.length) * 100 : 0;
     return { count: dept.length, onTrackPercent: onTrackPct };
-  }, [visibleObjectives, role, user?.departmentId, scoreByObjectiveId]);
+  }, [objectives, role, visibilityUser?.departmentId, scoreByObjectiveId]);
 
   const handleSortChange = useCallback(
     (sort: 'score' | 'owner' | 'updated', direction: 'asc' | 'desc') => {
@@ -452,8 +454,8 @@ export function OKRDashboard() {
   }, [objectiveIdsFromPresentation]);
 
   const displayObjectives = useMemo(
-    () => (isPersonalHome ? scopeObjectives : visibleObjectives),
-    [isPersonalHome, scopeObjectives, visibleObjectives]
+    () => (isPersonalHome ? scopeObjectives : objectives),
+    [isPersonalHome, scopeObjectives, objectives]
   );
 
   const divisions = useMemo(() => {
@@ -551,7 +553,8 @@ export function OKRDashboard() {
     dashboardSubtitle: isPersonalHome
       ? 'Objectives you own or contribute to, plus roll-up in the hierarchy'
       : undefined,
-    hideEmptyStateCreate: isPersonalHome && !userCanCreateObjectives(role),
+    hideEmptyStateCreate: isPersonalHome && !userCanCreateObjectives(sessionUser),
+    showAdminUserManagement: shouldShowUserManagementNav(sessionUser, rolePreview),
   };
 
   // Use admin (FullDashboardView) layout for all roles so design is consistent; filtering handles role-specific data.

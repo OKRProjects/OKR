@@ -22,6 +22,8 @@ interface DashboardHeaderProps {
   onTrackPercent: number;
   daysLeftInQuarter: number;
   role?: DashboardRole;
+  /** When set, used only for the User management tile (avoids role-preview “admin”). */
+  accountRole?: DashboardRole;
   myObjectivesCount?: number;
   departmentStats?: { count: number; onTrackPercent: number };
   /** Reference design: 4 stat cards with colored icon boxes */
@@ -93,10 +95,13 @@ export function DashboardHeader({
   onTrackPercent,
   daysLeftInQuarter,
   role,
+  accountRole,
   myObjectivesCount,
   departmentStats,
   variant = 'default',
 }: DashboardHeaderProps) {
+  const showUserManagementTile =
+    accountRole !== undefined ? accountRole === 'admin' : role === 'admin';
   if (variant === 'reference') {
     return (
       <div className="grid grid-cols-4 gap-4 mb-6">
@@ -166,7 +171,7 @@ export function DashboardHeader({
           highlight={onTrackPercent >= 70}
         />
         <StatBlock label="Days left" value={daysLeftInQuarter} icon={Calendar} />
-        {role === 'admin' && (
+        {showUserManagementTile && (
           <a
             href="/admin/users"
             className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-muted/50"

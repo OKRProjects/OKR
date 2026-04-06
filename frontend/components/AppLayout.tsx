@@ -3,9 +3,6 @@
 import React from 'react';
 import { Sidebar } from './Sidebar';
 import { UserMenu } from './UserMenu';
-import { useRouter } from 'next/navigation';
-import { Button } from './ui/button';
-import { Plus } from 'lucide-react';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -17,16 +14,10 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children, title, description, showNewObjective = false, hideHeader = false }: AppLayoutProps) {
-  const router = useRouter();
-
-  const handleNewObjective = () => {
-    router.push('/okrs/new');
-  };
-
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Sidebar */}
-      <Sidebar onNewObjective={handleNewObjective} />
+      <Sidebar />
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">

@@ -65,11 +65,11 @@ export default function DocsPage() {
           <section id="ownership" className="scroll-mt-4">
             <h2 className="text-xl font-semibold">Who owns OKRs</h2>
             <p className="mt-2 text-muted-foreground">
-              <strong className="text-foreground">Ownership</strong> starts at the manager level (and above: director,
-              VP, executive, org owner). Those roles create objectives and are accountable for roll-up into higher-level
-              OKRs. <strong className="text-foreground">Individual contributors</strong> are usually{' '}
-              <strong className="text-foreground">viewers</strong> by default: they can read company OKRs but do not
-              create objectives unless an admin assigns a leadership role.
+              <strong className="text-foreground">Creating objectives</strong> is allowed for every role by default.
+              An <strong className="text-foreground">admin</strong> can block creation for a specific user in{' '}
+              <strong className="text-foreground">User management</strong> (Block creating objectives).{' '}
+              <strong className="text-foreground">Ownership and accountability</strong> still typically sit with managers
+              and above for roll-up; use roles and parent links to reflect how your org runs reviews.
             </p>
             <p className="mt-2 text-muted-foreground">
               <strong className="text-foreground">Who can edit</strong>: objective owners, admins, and department-scoped

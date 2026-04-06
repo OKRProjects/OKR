@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   frontend:
     build:
@@ -7,13 +5,12 @@ services:
       dockerfile: Dockerfile.dev
     ports:
       - "3000:3000"
+    env_file:
+      - ./frontend/.env.local
     environment:
-      - AUTH0_SECRET=${AUTH0_SECRET}
-      - AUTH0_BASE_URL=${AUTH0_BASE_URL}
-      - AUTH0_ISSUER_BASE_URL=${AUTH0_ISSUER_BASE_URL}
-      - AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID}
-      - AUTH0_CLIENT_SECRET=${AUTH0_CLIENT_SECRET}
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:5001}
+      # Browser calls Flask on host :5001 (published port). Route handlers use BACKEND_URL inside Docker network.
+      - NEXT_PUBLIC_API_URL=http://localhost:5001
+      - BACKEND_URL=http://backend:5001
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -27,24 +24,22 @@ services:
       dockerfile: Dockerfile
     ports:
       - "5001:5001"
+    env_file:
+      - ./backend/.env
     environment:
-      - FLASK_ENV=${FLASK_ENV:-development}
-      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
-      - MONGODB_URI=${MONGODB_URI}
-      - MONGODB_DB_NAME=${MONGODB_DB_NAME:-hackathon_db}
-      - AUTH0_DOMAIN=${AUTH0_DOMAIN}
-      - AUTH0_AUDIENCE=${AUTH0_AUDIENCE}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
-      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
-      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
-      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
-      - DATABASE_URL=${DATABASE_URL:-postgresql+psycopg://postgres:postgres@postgres:5432/hackathon}
-      - OKR_REPOSITORY=${OKR_REPOSITORY:-mongo}
+      # Compose network: DB host is the postgres service name, not localhost
+      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/hackathon
+      - OKR_REPOSITORY=postgres
+      # Comma-separated Auth0 subs (e.g. auth0|abc) that always get admin (User management, etc.)
+      - APP_ADMIN_USER_IDS=${APP_ADMIN_USER_IDS:-}
+      # Comma-separated emails: admin on first login without pre-creating Mongo / knowing sub
+      - APP_ADMIN_EMAILS=${APP_ADMIN_EMAILS:-}
     volumes:
       - ./backend:/app
     restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
 
   postgres:
     image: postgres:16
@@ -56,6 +51,12 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 3s
+      timeout: 5s
+      retries: 15
+      start_period: 5s
 
 volumes:
   pgdata:

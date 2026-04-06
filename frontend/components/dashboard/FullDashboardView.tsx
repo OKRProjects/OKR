@@ -60,7 +60,11 @@ export function FullDashboardView(props: DashboardViewProps) {
     dashboardTitle,
     dashboardSubtitle,
     hideEmptyStateCreate,
+    showAdminUserManagement,
   } = props;
+
+  /** Only explicit true — `role` can be preview-overridden and must not unlock admin links. */
+  const showAdminUserManagementLink = showAdminUserManagement === true;
 
   const quarterLabel = `Q${Math.ceil((new Date().getMonth() + 1) / 3)} ${new Date().getFullYear()}`;
   const headerTitle = dashboardTitle ?? 'OKR Dashboard';
@@ -113,7 +117,7 @@ export function FullDashboardView(props: DashboardViewProps) {
               <p className="text-sm text-gray-600 mt-1">{headerSub}</p>
             </div>
             <div className="flex items-center gap-2">
-              {role === 'admin' && (
+              {showAdminUserManagementLink && (
                 <Link
                   href="/admin/users"
                   className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900"

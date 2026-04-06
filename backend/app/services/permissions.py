@@ -1,8 +1,16 @@
 """Role-based permissions for OKR actions. User role from db.users (keyed by Auth0 sub).
 
-Product model: OKR ownership starts at manager level; individual contributors are viewers by default.
-Leadership roles can create objectives and act as department-scoped approvers where applicable.
+Creating objectives: any role may create by default. Admins can set ``okrCreateDisabled`` on a user
+document to block creation for that account. Mongo path uses ``db.users``; Postgres OKR storage
+still consults the same permission helper via Mongo user records.
+
+Bootstrap admins:
+
+- ``APP_ADMIN_USER_IDS``: comma-separated Auth0 ``sub`` values (e.g. ``auth0|abc123``).
+- ``APP_ADMIN_EMAILS``: comma-separated emails (case-insensitive). On login, those accounts get
+  ``admin`` in Mongo and in ``get_user_role`` (no need to know ``sub`` ahead of time).
 """
+import os
 from typing import Optional
 
 ROLE_ADMIN = 'admin'
@@ -43,11 +51,36 @@ def _is_dept_scoped_leader(role: str) -> bool:
     return role in DEPT_SCOPED_LEADER_ROLES
 
 
+def _bootstrap_admin_ids() -> frozenset[str]:
+    raw = os.getenv("APP_ADMIN_USER_IDS", "").strip()
+    if not raw:
+        return frozenset()
+    return frozenset(x.strip() for x in raw.split(",") if x.strip())
+
+
+def _bootstrap_admin_emails() -> frozenset[str]:
+    raw = os.getenv("APP_ADMIN_EMAILS", "").strip()
+    if not raw:
+        return frozenset()
+    return frozenset(e.strip().lower() for e in raw.split(",") if e.strip())
+
+
+def is_bootstrap_admin_email(email: Optional[str]) -> bool:
+    """True if ``email`` is listed in ``APP_ADMIN_EMAILS`` (case-insensitive)."""
+    if not email or not str(email).strip():
+        return False
+    return str(email).strip().lower() in _bootstrap_admin_emails()
+
+
 def get_user_role(db, user_id: str) -> str:
-    """Get role for user_id (Auth0 sub). Returns developer if not in users collection or no role."""
+    """Get role for user_id (Auth0 sub). Bootstrap IDs/emails force admin; else Mongo ``users.role``."""
+    if user_id in _bootstrap_admin_ids():
+        return ROLE_ADMIN
     user = db.users.find_one({'_id': user_id})
     if not user:
         return ROLE_DEVELOPER
+    if is_bootstrap_admin_email(user.get("email")):
+        return ROLE_ADMIN
     return user.get('role', ROLE_DEVELOPER)
 
 
@@ -59,9 +92,22 @@ def get_user_department_id(db, user_id: str) -> Optional[str]:
     return str(user['departmentId'])
 
 
+def is_okr_create_disabled(db, user_id: str) -> bool:
+    """True when admin set ``okrCreateDisabled`` on the user document."""
+    user = db.users.find_one({'_id': user_id})
+    if not user:
+        return False
+    return bool(user.get('okrCreateDisabled'))
+
+
 def can_create_objective(db, user_id: str) -> bool:
-    """True if user may create a new objective (leadership roles only; not viewer/IC/standard/developer)."""
-    return get_user_role(db, user_id) in OKR_LEADERSHIP_ROLES
+    """True unless ``okrCreateDisabled`` is set. Admins always may create."""
+    role = get_user_role(db, user_id)
+    if role == ROLE_ADMIN:
+        return True
+    if is_okr_create_disabled(db, user_id):
+        return False
+    return True
 
 
 def can_view_objective(db, user_id: str, objective: dict) -> bool:
