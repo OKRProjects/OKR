@@ -10,7 +10,8 @@ RUN apt-get update && apt-get install -y \
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+  && python -c "import openai; import flask; print('python deps ok')"
 
 # Copy application code
 COPY . .

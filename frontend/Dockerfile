@@ -5,7 +5,8 @@ FROM node:20-alpine AS base
 FROM base AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci
+# Fail fast if lockfile is missing motion / mediapipe (avoids stale Render cache masking bad deploys)
+RUN npm ci && npm ls motion @mediapipe/tasks-vision
 
 # Rebuild the source code only when needed
 FROM base AS builder
