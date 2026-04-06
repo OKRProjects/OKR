@@ -1,7 +1,7 @@
 # Render Blueprint: https://render.com/docs/infrastructure-as-code
 # Deploy: New → Blueprint → connect repo → apply this file.
 #
-# Free tier: Web Service + PostgreSQL (free instance limits apply; service may spin down when idle).
+# Free tier: Web Services + PostgreSQL (free instance limits apply; services may spin down when idle).
 # Set secrets in the Render dashboard (Environment) or link a secret store — do not commit .env.
 
 version: "1"
@@ -59,4 +59,41 @@ services:
       - key: APP_ADMIN_USER_IDS
         sync: false
       - key: APP_ADMIN_EMAILS
+        sync: false
+
+  - type: web
+    name: hackathon-frontend
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: main
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Server-side rewrites: proxy /api → Flask (see frontend/next.config.ts)
+      - key: BACKEND_URL
+        fromService:
+          name: hackathon-backend
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      # Auth0 (Next.js + @auth0/nextjs-auth0) — set to your frontend public URL after deploy
+      - key: AUTH0_SECRET
+        sync: false
+      - key: AUTH0_BASE_URL
+        sync: false
+      - key: AUTH0_ISSUER_BASE_URL
+        sync: false
+      - key: AUTH0_CLIENT_ID
+        sync: false
+      - key: AUTH0_CLIENT_SECRET
+        sync: false
+      - key: AUTH0_AUDIENCE
+        sync: false
+      # Optional: leave unset so the browser uses same-origin /api (rewrites to BACKEND_URL)
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
+      - key: NEXT_PUBLIC_APP_URL
         sync: false

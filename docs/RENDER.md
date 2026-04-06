@@ -3,13 +3,16 @@
 The repo root [`render.yaml`](../render.yaml) defines:
 
 - **Web service** `hackathon-backend`: Docker build from [`backend/Dockerfile`](../backend/Dockerfile), **Free** plan.
+- **Web service** `hackathon-frontend`: Docker build from [`frontend/Dockerfile`](../frontend/Dockerfile) (Next.js `standalone`), **Free** plan.
 - **PostgreSQL** `hackathon-postgres`: **Free** plan (limits apply; check [Render pricing](https://render.com/pricing)).
+
+`hackathon-frontend` gets **`BACKEND_URL`** from the backend service’s `RENDER_EXTERNAL_URL` (same blueprint). Set **`AUTH0_*`** and **`AUTH0_BASE_URL`** to your frontend URL (e.g. `https://hackathon-frontend.onrender.com`).
 
 ## Deploy
 
 1. In Render: **New** → **Blueprint** → connect this GitHub repo and select `render.yaml`.
-2. After the first deploy, open the **Web Service** → **Environment** and set the variables marked `sync: false` in the blueprint (MongoDB, Auth0, `BACKEND_URL`, `CORS_ORIGINS`, `FRONTEND_URL`, etc.). `FLASK_SECRET_KEY` can stay auto-generated unless you rotate it.
-3. Set **`BACKEND_URL`** to your public service URL (e.g. `https://hackathon-backend.onrender.com`) and **`CORS_ORIGINS`** / **`AUTH0_BASE_URL`** / **`FRONTEND_URL`** to match your frontend origin.
+2. After the first deploy, open each **Web Service** → **Environment** and set the variables marked `sync: false` (MongoDB, Auth0, `BACKEND_URL` on the API if needed, `CORS_ORIGINS`, `FRONTEND_URL`, etc.). `FLASK_SECRET_KEY` can stay auto-generated unless you rotate it.
+3. Point **`CORS_ORIGINS`** (backend) and Auth0 **Allowed Callback URLs** at the frontend URL, and set **`FRONTEND_URL`** / **`AUTH0_BASE_URL`** (frontend) to that same frontend URL.
 
 `DATABASE_URL` is wired from the Render Postgres instance; the backend normalizes `postgresql://` to `postgresql+psycopg://` for SQLAlchemy.
 
