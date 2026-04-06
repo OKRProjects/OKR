@@ -93,7 +93,7 @@ export default function ObjectiveForm({
       const orgId = await resolveOrgIdForDepartment(parentOptions);
       if (!orgId) {
         setError(
-          'Could not determine your organization. Create an objective first (or ensure you belong to an org), then add a department.'
+          'Could not determine your organization. Ensure Postgres is configured and try again, or refresh the page so your default organization is created.'
         );
         return;
       }

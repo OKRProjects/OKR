@@ -34,6 +34,7 @@ services:
       - APP_ADMIN_USER_IDS=${APP_ADMIN_USER_IDS:-}
       # Comma-separated emails: admin on first login without pre-creating Mongo / knowing sub
       - APP_ADMIN_EMAILS=${APP_ADMIN_EMAILS:-}
+      - APP_ORG_OWNER_EMAILS=${APP_ORG_OWNER_EMAILS:-}
     volumes:
       - ./backend:/app
     restart: unless-stopped

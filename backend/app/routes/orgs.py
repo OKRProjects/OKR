@@ -11,6 +11,7 @@ from app.routes.auth_backend import require_auth
 from app.db.postgres import pg_session
 from app.models_sql import Department, Membership, Objective, Organization, Team, User
 from app.repositories.okr_repo_postgres import PostgresOKRRepository
+from app.services.org_bootstrap import ensure_default_org_membership_in_session
 
 
 bp = Blueprint("orgs", __name__)
@@ -65,6 +66,7 @@ def list_orgs(user_id: str):
     if err:
         return err
     with pg_session() as s:
+        ensure_default_org_membership_in_session(s, user_id)
         rows = (
             s.execute(
                 select(Organization)

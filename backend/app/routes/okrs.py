@@ -594,27 +594,17 @@ def create_objective(user_id):
             fiscal_year = data.get('fiscalYear')
             if fiscal_year is None:
                 return jsonify({'error': 'fiscalYear is required'}), 400
-            # orgId: accept body or first membership (same as /api/orgs)
+            # orgId: accept body or bootstrap default org + membership (same as GET /api/orgs)
             if not (data.get("orgId") or data.get("org_id")):
-                from sqlalchemy import select
-                from app.db.postgres import pg_session
-                from app.models_sql import Membership, Organization
-                with pg_session() as s:
-                    org_id = s.execute(
-                        select(Membership.org_id).where(
-                            Membership.user_id == user_id,
-                            Membership.active.is_(True),
-                        ).limit(1)
-                    ).scalar_one_or_none()
-                    if not org_id:
-                        org_id = s.execute(select(Organization.id).limit(1)).scalar_one_or_none()
+                from app.services.org_bootstrap import ensure_user_default_org_id
+
+                org_id = ensure_user_default_org_id(user_id)
                 if org_id:
                     data = {**data, "orgId": org_id}
                 else:
                     return jsonify({
                         'error': (
-                            'orgId is required (no organization in database). '
-                            'Run migrations or migrate Mongo OKRs to Postgres.'
+                            'orgId is required (Postgres is not configured or could not provision an organization).'
                         ),
                     }), 400
             created = repo.create_objective(user_id, data)

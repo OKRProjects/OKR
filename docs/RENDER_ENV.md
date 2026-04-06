@@ -24,6 +24,7 @@ All values below are **Render dashboard → Environment** unless the blueprint w
 | `FRONTEND_URL` | Auto | Blueprint wires it from the frontend service (`fromService`). |
 | `APP_ADMIN_USER_IDS` | Optional | Comma-separated Auth0 `sub` values. |
 | `APP_ADMIN_EMAILS` | Optional | Comma-separated emails → admin on login. |
+| `APP_ORG_OWNER_EMAILS` | Optional | Comma-separated emails → `org_owner` on login (admin list wins if the same email is in both). |
 | `AUTH_DISABLED_USER_ID` | Optional | When Auth0 is unset: synthetic user id (default `auth0|demo_u1`). |
 | `AUTH_DISABLED_USER_NAME` / `EMAIL` / `PICTURE` | Optional | Demo profile fields when Auth0 is unset. |
 

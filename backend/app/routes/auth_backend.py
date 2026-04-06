@@ -606,17 +606,30 @@ def get_current_user(user_id):
         _ensure_pg_user_row(user_info)
         try:
             from app.db.mongodb import get_db
-            from app.services.permissions import get_user_role, is_bootstrap_admin_email, ROLE_ADMIN
+            from app.services.permissions import (
+                get_user_role,
+                is_bootstrap_admin_email,
+                is_bootstrap_org_owner_email,
+                ROLE_ADMIN,
+                ROLE_ORG_OWNER,
+            )
 
             db = get_db()
             app_user = db.users.find_one({'_id': user_id})
             if not app_user:
-                # Secure default: view_only until provisioned; APP_ADMIN_EMAILS → admin on first insert.
+                # Secure default: view_only until provisioned; APP_ADMIN_EMAILS → admin; APP_ORG_OWNER_EMAILS → org_owner.
                 _email = user_info.get('email') or ''
                 _admin_by_email = is_bootstrap_admin_email(_email)
+                _org_owner_by_email = is_bootstrap_org_owner_email(_email) and not _admin_by_email
+                if _admin_by_email:
+                    _initial_role = 'admin'
+                elif _org_owner_by_email:
+                    _initial_role = ROLE_ORG_OWNER
+                else:
+                    _initial_role = 'view_only'
                 safe = {
                     '_id': user_id,
-                    'role': 'admin' if _admin_by_email else 'view_only',
+                    'role': _initial_role,
                     'name': user_info.get('name') or user_info.get('nickname') or '',
                     'email': _email,
                     'createdAt': datetime.utcnow().isoformat() + 'Z',
@@ -636,6 +649,22 @@ def get_current_user(user_id):
                             '$set': {
                                 'role': 'admin',
                                 'okrCreateDisabled': False,
+                                'email': _em or app_user.get('email', ''),
+                                'updatedAt': datetime.utcnow().isoformat() + 'Z',
+                            }
+                        },
+                    )
+                    app_user = db.users.find_one({'_id': user_id})
+                elif (
+                    is_bootstrap_org_owner_email(_em)
+                    and not is_bootstrap_admin_email(_em)
+                    and app_user.get('role') != ROLE_ORG_OWNER
+                ):
+                    db.users.update_one(
+                        {'_id': user_id},
+                        {
+                            '$set': {
+                                'role': ROLE_ORG_OWNER,
                                 'email': _em or app_user.get('email', ''),
                                 'updatedAt': datetime.utcnow().isoformat() + 'Z',
                             }
@@ -754,11 +783,13 @@ def list_user_names(user_id):
 
 def _user_row_from_mongo_doc(doc: dict) -> dict:
     """Build API user dict from Mongo users collection."""
-    from app.services.permissions import is_bootstrap_admin_email
+    from app.services.permissions import is_bootstrap_admin_email, is_bootstrap_org_owner_email
 
     r = doc.get('role', 'view_only')
     if is_bootstrap_admin_email(doc.get('email')):
         r = 'admin'
+    elif is_bootstrap_org_owner_email(doc.get('email')):
+        r = 'org_owner'
     u = {
         '_id': doc['_id'],
         'role': r,
@@ -781,7 +812,7 @@ def list_users(user_id):
     try:
         from app.db.mongodb import get_db
         db = get_db()
-        from app.services.permissions import is_bootstrap_admin_email
+        from app.services.permissions import is_bootstrap_admin_email, is_bootstrap_org_owner_email
 
         app_users_by_id = {
             doc['_id']: doc
@@ -805,6 +836,8 @@ def list_users(user_id):
                 base_role = app.get('role') or 'view_only'
                 if is_bootstrap_admin_email(row_email):
                     base_role = 'admin'
+                elif is_bootstrap_org_owner_email(row_email):
+                    base_role = 'org_owner'
                 u = {
                     '_id': uid,
                     'role': base_role,

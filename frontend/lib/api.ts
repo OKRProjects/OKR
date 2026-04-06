@@ -1118,7 +1118,7 @@ export const api = {
 
 /**
  * Postgres requires an org id for `POST /api/orgs/:orgId/departments`. Resolves it from parent objectives,
- * then `GET /orgs`, then any objective’s `orgId` (covers missing membership rows).
+ * then `GET /orgs` (bootstraps a default org + membership when none exist), then any objective’s `orgId`.
  */
 export async function resolveOrgIdForDepartment(parentOptions: Objective[]): Promise<string | undefined> {
   const fromParents = parentOptions.find((o) => o.orgId)?.orgId;

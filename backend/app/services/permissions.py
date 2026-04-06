@@ -9,6 +9,8 @@ Bootstrap admins:
 - ``APP_ADMIN_USER_IDS``: comma-separated Auth0 ``sub`` values (e.g. ``auth0|abc123``).
 - ``APP_ADMIN_EMAILS``: comma-separated emails (case-insensitive). On login, those accounts get
   ``admin`` in Mongo and in ``get_user_role`` (no need to know ``sub`` ahead of time).
+- ``APP_ORG_OWNER_EMAILS``: comma-separated emails (case-insensitive). On login, those accounts get
+  ``org_owner`` unless they are bootstrap admins (admin wins).
 """
 import os
 from typing import Optional
@@ -72,8 +74,22 @@ def is_bootstrap_admin_email(email: Optional[str]) -> bool:
     return str(email).strip().lower() in _bootstrap_admin_emails()
 
 
+def _bootstrap_org_owner_emails() -> frozenset[str]:
+    raw = os.getenv("APP_ORG_OWNER_EMAILS", "").strip()
+    if not raw:
+        return frozenset()
+    return frozenset(e.strip().lower() for e in raw.split(",") if e.strip())
+
+
+def is_bootstrap_org_owner_email(email: Optional[str]) -> bool:
+    """True if ``email`` is listed in ``APP_ORG_OWNER_EMAILS`` (case-insensitive)."""
+    if not email or not str(email).strip():
+        return False
+    return str(email).strip().lower() in _bootstrap_org_owner_emails()
+
+
 def get_user_role(db, user_id: str) -> str:
-    """Get role for user_id (Auth0 sub). Bootstrap IDs/emails force admin; else Mongo ``users.role``."""
+    """Get role for user_id (Auth0 sub). Bootstrap IDs/emails force admin; org-owner emails; else Mongo ``users.role``."""
     if user_id in _bootstrap_admin_ids():
         return ROLE_ADMIN
     user = db.users.find_one({'_id': user_id})
@@ -81,6 +97,8 @@ def get_user_role(db, user_id: str) -> str:
         return ROLE_DEVELOPER
     if is_bootstrap_admin_email(user.get("email")):
         return ROLE_ADMIN
+    if is_bootstrap_org_owner_email(user.get("email")):
+        return ROLE_ORG_OWNER
     return user.get('role', ROLE_DEVELOPER)
 
 
