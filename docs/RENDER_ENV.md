@@ -26,12 +26,15 @@ All values below are **Render dashboard → Environment** unless the blueprint w
 | `APP_ADMIN_EMAILS` | Optional | Comma-separated emails → admin on login. |
 | `APP_ORG_OWNER_EMAILS` | Optional | Comma-separated emails → `org_owner` on login (admin list wins if the same email is in both). |
 | `APP_DEFAULT_ORG_NAME` | Optional | Display name for the auto-created Postgres org (e.g. `Select Quote`). Replaces names ending in `'s organization` when listing orgs. |
-| `AUTH_DISABLED_USER_ID` | Optional | When Auth0 is unset: synthetic user id (default `auth0|demo_u1`). |
-| `AUTH_DISABLED_USER_NAME` / `EMAIL` / `PICTURE` | Optional | Demo profile fields when Auth0 is unset. |
+| `AUTH0_ISSUER_BASE_URL` | Yes | Auth0 tenant issuer URL. |
+| `AUTH0_CLIENT_ID` | Yes | Auth0 application client id. |
+| `AUTH0_CLIENT_SECRET` | Yes | Auth0 application secret. |
+| `AUTH0_AUDIENCE` | Optional | API audience; defaults if omitted when domain is set. |
+| `AUTH0_DOMAIN` | Optional | Alternative to deriving host from `AUTH0_ISSUER_BASE_URL`. |
 
-\* Set `MONGODB_URI` in the dashboard. If omitted, the API can run in demo mode without Auth0 (see `AUTH_DISABLED_USER_*`).
+\* Set `MONGODB_URI` in the dashboard.
 
-**Add in the dashboard when you enable Auth0** (not in `render.yaml`): `AUTH0_ISSUER_BASE_URL`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, optional `AUTH0_AUDIENCE`, and `AUTH0_BASE_URL` / `FRONTEND_URL` as needed. Use your `*.onrender.com` URLs, not localhost.
+**Auth0** must be set on the backend or the app will not start. Use your `*.onrender.com` URLs in Auth0’s callback / logout / web origins, not localhost.
 
 **Atlas / MongoDB:** allow Render’s outbound IPs or temporarily `0.0.0.0/0` under Network Access if you see TLS or timeout errors from Render.
 
@@ -52,13 +55,11 @@ All values below are **Render dashboard → Environment** unless the blueprint w
 - `NEXT_PUBLIC_API_URL` — omit to keep same-origin `/api` → rewrites to `BACKEND_URL`.
 - `NEXT_PUBLIC_APP_URL` — optional; only if the client must know the public URL at build time.
 
-**Auth0 on the frontend** (optional): add `AUTH0_SECRET`, `AUTH0_ISSUER_BASE_URL`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, optional `AUTH0_AUDIENCE` / `AUTH0_BASE_URL` in the Render dashboard when you wire login; use production URLs.
+**Auth0 on the frontend** (when using Next.js Auth0 helpers): add `AUTH0_SECRET`, `AUTH0_ISSUER_BASE_URL`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET`, optional `AUTH0_AUDIENCE` / `AUTH0_BASE_URL` in the Render dashboard; use production URLs.
 
 ## Auth0 Dashboard
 
-**Only if** you configure `AUTH0_ISSUER_BASE_URL`, `AUTH0_CLIENT_ID`, and `AUTH0_CLIENT_SECRET` on both services.
-
-This app completes OAuth on the **Flask** service. Add:
+OAuth completes on the **Flask** API. Configure Auth0 for the backend and add:
 
 - **Allowed Callback URLs:** `{BACKEND_URL}/api/auth/callback` (copy `RENDER_EXTERNAL_URL` from `okr-backend` + path).
 - **Allowed Logout URLs** and **Allowed Web Origins:** `{FRONTEND_URL}` (auto from blueprint on the backend, or copy from `okr-frontend`).

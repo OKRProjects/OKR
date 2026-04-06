@@ -75,6 +75,11 @@ def create_app():
         speech,
         transcription,
     )
+    if not auth_backend.is_auth0_configured():
+        raise RuntimeError(
+            "Auth0 is required. Set AUTH0_ISSUER_BASE_URL (or AUTH0_DOMAIN), AUTH0_CLIENT_ID, and AUTH0_CLIENT_SECRET."
+        )
+
     app.register_blueprint(items.bp, url_prefix='/api')
     app.register_blueprint(profiles.bp, url_prefix='/api')
     app.register_blueprint(chat.bp, url_prefix='/api')

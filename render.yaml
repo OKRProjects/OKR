@@ -57,6 +57,15 @@ services:
         sync: false
       - key: APP_DEFAULT_ORG_NAME
         sync: false
+      # Required — app will not start without Auth0 (see docs/RENDER_ENV.md).
+      - key: AUTH0_ISSUER_BASE_URL
+        sync: false
+      - key: AUTH0_CLIENT_ID
+        sync: false
+      - key: AUTH0_CLIENT_SECRET
+        sync: false
+      - key: AUTH0_AUDIENCE
+        sync: false
 
   - type: web
     name: okr-frontend
