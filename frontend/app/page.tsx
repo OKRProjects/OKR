@@ -3,9 +3,6 @@
 import { useEffect, useState } from 'react';
 import { getCurrentUser, login, loginEmailPassword, register, User } from '@/lib/auth';
 import Link from 'next/link';
-import LandingPage from '@/components/LandingPage';
-import Chatbot from '@/components/Chatbot';
-import { motion } from 'motion/react';
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
@@ -20,11 +17,14 @@ export default function Home() {
 
   useEffect(() => {
     loadUser();
+    
+    // Check for error in URL params
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const errorParam = params.get('error');
       if (errorParam) {
         setError(errorParam);
+        // Clear error from URL
         window.history.replaceState({}, '', window.location.pathname);
       }
     }
@@ -34,7 +34,8 @@ export default function Home() {
     try {
       const currentUser = await getCurrentUser();
       setUser(currentUser);
-    } catch {
+    } catch (error) {
+      // User not logged in is not an error
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -45,9 +46,10 @@ export default function Home() {
     try {
       setError(null);
       await login();
-    } catch (error: unknown) {
-      const err = error as { message?: string };
-      setError(err?.message || 'Login failed');
+    } catch (error: any) {
+      const errorMessage = error?.message || 'Login failed';
+      setError(errorMessage);
+      console.error('Login error:', error);
     }
   };
 
@@ -55,12 +57,17 @@ export default function Home() {
     e.preventDefault();
     setError(null);
     setLoading(true);
+    
     try {
-      await loginEmailPassword(email, password);
-      if (typeof window !== 'undefined') window.location.href = '/dashboard';
-    } catch (error: unknown) {
-      const err = error as { message?: string };
-      setError(err?.message || 'Login failed');
+      const loggedInUser = await loginEmailPassword(email, password);
+      setUser(loggedInUser);
+      // Redirect to Dashboard (primary destination)
+      if (typeof window !== 'undefined') {
+        window.location.href = '/my-okrs';
+      }
+    } catch (error: any) {
+      const errorMessage = error?.message || 'Login failed';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -70,178 +77,163 @@ export default function Home() {
     e.preventDefault();
     setError(null);
     setLoading(true);
+    
     try {
-      await register(email, password, name);
-      if (typeof window !== 'undefined') window.location.href = '/dashboard';
-    } catch (error: unknown) {
-      const err = error as { message?: string };
-      setError(err?.message || 'Registration failed');
+      const newUser = await register(email, password, name);
+      setUser(newUser);
+      // Redirect to Dashboard (primary destination)
+      if (typeof window !== 'undefined') {
+        window.location.href = '/my-okrs';
+      }
+    } catch (error: any) {
+      const errorMessage = error?.message || 'Registration failed';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  const navContent = (
-    <div className="flex items-center gap-4">
-      {!isLoading && user ? (
-        <>
-          <Link href="/dashboard">
-            <motion.span
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="inline-flex items-center bg-[#ff6b35] hover:bg-[#ff8555] text-black font-heading font-bold px-5 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-            >
-              Launch Console
-            </motion.span>
-          </Link>
-          <Link href="/profile" className="text-sm text-gray-400 hover:text-white transition-colors">
-            Profile
-          </Link>
-        </>
-      ) : (
-        <Link href="/dashboard">
-          <motion.span
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="inline-flex items-center bg-[#ff6b35] hover:bg-[#ff8555] text-black font-heading font-bold px-5 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-          >
-            Launch Console
-          </motion.span>
-        </Link>
-      )}
-    </div>
-  );
-
   return (
-    <>
-      <LandingPage>{navContent}</LandingPage>
-      <Chatbot />
-
-      {/* Login modal / card - fixed overlay when showEmailLogin or when user not logged in and we want to show login on same page */}
-      {!isLoading && !user && showEmailLogin && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-md bg-[#08050c] border border-white/10 rounded-2xl p-8 shadow-2xl"
-          >
-            <h3 className="text-xl font-semibold mb-6 text-white">
-              {isRegistering ? 'Create account' : 'Sign in'}
-            </h3>
-            {error && (
-              <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg text-sm">
-                {error === 'auth0_not_configured' || error.includes('Auth0 not configured')
-                  ? 'Auth0 is not configured. Use email login or set AUTH0_* in backend .env.'
-                  : error}
-              </div>
-            )}
-            <form
-              onSubmit={isRegistering ? handleRegister : handleEmailPasswordLogin}
-              className="space-y-4"
-            >
-              {isRegistering && (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex items-center justify-center p-4">
+      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-lg border border-slate-200 p-8 sm:p-10 text-center">
+        <h1 className="text-4xl sm:text-5xl font-bold text-slate-900 mb-3 tracking-tight">
+          OKR Tracker
+        </h1>
+        <p className="text-lg text-slate-600 mb-8">
+          Leadership-owned OKRs with org roll-up: managers and above create and own objectives; most people browse and
+          follow progress across the company.
+        </p>
+        
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded text-sm">
+            {error === 'auth0_not_configured' || error.includes('Auth0 not configured')
+              ? 'Auth0 is not configured. Please set AUTH0_DOMAIN, AUTH0_CLIENT_ID, and AUTH0_CLIENT_SECRET in backend .env file.'
+              : `Error: ${error}`}
+          </div>
+        )}
+        
+        {isLoading ? (
+          <div className="text-slate-500">Loading...</div>
+        ) : user ? (
+          <div className="space-y-5">
+            <p className="text-slate-700">
+              Welcome, <span className="font-semibold">{user.name || user.email}</span>
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Link
+                href="/my-okrs"
+                className="inline-block bg-slate-800 text-white px-6 py-3 rounded-lg font-semibold hover:bg-slate-900 transition-colors"
+              >
+                Go to My OKRs
+              </Link>
+              <Link
+                href="/profile"
+                className="inline-block border border-slate-300 text-slate-700 px-6 py-3 rounded-lg font-semibold hover:bg-slate-50 transition-colors"
+              >
+                Profile
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {!showEmailLogin ? (
+              <>
+                <button
+                  onClick={handleLogin}
+                  className="w-full bg-slate-800 text-white px-6 py-3 rounded-lg font-semibold hover:bg-slate-900 transition-colors"
+                >
+                  Login with Google
+                </button>
+                <button
+                  onClick={() => setShowEmailLogin(true)}
+                  className="w-full border-2 border-slate-300 text-slate-700 px-6 py-3 rounded-lg font-semibold hover:bg-slate-50 transition-colors"
+                >
+                  Login with Email
+                </button>
+              </>
+            ) : (
+              <form onSubmit={isRegistering ? handleRegister : handleEmailPasswordLogin} className="space-y-4">
+                {isRegistering && (
+                  <div>
+                    <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                      Name (optional)
+                    </label>
+                    <input
+                      type="text"
+                      id="name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                      placeholder="Your name"
+                    />
+                  </div>
+                )}
                 <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-1">
-                    Name (optional)
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                    Email
                   </label>
                   <input
-                    type="text"
-                    id="name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff6b35]/50"
-                    placeholder="Your name"
+                    type="email"
+                    id="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="your@email.com"
                   />
                 </div>
-              )}
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff6b35]/50"
-                  placeholder="your@email.com"
-                />
-              </div>
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  id="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={8}
-                  className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff6b35]/50"
-                  placeholder="••••••••"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-[#ff6b35] hover:bg-[#ff8555] text-black font-heading font-bold py-3 rounded-lg font-medium transition-colors disabled:opacity-50"
-              >
-                {loading ? 'Please wait...' : isRegistering ? 'Sign Up' : 'Login'}
-              </button>
-            </form>
-            <div className="mt-4 flex flex-wrap gap-3 text-sm">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsRegistering(!isRegistering);
-                  setError(null);
-                }}
-                className="text-[#ff6b35] hover:text-[#00e5c0]"
-              >
-                {isRegistering ? 'Already have an account? Login' : "Don't have an account? Sign up"}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowEmailLogin(false);
-                  setError(null);
-                  setEmail('');
-                  setPassword('');
-                  setName('');
-                }}
-                className="text-gray-400 hover:text-white"
-              >
-                Close
-              </button>
-            </div>
-            <div className="mt-4 pt-4 border-t border-white/10">
-              <button
-                type="button"
-                onClick={handleLogin}
-                className="w-full py-2.5 border border-white/10 rounded-lg text-gray-300 hover:bg-white/5 transition-colors text-sm font-medium"
-              >
-                Login with Google (Auth0)
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {/* Floating login trigger when not logged in - small button to open email login */}
-      {!isLoading && !user && !showEmailLogin && (
-        <div className="fixed bottom-8 right-8 z-50">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => setShowEmailLogin(true)}
-            className="bg-[#ff6b35] hover:bg-[#ff8555] text-black font-heading font-bold px-5 py-2.5 rounded-xl text-sm font-medium shadow-lg shadow-[#ff6b35]/30"
-          >
-            Sign in
-          </motion.button>
-        </div>
-      )}
-    </>
+                <div>
+                  <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    id="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={8}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="••••••••"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-slate-800 text-white px-6 py-3 rounded-lg font-semibold hover:bg-slate-900 transition-colors disabled:opacity-50"
+                >
+                  {loading ? 'Please wait...' : isRegistering ? 'Sign Up' : 'Login'}
+                </button>
+                <div className="flex justify-between text-sm">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsRegistering(!isRegistering);
+                      setError(null);
+                    }}
+                    className="text-slate-600 hover:text-slate-900 font-medium"
+                  >
+                    {isRegistering ? 'Already have an account? Login' : "Don't have an account? Sign up"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEmailLogin(false);
+                      setError(null);
+                      setEmail('');
+                      setPassword('');
+                      setName('');
+                    }}
+                    className="text-gray-600 hover:text-gray-700"
+                  >
+                    Back
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

@@ -17,4 +17,5 @@ COPY . .
 
 EXPOSE 5001
 
-CMD ["python", "run.py"]
+# Apply DB schema before Flask (also done in create_app; idempotent). Inline sh avoids exec-bit issues when /app is bind-mounted.
+CMD ["sh", "-c", "alembic upgrade head && exec python run.py"]

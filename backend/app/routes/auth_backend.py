@@ -20,6 +20,75 @@ BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:5001')
 if not AUTH0_AUDIENCE and AUTH0_DOMAIN:
     AUTH0_AUDIENCE = f'https://{AUTH0_DOMAIN}/api/v2/'
 
+# Cache for Auth0 Management API token (short-lived, avoid hitting token endpoint every request)
+_management_token_cache = {'token': None, 'expires': 0}
+
+
+def get_auth0_management_token():
+    """Get an access token for the Auth0 Management API (client_credentials). Requires the Auth0
+    application to be authorized for the Auth0 Management API with read:users scope.
+    In Auth0 Dashboard: APIs -> Auth0 Management API -> Machine to Machine Applications ->
+    Authorize your application and grant read:users."""
+    import time
+    global _management_token_cache
+    now = time.time()
+    if _management_token_cache['token'] and _management_token_cache['expires'] > now + 60:
+        return _management_token_cache['token']
+    if not AUTH0_DOMAIN or not AUTH0_CLIENT_ID or not AUTH0_CLIENT_SECRET:
+        return None
+    url = f'https://{AUTH0_DOMAIN}/oauth/token'
+    data = {
+        'grant_type': 'client_credentials',
+        'client_id': AUTH0_CLIENT_ID,
+        'client_secret': AUTH0_CLIENT_SECRET,
+        'audience': AUTH0_AUDIENCE or f'https://{AUTH0_DOMAIN}/api/v2/',
+    }
+    try:
+        r = requests.post(url, data=data, timeout=10)
+        if not r.ok:
+            return None
+        body = r.json()
+        token = body.get('access_token')
+        expires_in = body.get('expires_in', 86400)
+        if token:
+            _management_token_cache['token'] = token
+            _management_token_cache['expires'] = now + expires_in
+        return token
+    except Exception:
+        return None
+
+
+def list_auth0_users():
+    """Fetch all users from Auth0 Management API. Returns list of dicts with user_id, name, email, picture."""
+    token = get_auth0_management_token()
+    if not token:
+        return None
+    url = f'https://{AUTH0_DOMAIN}/api/v2/users'
+    all_users = []
+    page = 0
+    per_page = 100
+    while True:
+        try:
+            r = requests.get(
+                url,
+                headers={'Authorization': f'Bearer {token}'},
+                params={'per_page': per_page, 'page': page},
+                timeout=15,
+            )
+            if not r.ok:
+                return None
+            data = r.json()
+            if not data:
+                break
+            all_users.extend(data)
+            if len(data) < per_page:
+                break
+            page += 1
+        except Exception:
+            return None
+    return all_users
+
+
 def get_jwks_client():
     """Get JWKS client for Auth0 (uses certifi for SSL on macOS)"""
     if not AUTH0_DOMAIN:
@@ -155,6 +224,34 @@ def require_auth(f):
         except Exception as e:
             return jsonify({'error': 'Authentication failed'}), 401
     return decorated_function
+
+
+def _ensure_pg_user_row(user_info: dict) -> None:
+    """Best-effort: ensure authenticated user exists in Postgres users table."""
+    try:
+        if not os.getenv("DATABASE_URL"):
+            return
+        from app.db.postgres import pg_session
+        from app.models_sql.user import User
+        uid = (user_info or {}).get("sub")
+        if not uid:
+            return
+        with pg_session() as s:
+            u = s.get(User, uid)
+            if u is None:
+                u = User(id=uid)
+                s.add(u)
+            # Keep these fields up to date when available
+            email = (user_info or {}).get("email") or None
+            name = (user_info or {}).get("name") or (user_info or {}).get("nickname") or None
+            if email:
+                u.email = email
+            if name:
+                u.name = name
+            s.add(u)
+    except Exception:
+        # Don't block auth if provisioning fails; RBAC will enforce access later.
+        return
 
 @bp.route('/auth/login', methods=['GET'])
 def login():
@@ -402,7 +499,7 @@ def callback():
             session['user'] = user_info
             session['access_token'] = access_token
             session.permanent = True
-            
+
             # Redirect to frontend dashboard (AUTH0_BASE_URL is the frontend URL)
             return flask_redirect(f'{AUTH0_BASE_URL}/dashboard')
         except Exception as e:
@@ -434,9 +531,87 @@ def logout():
 @bp.route('/auth/me', methods=['GET'])
 @require_auth
 def get_current_user(user_id):
-    """Get current authenticated user"""
+    """Get current authenticated user. Includes role and departmentId from users collection if present.
+    Demo mode: if user is not in users collection, return role=admin so they can see all seed data."""
     try:
         user_info = get_user_info_from_request()
+        _ensure_pg_user_row(user_info)
+        try:
+            from app.db.mongodb import get_db
+            from app.services.permissions import get_user_role, is_bootstrap_admin_email, ROLE_ADMIN
+
+            db = get_db()
+            app_user = db.users.find_one({'_id': user_id})
+            if not app_user:
+                # Secure default: view_only until provisioned; APP_ADMIN_EMAILS → admin on first insert.
+                _email = user_info.get('email') or ''
+                _admin_by_email = is_bootstrap_admin_email(_email)
+                safe = {
+                    '_id': user_id,
+                    'role': 'admin' if _admin_by_email else 'view_only',
+                    'name': user_info.get('name') or user_info.get('nickname') or '',
+                    'email': _email,
+                    'createdAt': datetime.utcnow().isoformat() + 'Z',
+                }
+                if _admin_by_email:
+                    safe['okrCreateDisabled'] = False
+                db.users.update_one({'_id': user_id}, {'$setOnInsert': safe}, upsert=True)
+                user_info['needsProvisioning'] = True
+            app_user = db.users.find_one({'_id': user_id})
+            # Existing users: promote whitelist emails so Mongo and admin user list stay in sync.
+            if app_user:
+                _em = (user_info.get('email') or app_user.get('email') or '').strip()
+                if is_bootstrap_admin_email(_em) and app_user.get('role') != 'admin':
+                    db.users.update_one(
+                        {'_id': user_id},
+                        {
+                            '$set': {
+                                'role': 'admin',
+                                'okrCreateDisabled': False,
+                                'email': _em or app_user.get('email', ''),
+                                'updatedAt': datetime.utcnow().isoformat() + 'Z',
+                            }
+                        },
+                    )
+                    app_user = db.users.find_one({'_id': user_id})
+            if app_user and app_user.get('departmentId') is not None:
+                user_info['departmentId'] = str(app_user['departmentId'])
+
+            user_info['role'] = get_user_role(db, user_id)
+            if user_info['role'] == ROLE_ADMIN:
+                user_info['okrCreateDisabled'] = False
+            else:
+                user_info['okrCreateDisabled'] = bool(app_user.get('okrCreateDisabled')) if app_user else False
+        except Exception:
+            user_info['role'] = user_info.get('role', 'developer')
+        # Map departmentId to Postgres UUID so leader/view_only filters match objectives (UUID department_id).
+        if os.getenv('DATABASE_URL'):
+            try:
+                from sqlalchemy import select
+
+                from app.db.postgres import pg_session
+                from app.models_sql import Membership
+                from app.repositories.okr_repo_postgres import resolve_department_id_for_filter
+
+                mongo_dep = user_info.get('departmentId')
+                with pg_session() as s:
+                    m = s.execute(
+                        select(Membership)
+                        .where(Membership.user_id == user_id)
+                        .where(Membership.active.is_(True))
+                        .where(Membership.department_id.isnot(None))
+                    ).scalars().first()
+                    if m and m.department_id:
+                        user_info['departmentId'] = str(m.department_id)
+                    elif mongo_dep:
+                        resolved = resolve_department_id_for_filter(s, str(mongo_dep))
+                        if resolved:
+                            user_info['departmentId'] = resolved
+            except Exception:
+                pass
+        if 'role' not in user_info:
+            user_info['role'] = 'developer'
+        user_info.setdefault('okrCreateDisabled', False)
         return jsonify(user_info), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 401
@@ -453,3 +628,167 @@ def get_token():
         return jsonify({'error': 'No access token available'}), 401
     
     return jsonify({'accessToken': access_token}), 200
+
+
+def require_admin(f):
+    """Decorator to require authenticated admin (Mongo admin, ``APP_ADMIN_USER_IDS``, or ``APP_ADMIN_EMAILS``)."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        try:
+            user_id = get_user_id_from_request()
+            from app.db.mongodb import get_db
+            from app.services.permissions import get_user_role, ROLE_ADMIN
+            db = get_db()
+            if get_user_role(db, user_id) != ROLE_ADMIN:
+                return jsonify({'error': 'Admin access required'}), 403
+            kwargs['user_id'] = user_id
+            return f(*args, **kwargs)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 401
+        except Exception as e:
+            return jsonify({'error': 'Authentication failed'}), 401
+    return decorated_function
+
+
+@bp.route('/auth/users/names', methods=['GET'])
+@require_auth
+def list_user_names(user_id):
+    """List all users' _id and name for dashboard display (any authenticated user)."""
+    try:
+        from app.db.mongodb import get_db
+        db = get_db()
+        cursor = db.users.find({}, {'_id': 1, 'name': 1})
+        users = [{'_id': doc['_id'], 'name': doc.get('name', doc.get('email', str(doc['_id'])))} for doc in cursor]
+        return jsonify(users), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+def _user_row_from_mongo_doc(doc: dict) -> dict:
+    """Build API user dict from Mongo users collection."""
+    from app.services.permissions import is_bootstrap_admin_email
+
+    r = doc.get('role', 'view_only')
+    if is_bootstrap_admin_email(doc.get('email')):
+        r = 'admin'
+    u = {
+        '_id': doc['_id'],
+        'role': r,
+        'okrCreateDisabled': False if r == 'admin' else bool(doc.get('okrCreateDisabled')),
+    }
+    if doc.get('departmentId') is not None:
+        u['departmentId'] = str(doc['departmentId'])
+    if doc.get('name'):
+        u['name'] = doc['name']
+    if doc.get('email'):
+        u['email'] = doc['email']
+    return u
+
+
+@bp.route('/auth/users', methods=['GET'])
+@require_admin
+def list_users(user_id):
+    """List all users (admin only). Merges Auth0 directory with Mongo ``users`` so nothing is dropped:
+    Auth0-only, Mongo-only, and merged rows all appear. Role / permissions live in Mongo."""
+    try:
+        from app.db.mongodb import get_db
+        db = get_db()
+        from app.services.permissions import is_bootstrap_admin_email
+
+        app_users_by_id = {
+            doc['_id']: doc
+            for doc in db.users.find(
+                {},
+                {'_id': 1, 'role': 1, 'departmentId': 1, 'name': 1, 'email': 1, 'okrCreateDisabled': 1},
+            )
+        }
+        auth0_users = list_auth0_users()
+        users = []
+        seen: set[str] = set()
+
+        if auth0_users is not None:
+            for au in auth0_users:
+                uid = au.get('user_id') or au.get('sub') or ''
+                if not uid:
+                    continue
+                seen.add(uid)
+                app = app_users_by_id.get(uid) or {}
+                row_email = (au.get('email') or app.get('email') or '').strip()
+                base_role = app.get('role') or 'view_only'
+                if is_bootstrap_admin_email(row_email):
+                    base_role = 'admin'
+                u = {
+                    '_id': uid,
+                    'role': base_role,
+                    'name': au.get('name') or app.get('name') or au.get('email') or '',
+                    'email': row_email or (au.get('email') or app.get('email') or ''),
+                }
+                if app.get('departmentId') is not None:
+                    u['departmentId'] = str(app['departmentId'])
+                u['okrCreateDisabled'] = False if u['role'] == 'admin' else bool(app.get('okrCreateDisabled'))
+                users.append(u)
+            # Users present in Mongo but missing from Auth0 listing (e.g. stale id, different connection)
+            for uid, doc in app_users_by_id.items():
+                if uid in seen:
+                    continue
+                users.append(_user_row_from_mongo_doc(doc))
+        else:
+            # Auth0 Management API unavailable — all app users from Mongo
+            for doc in app_users_by_id.values():
+                users.append(_user_row_from_mongo_doc(doc))
+
+        users.sort(
+            key=lambda x: (
+                (x.get('name') or x.get('email') or x.get('_id') or '').lower(),
+                x.get('_id') or '',
+            )
+        )
+        return jsonify(users), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/auth/users/<uid>', methods=['PATCH'])
+@require_admin
+def update_user(user_id, uid):
+    """Update a user's role and/or departmentId (admin only)."""
+    try:
+        from app.db.mongodb import get_db
+        db = get_db()
+        data = request.get_json() or {}
+        update = {}
+        from app.services.permissions import USER_APP_ROLES
+        if 'role' in data and data['role'] in USER_APP_ROLES:
+            update['role'] = data['role']
+            if data['role'] == 'admin':
+                update['okrCreateDisabled'] = False
+        if 'departmentId' in data:
+            update['departmentId'] = data['departmentId'] if data['departmentId'] else None
+        if 'okrCreateDisabled' in data:
+            effective_role = update.get('role')
+            if effective_role is None:
+                existing = db.users.find_one({'_id': uid}, {'role': 1})
+                effective_role = existing.get('role') if existing else None
+            if effective_role != 'admin':
+                update['okrCreateDisabled'] = bool(data['okrCreateDisabled'])
+        if not update:
+            return jsonify({'error': 'No valid fields to update'}), 400
+        update['updatedAt'] = datetime.utcnow().isoformat() + 'Z'
+        result = db.users.update_one(
+            {'_id': uid},
+            {'$set': update},
+            upsert=True
+        )
+        if result.matched_count == 0 and not result.upserted_count:
+            return jsonify({'error': 'User not found'}), 404
+        updated = db.users.find_one({'_id': uid}, {'_id': 1, 'role': 1, 'departmentId': 1, 'okrCreateDisabled': 1})
+        out = {
+            '_id': updated['_id'],
+            'role': updated.get('role', 'view_only'),
+            'okrCreateDisabled': bool(updated.get('okrCreateDisabled')),
+        }
+        if updated.get('departmentId') is not None:
+            out['departmentId'] = str(updated['departmentId'])
+        return jsonify(out), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

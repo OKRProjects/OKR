@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
+import { getServerBackendUrl } from '@/lib/serverBackendUrl';
 
-// Proxy to backend auth login endpoint
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
-
+/** Return JSON { auth_url } so the client can window.location.href = auth_url (browser fetch cannot follow OAuth redirect usefully). */
 export async function GET() {
   try {
-    const response = await fetch(`${API_URL}/api/auth/login`, {
+    const backend = getServerBackendUrl();
+    const response = await fetch(`${backend}/api/auth/login`, {
       method: 'GET',
       credentials: 'include',
     });
@@ -16,12 +16,8 @@ export async function GET() {
     }
 
     const data = await response.json();
-    // Redirect to Auth0 login URL
-    return NextResponse.redirect(data.auth_url);
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to initiate login' },
-      { status: 500 }
-    );
+    return NextResponse.json(data);
+  } catch {
+    return NextResponse.json({ error: 'Failed to initiate login' }, { status: 500 });
   }
 }

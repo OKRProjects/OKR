@@ -1,7 +1,18 @@
 import type { NextConfig } from "next";
 
+/** Proxy /api to Flask so the browser calls same-origin /api (session cookie works). Docker: BACKEND_URL=http://backend:5001 */
+const backend = process.env.BACKEND_URL || "http://127.0.0.1:5001";
+
 const nextConfig: NextConfig = {
-  output: 'standalone',
+  output: "standalone",
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${backend.replace(/\/$/, "")}/api/:path*`,
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {

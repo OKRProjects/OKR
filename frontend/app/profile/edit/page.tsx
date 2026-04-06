@@ -4,9 +4,12 @@ import { useEffect, useState } from 'react';
 import { getCurrentUser, login, User } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import DashboardShell from '@/components/DashboardShell';
+import { AppLayout } from '@/components/AppLayout';
 import ProfileForm from '@/components/ProfileForm';
 import { api, Profile } from '@/lib/api';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft } from 'lucide-react';
 
 export default function EditProfilePage() {
   const [user, setUser] = useState<User | null>(null);
@@ -28,7 +31,8 @@ export default function EditProfilePage() {
       }
       setUser(currentUser);
       loadProfile();
-    } catch {
+    } catch (error) {
+      console.error('Error loading user:', error);
       await login();
     } finally {
       setIsLoading(false);
@@ -37,6 +41,7 @@ export default function EditProfilePage() {
 
   const loadProfile = async () => {
     if (!user) return;
+
     try {
       const data = await api.getProfile();
       setProfile(data);
@@ -49,11 +54,17 @@ export default function EditProfilePage() {
     }
   };
 
+  useEffect(() => {
+    if (user) {
+      loadProfile();
+    }
+  }, [user]);
+
   if (isLoading || loading || !user) {
     return (
-      <div className="min-h-screen bg-[#0c0712] flex items-center justify-center">
-        <div className="text-gray-400">Loading...</div>
-      </div>
+      <AppLayout title="Edit Profile" description="Update your profile information">
+        <div className="text-center text-muted-foreground">Loading...</div>
+      </AppLayout>
     );
   }
 
@@ -61,24 +72,29 @@ export default function EditProfilePage() {
     return null;
   }
 
-  const handleProfileUpdate = () => {
-    router.push('/profile');
+  const handleProfileUpdate = async () => {
+    try {
+      router.push('/profile');
+    } catch (err) {
+      // Handle error
+    }
   };
 
   return (
-    <DashboardShell>
-      <div className="mb-6">
-        <Link
-          href="/profile"
-          className="text-orange-400 hover:text-teal-400 text-sm font-medium mb-4 inline-block"
-        >
-          ← Back to Profile
-        </Link>
-        <h1 className="text-3xl font-bold text-white">Edit Profile</h1>
+    <AppLayout title="Edit Profile" description="Update your profile information">
+      <div className="space-y-6">
+        <Button variant="ghost" size="sm" asChild className="gap-1.5 text-muted-foreground hover:text-foreground">
+          <Link href="/profile">
+            <ArrowLeft className="h-4 w-4" />
+            Back to Profile
+          </Link>
+        </Button>
+        <Card>
+          <CardContent className="pt-6">
+            <ProfileForm profile={profile} onSuccess={handleProfileUpdate} />
+          </CardContent>
+        </Card>
       </div>
-      <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-8">
-        <ProfileForm profile={profile} onSuccess={handleProfileUpdate} />
-      </div>
-    </DashboardShell>
+    </AppLayout>
   );
 }

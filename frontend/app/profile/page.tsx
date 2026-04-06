@@ -2,15 +2,177 @@
 
 import { useEffect, useState } from 'react';
 import { getCurrentUser, login, User } from '@/lib/auth';
-import Link from 'next/link';
-import DashboardShell from '@/components/DashboardShell';
+import { useRouter } from 'next/navigation';
+import { AppLayout } from '@/components/AppLayout';
 import ProfileForm from '@/components/ProfileForm';
 import { api, Profile } from '@/lib/api';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { IntegrationsSection } from '@/components/IntegrationsSection';
+import { ProfileIntegrationsDemo } from '@/components/ProfileIntegrationsDemo';
 import Image from 'next/image';
+import Link from 'next/link';
+import { useViewPreferences } from '@/lib/useViewPreferences';
+import { RotateCcw } from 'lucide-react';
+import { toast } from 'sonner';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import type { DashboardSortField, SortDirection } from '@/lib/api';
+
+const OKR_TAB_LABELS: Record<string, string> = {
+  overview: 'Overview',
+  progress: 'Progress',
+  updates: 'Updates',
+  history: 'History',
+  dependencies: 'Dependencies',
+  files: 'Files',
+};
+
+const OKR_TAB_IDS = Object.keys(OKR_TAB_LABELS);
+
+const HISTORY_EVENT_FILTER_OPTIONS: { value: string; label: string }[] = [
+  { value: 'all', label: 'All types' },
+  { value: 'in_review', label: 'Submitted' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'draft', label: 'Back to draft' },
+];
+
+/** Customizable views (#24): tabs, dashboard sort/filter, history filter — persisted on profile */
+function ProfileCustomizableViews() {
+  const { preferences, updatePreferences, resetToDefault, loading } = useViewPreferences();
+  if (loading) return <p className="text-sm text-muted-foreground">Loading view settings…</p>;
+
+  const visibleTabCount = OKR_TAB_IDS.filter((id) => preferences.visibleTabs[id] !== false).length;
+
+  const handleTabToggle = (id: string, checked: boolean) => {
+    if (!checked && visibleTabCount <= 1) {
+      toast.error('Debe quedar al menos una pestaña visible en el detalle del OKR.');
+      return;
+    }
+    void updatePreferences({ visibleTabs: { [id]: checked } });
+  };
+
+  const sortCombo = `${preferences.dashboardSort}-${preferences.dashboardSortDirection}` as string;
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="text-lg font-semibold mb-1">Vistas personalizables</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Se guardan en tu perfil: última pestaña del modal OKR, pestañas visibles, orden del listado del
+          dashboard y filtros.
+        </p>
+      </div>
+
+      <div>
+        <h3 className="text-base font-medium mb-2">Pestañas del detalle OKR</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Oculta secciones (por ejemplo Historial). La última pestaña que elijas se recordará al abrir otro OKR.
+        </p>
+        <div className="flex flex-wrap gap-x-6 gap-y-2">
+          {Object.entries(OKR_TAB_LABELS).map(([id, label]) => (
+            <label key={id} className="flex items-center gap-2 cursor-pointer text-sm">
+              <input
+                type="checkbox"
+                checked={preferences.visibleTabs[id] !== false}
+                onChange={(e) => handleTabToggle(id, e.target.checked)}
+                className="rounded border-input h-4 w-4"
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-base font-medium mb-2">Listado del dashboard</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Mismo criterio que la barra de filtros del dashboard: orden y actividad reciente.
+        </p>
+        <div className="flex flex-col sm:flex-row flex-wrap gap-4 max-w-xl">
+          <div className="space-y-2 flex-1 min-w-[200px]">
+            <Label htmlFor="profile-sort">Ordenar por</Label>
+            <Select
+              value={sortCombo}
+              onValueChange={(v) => {
+                const [sort, dir] = v.split('-') as [DashboardSortField, SortDirection];
+                void updatePreferences({ dashboardSort: sort, dashboardSortDirection: dir });
+              }}
+            >
+              <SelectTrigger id="profile-sort">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="score-desc">Puntuación (mayor primero)</SelectItem>
+                <SelectItem value="score-asc">Puntuación (menor primero)</SelectItem>
+                <SelectItem value="owner-asc">Propietario (A–Z)</SelectItem>
+                <SelectItem value="owner-desc">Propietario (Z–A)</SelectItem>
+                <SelectItem value="updated-desc">Actualizado (más reciente)</SelectItem>
+                <SelectItem value="updated-asc">Actualizado (más antiguo)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2 flex-1 min-w-[200px]">
+            <Label htmlFor="profile-update-filter">Filtro por actividad</Label>
+            <Select
+              value={preferences.dashboardFilterUpdateType}
+              onValueChange={(v) => void updatePreferences({ dashboardFilterUpdateType: v })}
+            >
+              <SelectTrigger id="profile-update-filter">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Cualquier actividad</SelectItem>
+                <SelectItem value="recent">Actualizado en los últimos 7 días</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-base font-medium mb-2">Pestaña Historial (por defecto)</h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Tipo de evento de workflow mostrado al abrir la pestaña Historial en un OKR.
+        </p>
+        <div className="max-w-xs">
+          <Select
+            value={preferences.historyEventTypeFilter}
+            onValueChange={(v) => void updatePreferences({ historyEventTypeFilter: v })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {HISTORY_EVENT_FILTER_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <Button variant="outline" size="sm" onClick={() => void resetToDefault()} className="gap-2">
+        <RotateCcw className="h-4 w-4" />
+        Restablecer todo a valores por defecto
+      </Button>
+    </div>
+  );
+}
 
 export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -28,7 +190,8 @@ export default function ProfilePage() {
       }
       setUser(currentUser);
       loadProfile();
-    } catch {
+    } catch (error) {
+      console.error('Error loading user:', error);
       await login();
     } finally {
       setIsLoading(false);
@@ -36,23 +199,29 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
-    if (user) loadProfile();
+    if (user) {
+      loadProfile();
+    }
   }, [user]);
 
   const loadProfile = async () => {
     if (!user) return;
+    
     try {
       setLoading(true);
       const data = await api.getProfile();
       setProfile(data);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
-      if (msg.includes('404') || msg.includes('not found') || msg.includes('500')) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      console.error('Error loading profile:', err);
+      
+      if (errorMessage.includes('404') || errorMessage.includes('not found') || errorMessage.includes('500')) {
         try {
-          await new Promise((r) => setTimeout(r, 1000));
+          await new Promise(resolve => setTimeout(resolve, 1000));
           const retryData = await api.getProfile();
           setProfile(retryData);
-        } catch {
+        } catch (retryErr) {
+          console.error('Retry failed:', retryErr);
           setProfile(null);
         }
       } else {
@@ -69,149 +238,155 @@ export default function ProfilePage() {
         const data = await api.getProfile();
         setProfile(data);
         setEditing(false);
-      } catch {
-        // ignore
+      } catch (err) {
+        if (err instanceof Error && err.message.includes('404')) {
+          // Profile still doesn't exist
+        }
       }
     }
   };
 
   if (isLoading || loading || !user) {
     return (
-      <div className="min-h-screen bg-[#0c0712] flex items-center justify-center">
-        <div className="text-gray-400">Loading...</div>
-      </div>
+      <AppLayout title="Profile" description="Manage your profile information">
+        <div className="text-center text-muted-foreground">Loading...</div>
+      </AppLayout>
     );
   }
 
   if (!profile && !editing) {
     return (
-      <DashboardShell>
-        <h1 className="text-3xl font-bold mb-6">Profile</h1>
-        <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-8 text-center">
-          <p className="text-gray-400 mb-4">You haven&apos;t created a profile yet.</p>
-          <button
-            onClick={() => setEditing(true)}
-            className="bg-orange-500 hover:bg-orange-400 text-white px-6 py-2.5 rounded-xl font-medium transition-colors"
-          >
-            Create Profile
-          </button>
-        </div>
-      </DashboardShell>
+      <AppLayout title="Profile" description="Manage your profile information">
+        <Card>
+          <CardContent className="py-8 text-center">
+            <p className="text-muted-foreground mb-4">You haven't created a profile yet.</p>
+            <Button onClick={() => setEditing(true)}>
+              Create Profile
+            </Button>
+          </CardContent>
+        </Card>
+      </AppLayout>
     );
   }
 
   if (editing) {
     return (
-      <DashboardShell>
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-3xl font-bold">{profile != null ? 'Edit Profile' : 'Create Profile'}</h1>
-          {profile && (
-            <button
-              onClick={() => setEditing(false)}
-              className="text-gray-400 hover:text-white transition-colors"
-            >
-              Cancel
-            </button>
-          )}
-        </div>
-        <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-8">
-          <ProfileForm profile={profile || undefined} onSuccess={handleProfileUpdate} />
-        </div>
-      </DashboardShell>
+      <AppLayout title={profile ? 'Edit Profile' : 'Create Profile'} description="Update your profile information">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="mb-6 flex items-center justify-between">
+              {profile && (
+                <Button variant="ghost" onClick={() => setEditing(false)}>
+                  Cancel
+                </Button>
+              )}
+            </div>
+            <ProfileForm profile={profile || undefined} onSuccess={handleProfileUpdate} />
+          </CardContent>
+        </Card>
+      </AppLayout>
     );
   }
 
   if (!profile) return null;
 
   return (
-    <DashboardShell>
-      <div className="max-w-4xl">
-        <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden">
-          {/* Profile Header */}
-          <div className="bg-gradient-to-br from-orange-500/20 to-teal-500/10 border-b border-white/10 px-8 py-12">
-            <div className="flex items-center gap-6 flex-wrap">
-              {profile.profileImageUrl ? (
-                <div className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-white/20 flex-shrink-0">
-                  <Image
-                    src={profile.profileImageUrl}
-                    alt={profile.displayName}
-                    fill
-                    className="object-cover"
-                  />
-                </div>
-              ) : (
-                <div className="w-32 h-32 rounded-full bg-orange-500/30 flex items-center justify-center flex-shrink-0 text-4xl font-bold text-white">
-                  {profile.displayName.charAt(0).toUpperCase()}
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <h1 className="text-4xl font-bold mb-2 text-white">{profile.displayName}</h1>
-                {user?.email && <p className="text-gray-400 text-lg">{user.email}</p>}
+    <AppLayout title="Profile" description="Manage your profile information">
+      <Card className="overflow-hidden">
+        {/* Profile Header */}
+        <div className="bg-gradient-to-r from-primary to-purple-600 px-6 py-12">
+          <div className="flex items-center space-x-6">
+            {profile.profileImageUrl ? (
+              <div className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-lg flex-shrink-0">
+                <Image
+                  src={profile.profileImageUrl}
+                  alt={profile.displayName}
+                  fill
+                  className="object-cover"
+                />
               </div>
-              <button
-                onClick={() => setEditing(true)}
-                className="bg-orange-500 hover:bg-orange-400 text-white px-6 py-2.5 rounded-xl font-medium transition-colors"
-              >
-                Edit Profile
-              </button>
-            </div>
-          </div>
-
-          {/* Profile Content */}
-          <div className="px-8 py-8">
-            {profile.bio && (
-              <div className="mb-6">
-                <h2 className="text-xl font-semibold text-white mb-2">About</h2>
-                <p className="text-gray-400 leading-relaxed">{profile.bio}</p>
+            ) : (
+              <div className="w-32 h-32 rounded-full bg-white bg-opacity-20 flex items-center justify-center flex-shrink-0">
+                <span className="text-5xl text-white font-bold">
+                  {profile.displayName.charAt(0).toUpperCase()}
+                </span>
               </div>
             )}
-
-            <div className="border-t border-white/10 pt-6 mt-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-500">Member since</span>
-                  <p className="text-gray-300 font-medium">
-                    {profile.createdAt
-                      ? new Date(profile.createdAt).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })
-                      : 'N/A'}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-gray-500">Last updated</span>
-                  <p className="text-gray-300 font-medium">
-                    {profile.updatedAt
-                      ? new Date(profile.updatedAt).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })
-                      : 'N/A'}
-                  </p>
-                </div>
-              </div>
+            <div className="flex-1 text-white">
+              <h1 className="text-4xl font-bold mb-2">{profile.displayName}</h1>
+              {user?.email && (
+                <p className="text-white/80 text-lg">{user.email}</p>
+              )}
             </div>
-
-            <div className="mt-8 flex gap-4">
-              <Link
-                href="/dashboard"
-                className="bg-orange-500 hover:bg-orange-400 text-white px-6 py-2.5 rounded-xl font-medium transition-colors inline-block"
-              >
-                Dashboard
-              </Link>
-              <button
-                onClick={() => setEditing(true)}
-                className="border border-white/20 text-gray-300 hover:bg-white/5 px-6 py-2.5 rounded-xl font-medium transition-colors"
-              >
-                Edit Profile
-              </button>
-            </div>
+            <Button
+              onClick={() => setEditing(true)}
+              variant="secondary"
+            >
+              Edit Profile
+            </Button>
           </div>
         </div>
-      </div>
-    </DashboardShell>
+
+        {/* Profile Content */}
+        <CardContent className="px-6 py-8">
+          {profile.bio && (
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold mb-2">About</h2>
+              <p className="text-muted-foreground leading-relaxed">{profile.bio}</p>
+            </div>
+          )}
+
+          <div className="border-t pt-6 mt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">Member since</span>
+                <p className="font-medium">
+                  {profile.createdAt
+                    ? new Date(profile.createdAt).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      })
+                    : 'N/A'}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Last updated</span>
+                <p className="font-medium">
+                  {profile.updatedAt
+                    ? new Date(profile.updatedAt).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      })
+                    : 'N/A'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-6 mt-6">
+            <ProfileCustomizableViews />
+          </div>
+
+          <div className="border-t pt-6 mt-6">
+            <IntegrationsSection />
+          </div>
+
+          <div className="border-t pt-6 mt-6">
+            <ProfileIntegrationsDemo />
+          </div>
+
+          <div className="mt-8 flex space-x-4">
+            <Button asChild>
+              <Link href="/dashboard">Go to Dashboard</Link>
+            </Button>
+            <Button variant="outline" onClick={() => setEditing(true)}>
+              Edit Profile
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </AppLayout>
   );
 }

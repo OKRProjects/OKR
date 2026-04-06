@@ -29,6 +29,8 @@ export const auth0 = new Auth0Client({
     login: '/api/auth/login',
     logout: '/api/auth/logout',
     callback: '/api/auth/callback',
-    backChannelLogout: '/api/auth/backchannel-logout',
-  },
+    profile: '/api/auth/profile',
+    accessToken: '/api/auth/token',
+    backchannelLogout: '/api/auth/backchannel-logout',
+  } as Record<string, string>,
 });

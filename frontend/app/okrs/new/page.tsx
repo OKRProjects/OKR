@@ -1,0 +1,145 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { getCurrentUser, login, User } from '@/lib/auth';
+import { AppLayout } from '@/components/AppLayout';
+import ObjectiveForm from '@/components/ObjectiveForm';
+import { isAdminAccount, userCanCreateObjectives } from '@/lib/roles';
+import { api, Objective } from '@/lib/api';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { TutorialOverlay } from '@/components/shared/TutorialOverlay';
+import { useFirstTimeTutorial, getNewOKRTutorialSteps } from '@/lib/tutorial';
+import { Button } from '@/components/ui/button';
+import { HelpCircle } from 'lucide-react';
+
+export default function NewObjectivePage() {
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [parentOptions, setParentOptions] = useState<Objective[]>([]);
+  const { shouldShowTutorial, dismissTutorial } = useFirstTimeTutorial('new_okr');
+  const [showTutorial, setShowTutorial] = useState(false);
+
+  useEffect(() => {
+    loadUser();
+  }, []);
+
+  useEffect(() => {
+    if (user) loadParents();
+  }, [user]);
+
+  const loadUser = async () => {
+    try {
+      const currentUser = await getCurrentUser();
+      if (!currentUser) {
+        await login();
+        return;
+      }
+      setUser(currentUser);
+    } catch (error) {
+      console.error('Error loading user:', error);
+      await login();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadParents = async () => {
+    try {
+      const all = await api.getObjectives({});
+      setParentOptions(all);
+    } catch {
+      setParentOptions([]);
+    }
+  };
+
+  if (isLoading || !user) {
+    return (
+      <AppLayout title="Create Objective" description="Create a new objective">
+        <div className="text-center text-muted-foreground">Loading...</div>
+      </AppLayout>
+    );
+  }
+
+  if (!userCanCreateObjectives(user)) {
+    return (
+      <AppLayout
+        title="Create objective"
+        description="Creating objectives is disabled for your account"
+      >
+        <Card className="max-w-xl">
+          <CardContent className="space-y-4 pt-6 text-muted-foreground">
+            <p>
+              An administrator has turned off <strong className="text-foreground">creating objectives</strong> for your
+              account. You can still browse{' '}
+              <Link href="/divisions" className="text-primary underline underline-offset-4">
+                Organization
+              </Link>{' '}
+              and{' '}
+              <Link href="/my-okrs" className="text-primary underline underline-offset-4">
+                My OKRs
+              </Link>
+              .
+            </p>
+            <p>
+              {isAdminAccount(user) ? (
+                <>
+                  Clear this in{' '}
+                  <Link href="/admin/users" className="text-primary font-medium">
+                    User management
+                  </Link>{' '}
+                  if you need to create OKRs.
+                </>
+              ) : (
+                <>Ask your organization administrator to re-enable creating objectives if you need to create OKRs.</>
+              )}
+            </p>
+            <p>
+              <Link href="/docs#ownership" className="text-primary font-medium">
+                Who owns and edits OKRs →
+              </Link>
+            </p>
+          </CardContent>
+        </Card>
+      </AppLayout>
+    );
+  }
+
+  return (
+    <AppLayout
+      title="Create objective"
+      description="Define the outcome, department, and period — saved to your org database"
+    >
+      <div className="flex items-center justify-between gap-2 mb-6">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowTutorial(true)}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <HelpCircle className="mr-2 h-4 w-4" />
+          Take the tour
+        </Button>
+      </div>
+      <Card className="max-w-3xl shadow-sm">
+        <CardHeader className="border-b border-border pb-4">
+          <CardTitle className="text-xl font-semibold tracking-tight">New objective</CardTitle>
+          <CardDescription>
+            Choose a <strong className="text-foreground">department</strong> so this OKR is scoped correctly in filters
+            and leadership views. Add a clear title and optional description for your team.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-8">
+          <ObjectiveForm parentOptions={parentOptions} defaultDepartmentId={user.departmentId} />
+        </CardContent>
+      </Card>
+      {(showTutorial || shouldShowTutorial) && (
+        <TutorialOverlay
+          steps={getNewOKRTutorialSteps()}
+          contextName="New OKR"
+          onDismiss={() => { setShowTutorial(false); dismissTutorial(); }}
+        />
+      )}
+    </AppLayout>
+  );
+}

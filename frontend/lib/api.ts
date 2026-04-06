@@ -1,4 +1,22 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+/**
+ * Build absolute URL for API calls.
+ * Prefer NEXT_PUBLIC_API_URL (e.g. http://localhost:5001) so the browser talks to Flask directly;
+ * CORS + session cookies are configured on the backend.
+ * If empty in the browser, use window.location.origin + path (never a bare "/api/..." — Turbopack/some
+ * browsers surface that as TypeError: Failed to fetch).
+ */
+function apiFetchUrl(path: string): string {
+  const p = path.startsWith('/') ? path : `/${path}`;
+  const raw = process.env.NEXT_PUBLIC_API_URL;
+  if (raw === '' || raw === undefined) {
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin}${p}`;
+    }
+    const internal = process.env.INTERNAL_API_URL || 'http://127.0.0.1:5001';
+    return `${internal.replace(/\/$/, '')}${p}`;
+  }
+  return `${raw.replace(/\/$/, '')}${p}`;
+}
 
 export interface Item {
   _id?: string;
@@ -21,9 +39,199 @@ export interface Profile {
   updatedAt?: string;
 }
 
+export type DashboardSortField = 'score' | 'owner' | 'updated';
+export type SortDirection = 'asc' | 'desc';
+
+export interface ViewPreferences {
+  lastDetailTab: string;
+  visibleTabs: Record<string, boolean>;
+  dashboardSort: DashboardSortField;
+  dashboardSortDirection: SortDirection;
+  dashboardFilterUpdateType: string;
+  historyEventTypeFilter: string;
+}
+
+export const DEFAULT_VIEW_PREFERENCES: ViewPreferences = {
+  lastDetailTab: 'overview',
+  visibleTabs: {
+    overview: true,
+    progress: true,
+    updates: true,
+    history: true,
+    dependencies: true,
+    files: true,
+  },
+  dashboardSort: 'updated',
+  dashboardSortDirection: 'desc',
+  dashboardFilterUpdateType: 'all',
+  historyEventTypeFilter: 'all',
+};
+
+export type ObjectiveLevel = 'strategic' | 'functional' | 'tactical';
+export type ObjectiveTimeline = 'annual' | 'quarterly';
+
+export type ObjectiveStatus = 'draft' | 'in_review' | 'approved' | 'rejected';
+
+export interface Objective {
+  _id?: string;
+  title: string;
+  description?: string;
+  ownerId?: string;
+  level: ObjectiveLevel;
+  timeline: ObjectiveTimeline;
+  fiscalYear: number;
+  quarter?: string;
+  parentObjectiveId?: string | null;
+  division?: string;
+  departmentId?: string | null;
+  status?: ObjectiveStatus;
+  relatedObjectiveIds?: string[];
+  /** Per linked OKR id: subjective 0–1 health of that dependency (0.1 steps), stored on this objective. */
+  dependencyHealth?: Record<string, number>;
+  averageScore?: number | null;
+  createdAt?: string;
+  updatedAt?: string;
+  /** ISO date (YYYY-MM-DD) for next leadership review / check-in. */
+  nextReviewDate?: string | null;
+  /** Short narrative for slides and overview; persisted on the objective. */
+  latestUpdateSummary?: string | null;
+  /** Organization id (Postgres); sent on create when known. */
+  orgId?: string;
+  /** Present on objectives returned from the dependencies graph API. */
+  linkHealth?: number | null;
+}
+
+export interface ObjectiveTree extends Objective {
+  children: ObjectiveTree[];
+  keyResults: KeyResult[];
+  averageScore?: number | null;
+}
+
+export interface KeyResult {
+  _id?: string;
+  objectiveId: string;
+  title: string;
+  target?: string;
+  currentValue?: string;
+  unit?: string;
+  /** Score 0.0–1.0 (OKR standard) */
+  score?: number | null;
+  targetScore?: number;
+  ownerId?: string | null;
+  notes?: Array<{ text?: string; createdAt?: string }>;
+  createdAt?: string;
+  lastUpdatedAt?: string;
+}
+
+export interface WorkflowEvent {
+  _id?: string;
+  objectiveId: string;
+  fromStatus: string;
+  toStatus: string;
+  actorId: string;
+  reason?: string;
+  timestamp: string;
+}
+
+export interface ScoreHistoryEntry {
+  _id?: string;
+  keyResultId: string;
+  score: number;
+  notes?: string;
+  recordedBy: string;
+  recordedAt: string;
+}
+
+/** Short TTL cache for objective list fetches (reduces duplicate requests). */
+const OBJECTIVES_LIST_CACHE_MS = 45_000;
+const objectivesListCache = new Map<string, { storedAt: number; data: Objective[] }>();
+
+export function invalidateObjectivesListCache(): void {
+  objectivesListCache.clear();
+}
+
+export interface Comment {
+  _id?: string;
+  objectiveId: string;
+  authorId: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface Attachment {
+  _id?: string;
+  objectiveId: string;
+  keyResultId?: string | null;
+  fileName: string;
+  fileSize: number;
+  fileType: string;
+  url: string;
+  uploadedBy: string;
+  uploadedAt: string;
+  deletedAt?: string | null;
+  storagePublicId?: string | null;
+}
+
+/** Audit entry when an attachment is deleted (immutable log). */
+export interface AttachmentDeletionAudit {
+  _id?: string;
+  objectiveId: string;
+  keyResultId?: string | null;
+  attachmentId: string;
+  fileName: string;
+  fileSize: number;
+  fileType?: string;
+  uploadedBy?: string;
+  uploadedAt?: string;
+  storageUrl?: string;
+  deletedBy: string;
+  deletedAt: string;
+}
+
+export interface OrgSummary {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export interface OrgTreeUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
+export interface OrgTreeTeam {
+  id: string;
+  canonicalName: string;
+  displayName: string;
+  departmentId?: string | null;
+  users: OrgTreeUser[];
+}
+
+export interface OrgTreeDepartment {
+  id: string;
+  canonicalName: string;
+  displayName: string;
+  parentDepartmentId?: string | null;
+  teams: OrgTreeTeam[];
+}
+
+export interface OrgTreeResponse {
+  org: OrgSummary;
+  departments: OrgTreeDepartment[];
+  unassignedUsers: OrgTreeUser[];
+}
+
+export interface ObjectiveAncestor {
+  _id: string;
+  title: string;
+  parentObjectiveId?: string | null;
+}
+
 async function getAccessToken(): Promise<string | null> {
   try {
-    const response = await fetch(`${API_URL}/api/auth/token`, {
+    const response = await fetch(apiFetchUrl('/api/auth/token'), {
       credentials: 'include', // Include cookies for session
     });
     if (response.ok) {
@@ -50,6 +258,18 @@ async function getAccessToken(): Promise<string | null> {
   return null;
 }
 
+/** Thrown when PUT key-result returns 409 Conflict (stale lastUpdatedAt). */
+export class ApiConflictError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly body: { current?: KeyResult; error?: string; message?: string }
+  ) {
+    super(message);
+    this.name = 'ApiConflictError';
+  }
+}
+
 async function fetchWithAuth(url: string, options: RequestInit = {}) {
   let token = await getAccessToken();
   
@@ -70,7 +290,7 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
     ...options.headers,
   };
 
-  const response = await fetch(`${API_URL}${url}`, {
+  const response = await fetch(apiFetchUrl(url), {
     ...options,
     headers,
     credentials: 'include', // Include cookies
@@ -78,9 +298,15 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: 'An error occurred' }));
-    const errorMessage = error.message || error.error || `HTTP error! status: ${response.status}`;
-    
-    throw new Error(errorMessage);
+    const backendMessage = error.message || error.error || '';
+    if (response.status === 403) {
+      throw new Error(
+        backendMessage
+          ? `You don't have permission to perform this action. ${backendMessage}`
+          : 'You don\'t have permission to perform this action. Your role or ownership may not allow it. Ask an admin to assign the correct role or permissions.'
+      );
+    }
+    throw new Error(backendMessage || `HTTP error! status: ${response.status}`);
   }
 
   return response.json();
@@ -93,46 +319,18 @@ async function fetchPublic(url: string, options: RequestInit = {}) {
     ...options.headers,
   };
 
-  const response = await fetch(`${API_URL}${url}`, {
+  const response = await fetch(apiFetchUrl(url), {
     ...options,
     headers,
     credentials: 'include',
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    let msg = `Error ${response.status}`;
-    try {
-      const error = JSON.parse(text);
-      msg = error.error || error.message || msg;
-    } catch {
-      if (text.length < 200) msg = text || msg;
-    }
-    throw new Error(msg);
-  }
-
-  return response.json();
-}
-
-async function fetchPublicBlob(url: string, options: RequestInit = {}) {
-  const isFormData = options.body instanceof FormData;
-  const headers: HeadersInit = {
-    ...(!isFormData && { 'Content-Type': 'application/json' }),
-    ...options.headers,
-  };
-
-  const response = await fetch(`${API_URL}${url}`, {
-    ...options,
-    headers,
-    credentials: 'include',
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'An error occurred' }));
+    const error = await response.json().catch(() => ({ message: 'An error occurred' }));
     throw new Error(error.message || error.error || `HTTP error! status: ${response.status}`);
   }
 
-  return response.blob();
+  return response.json();
 }
 
 export const api = {
@@ -167,6 +365,58 @@ export const api = {
 
   async getCurrentUser(): Promise<any> {
     return fetchWithAuth('/api/auth/me');
+  },
+
+  async getUsers(): Promise<
+    {
+      _id: string;
+      role: string;
+      departmentId?: string;
+      name?: string;
+      email?: string;
+      okrCreateDisabled?: boolean;
+    }[]
+  > {
+    return fetchWithAuth('/api/auth/users');
+  },
+
+  async getUserNames(): Promise<{ _id: string; name: string }[]> {
+    return fetchWithAuth('/api/auth/users/names');
+  },
+
+  async getDepartments(): Promise<{ _id: string; name: string; color?: string }[]> {
+    return fetchWithAuth('/api/departments');
+  },
+
+  async getOrgs(): Promise<OrgSummary[]> {
+    return fetchWithAuth('/api/orgs');
+  },
+
+  async getOrgTree(orgId: string): Promise<OrgTreeResponse> {
+    return fetchWithAuth(`/api/orgs/${encodeURIComponent(orgId)}/tree`);
+  },
+
+  async getObjectivesByScope(params: { scope: 'org' | 'department' | 'team' | 'user'; scopeId: string; fiscalYear?: number }): Promise<Objective[]> {
+    const search = new URLSearchParams();
+    search.set('scope', params.scope);
+    search.set('scopeId', params.scopeId);
+    if (params.fiscalYear != null) search.set('fiscalYear', String(params.fiscalYear));
+    return fetchWithAuth(`/api/okrs/scope/objectives?${search.toString()}`);
+  },
+
+  async getObjectiveAncestors(objectiveId: string): Promise<ObjectiveAncestor[]> {
+    return fetchWithAuth(`/api/objectives/${encodeURIComponent(objectiveId)}/ancestors`);
+  },
+
+  async updateUser(
+    uid: string,
+    body: { role?: string; departmentId?: string | null; okrCreateDisabled?: boolean }
+  ): Promise<{ _id: string; role: string; departmentId?: string; okrCreateDisabled?: boolean }> {
+    return fetchWithAuth(`/api/auth/users/${encodeURIComponent(uid)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
   },
 
   async getItems(): Promise<Item[]> {
@@ -285,215 +535,436 @@ export const api = {
     });
   },
 
-  // Chat API (public, no auth). Optional images, optional video (roast: video max 20s), optional mode 'assistant' | 'roast'.
-  async sendChatMessage(
-    messages: Array<{ role: string; content: string }>,
-    model?: string,
-    imagesBase64?: string[],
-    mode?: 'assistant' | 'roast' | 'support',
-    videoBase64?: string,
-    videoMime?: string
-  ): Promise<{ message: string; usage?: any }> {
-    const body: {
-      messages: typeof messages;
-      model?: string;
-      images?: string[];
-      mode?: string;
-      video_b64?: string;
-      video_mime?: string;
-    } = {
-      messages,
-      model: model || 'openai/gpt-3.5-turbo',
-    };
-    if (imagesBase64?.length) body.images = imagesBase64;
-    if (mode) body.mode = mode;
-    if (videoBase64) {
-      body.video_b64 = videoBase64;
-      body.video_mime = videoMime || 'video/mp4';
-    }
+  /** View preferences (tabs, sort, filter). Saved to user profile. */
+  async getViewPreferences(): Promise<ViewPreferences> {
+    return fetchWithAuth('/api/profiles/preferences');
+  },
+
+  async updateViewPreferences(prefs: Partial<ViewPreferences>): Promise<ViewPreferences> {
+    return fetchWithAuth('/api/profiles/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(prefs),
+    });
+  },
+
+  async resetViewPreferences(): Promise<ViewPreferences> {
+    return fetchWithAuth('/api/profiles/preferences', { method: 'DELETE' });
+  },
+
+  // Chat API (public endpoint, no auth required)
+  async sendChatMessage(messages: Array<{ role: string; content: string }>, model?: string): Promise<{ message: string; usage?: any }> {
     return fetchPublic('/api/chat', {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify({ messages, model: model || 'openai/gpt-3.5-turbo' }),
     });
   },
 
-  // Voice API (public - text to speech: OpenAI TTS or Magic Hour) - from JP-Branch
-  async generateVoice(params: {
-    text: string;
-    provider: 'openai' | 'magic_hour';
-    voice?: string;
-    model?: string;
-    speed?: number;
-    voice_name?: string;
-    name?: string;
-  }): Promise<Blob> {
-    const body: Record<string, unknown> = {
-      text: params.text,
-      provider: params.provider,
-    };
-    if (params.provider === 'openai') {
-      if (params.voice) body.voice = params.voice;
-      if (params.model) body.model = params.model;
-      if (params.speed != null) body.speed = params.speed;
-    } else {
-      if (params.voice_name) body.voice_name = params.voice_name;
-      if (params.name) body.name = params.name;
+  // OKRs API
+  /** Lightweight counts for sidebar; avoids N+1 getKeyResults. */
+  async getObjectivesStats(params?: { fiscalYear?: number; departmentId?: string | null }): Promise<{ strategic: number; functional: number; tactical: number; keyResults: number }> {
+    const search = new URLSearchParams();
+    if (params?.fiscalYear != null) search.set('fiscalYear', String(params.fiscalYear));
+    if (params?.departmentId != null && params.departmentId !== '') search.set('departmentId', params.departmentId);
+    return fetchWithAuth(`/api/objectives/stats?${search.toString()}`);
+  },
+
+  async getObjectives(params?: { fiscalYear?: number; level?: string; division?: string; status?: string; ownerId?: string; departmentId?: string; parentObjectiveId?: string | null }): Promise<Objective[]> {
+    const search = new URLSearchParams();
+    if (params?.fiscalYear != null) search.set('fiscalYear', String(params.fiscalYear));
+    if (params?.level) search.set('level', params.level);
+    if (params?.division) search.set('division', params.division);
+    if (params?.status) search.set('status', params.status);
+    if (params?.ownerId) search.set('ownerId', params.ownerId);
+    if (params?.departmentId) search.set('departmentId', params.departmentId);
+    if (params?.parentObjectiveId !== undefined) search.set('parentObjectiveId', params.parentObjectiveId ?? '');
+    const q = search.toString();
+    const cacheKey = q || 'default';
+    const now = Date.now();
+    const hit = objectivesListCache.get(cacheKey);
+    if (hit && now - hit.storedAt < OBJECTIVES_LIST_CACHE_MS) {
+      return hit.data;
     }
-    return fetchPublicBlob('/api/voice/generate', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
+    const data = (await fetchWithAuth(`/api/objectives${q ? `?${q}` : ''}`)) as Objective[];
+    objectivesListCache.set(cacheKey, { storedAt: now, data });
+    return data;
   },
 
-  // Roast AI (public, no auth)
-  async analyzeRoast(image: File): Promise<RoastAnalyzeResponse> {
-    const formData = new FormData();
-    formData.append('image', image);
-    return fetchPublic('/api/multiverse/analyze', {
-      method: 'POST',
-      body: formData,
-    });
-  },
-
-  // Weekend Energy AI Tutor (auth) — FUN + HELP; optional images/video
-  async askTutor(
-    question: string,
-    options?: { weekday?: string; time?: string; images?: string[]; video_b64?: string; video_mime?: string }
-  ): Promise<{ fun: string; help: string[]; raw?: string }> {
-    const now = new Date();
-    const weekday = options?.weekday ?? now.toLocaleDateString('en-US', { weekday: 'long' });
-    const time = options?.time ?? now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-    const body: { question: string; weekday: string; time: string; images?: string[]; video_b64?: string; video_mime?: string } = {
-      question,
-      weekday,
-      time,
-    };
-    if (options?.images?.length) body.images = options.images;
-    if (options?.video_b64) {
-      body.video_b64 = options.video_b64;
-      body.video_mime = options.video_mime || 'video/mp4';
+  async getObjective(id: string, params?: { since?: string }): Promise<Objective | { unchanged: true }> {
+    const url = params?.since
+      ? `/api/objectives/${id}?since=${encodeURIComponent(params.since)}`
+      : `/api/objectives/${id}`;
+    const data = await fetchWithAuth(url);
+    if (data && typeof data === 'object' && 'unchanged' in data && data.unchanged === true) {
+      return { unchanged: true };
     }
-    return fetchWithAuth('/api/tutor', {
+    return data as Objective;
+  },
+
+  async postView(objectiveId: string, body?: { userName?: string }): Promise<{ viewers: { userId: string; userName: string }[]; count: number }> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/view`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify(body ?? {}),
     });
   },
 
-  // Voice-to-Text API (Whisper - pipeline backend)
-  async transcribeAudio(file: File, options?: { language?: string; model?: string }): Promise<{ text: string }> {
-    const formData = new FormData();
-    formData.append('file', file);
-    if (options?.language) formData.append('language', options.language);
-    if (options?.model) formData.append('model', options.model);
-    return fetchPublic('/api/transcribe', {
+  async leaveView(objectiveId: string): Promise<void> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/leave`, { method: 'POST' });
+  },
+
+  async getObjectiveTree(id: string): Promise<ObjectiveTree> {
+    return fetchWithAuth(`/api/objectives/${id}/tree`);
+  },
+
+  async createObjective(obj: Partial<Objective> & { title: string; fiscalYear: number }): Promise<Objective> {
+    const out = await fetchWithAuth('/api/objectives', {
       method: 'POST',
-      body: formData,
+      body: JSON.stringify(obj),
+    });
+    invalidateObjectivesListCache();
+    return out as Objective;
+  },
+
+  async updateObjective(id: string, obj: Partial<Objective>): Promise<Objective> {
+    const out = await fetchWithAuth(`/api/objectives/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(obj),
+    });
+    invalidateObjectivesListCache();
+    return out as Objective;
+  },
+
+  async deleteObjective(id: string): Promise<void> {
+    await fetchWithAuth(`/api/objectives/${id}`, { method: 'DELETE' });
+    invalidateObjectivesListCache();
+  },
+
+  async getKeyResults(objectiveId: string): Promise<KeyResult[]> {
+    return fetchWithAuth(`/api/key-results?objectiveId=${encodeURIComponent(objectiveId)}`);
+  },
+
+  async getKeyResult(id: string): Promise<KeyResult> {
+    return fetchWithAuth(`/api/key-results/${id}`);
+  },
+
+  async createKeyResult(kr: { objectiveId: string; title: string; target?: string; currentValue?: string; unit?: string }): Promise<KeyResult> {
+    return fetchWithAuth('/api/key-results', {
+      method: 'POST',
+      body: JSON.stringify(kr),
     });
   },
 
-  // Chat Pipeline: STT -> Chat (text+images+video) -> TTS (same features as Chatbot: mode, video for roast)
-  async chatPipeline(options: {
-    audio?: File;
-    text?: string;
-    images?: File[];
-    video?: File;
-    messages?: Array<{ role: string; content: string }>;
-    tts?: boolean;
-    voice?: string;
-    mode?: 'assistant' | 'roast' | 'support';
-    model?: string;
-  }): Promise<{ message: string; transcribed_text?: string; audio_base64?: string; audio_format?: 'mp3' | 'wav'; tts_error?: string; usage?: any }> {
-    const formData = new FormData();
-    if (options.text) formData.append('text', options.text);
-    if (options.messages?.length) {
-      formData.append('messages', JSON.stringify(options.messages));
+  async updateKeyResult(id: string, kr: Partial<KeyResult>): Promise<KeyResult> {
+    const token = await getAccessToken();
+    if (!token) throw new Error('Unable to get access token.');
+    const response = await fetch(apiFetchUrl(`/api/key-results/${id}`), {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify(kr),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.status === 409) {
+      throw new ApiConflictError(
+        data.message || 'Conflict',
+        409,
+        data as { current?: KeyResult; error?: string; message?: string }
+      );
     }
-    formData.append('tts', String(options.tts ?? false));
-    if (options.voice) formData.append('voice', options.voice);
-    if (options.mode) formData.append('mode', options.mode);
-    if (options.model) formData.append('model', options.model);
-    if (options.audio) formData.append('audio', options.audio);
-    if (options.images?.length) {
-      options.images.forEach((f) => formData.append('images', f));
+    if (!response.ok) {
+      throw new Error(data.message || data.error || `HTTP ${response.status}`);
     }
-    if (options.video) formData.append('video', options.video);
-    return fetchPublic('/api/chat/pipeline', {
-      method: 'POST',
-      body: formData,
+    return data as KeyResult;
+  },
+
+  async deleteKeyResult(id: string): Promise<void> {
+    return fetchWithAuth(`/api/key-results/${id}`, { method: 'DELETE' });
+  },
+
+  async getKeyResultHistory(keyResultId: string): Promise<ScoreHistoryEntry[]> {
+    return fetchWithAuth(`/api/key-results/${keyResultId}/history`);
+  },
+
+  async getWorkflowHistory(objectiveId: string): Promise<WorkflowEvent[]> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/workflow-history`);
+  },
+
+  async getDependencies(objectiveId: string): Promise<{
+    upstream: Objective[];
+    downstream: Objective[];
+  }> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/dependencies`);
+  },
+
+  /**
+   * Set or clear dependency health (0–1, one decimal) on `ownerObjectiveId` for the link to `relatedObjectiveId`.
+   * Upstream: owner is this OKR, related is the upstream objective.
+   * Downstream: owner is the child OKR, related is this OKR.
+   */
+  async patchDependencyHealth(
+    ownerObjectiveId: string,
+    relatedObjectiveId: string,
+    score: number | null
+  ): Promise<Objective> {
+    return fetchWithAuth(`/api/objectives/${ownerObjectiveId}/dependency-health`, {
+      method: 'PATCH',
+      body: JSON.stringify({ relatedObjectiveId, score }),
     });
   },
 
-  // Text-to-Speech API (OpenAI TTS - pipeline backend)
-  async textToSpeech(
-    text: string,
-    options?: { voice?: string; model?: string }
-  ): Promise<Blob> {
-    const response = await fetch(`${API_URL}/api/speech`, {
+  async submitObjective(objectiveId: string): Promise<Objective> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/submit`, { method: 'POST' });
+  },
+
+  async approveObjective(objectiveId: string): Promise<Objective> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/approve`, { method: 'POST' });
+  },
+
+  async rejectObjective(objectiveId: string, reason?: string): Promise<Objective> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/reject`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason ?? '' }),
+    });
+  },
+
+  async resubmitObjective(objectiveId: string): Promise<Objective> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/resubmit`, { method: 'POST' });
+  },
+
+  async reopenObjective(objectiveId: string, reason?: string): Promise<Objective> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/reopen`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason ?? '' }),
+    });
+  },
+
+  async getComments(objectiveId: string): Promise<Comment[]> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/comments`);
+  },
+
+  async createComment(objectiveId: string, body: string): Promise<Comment> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    });
+  },
+
+  async getAttachments(objectiveId: string): Promise<Attachment[]> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/attachments`);
+  },
+
+  async createAttachment(form: {
+    objectiveId: string;
+    keyResultId?: string | null;
+    file?: File;
+    url?: string;
+    fileName?: string;
+    fileSize?: number;
+    fileType?: string;
+  }): Promise<Attachment> {
+    if (form.file) {
+      const fd = new FormData();
+      fd.append('objectiveId', form.objectiveId);
+      if (form.keyResultId) fd.append('keyResultId', form.keyResultId);
+      fd.append('file', form.file);
+      return fetchWithAuth('/api/attachments', { method: 'POST', body: fd });
+    }
+    return fetchWithAuth('/api/attachments', {
+      method: 'POST',
       body: JSON.stringify({
-        text,
-        voice: options?.voice || 'coral',
-        model: options?.model || 'tts-1-hd',
+        objectiveId: form.objectiveId,
+        keyResultId: form.keyResultId ?? undefined,
+        url: form.url,
+        fileName: form.fileName,
+        fileSize: form.fileSize,
+        fileType: form.fileType,
       }),
+    });
+  },
+
+  async deleteAttachment(attachmentId: string): Promise<void> {
+    return fetchWithAuth(`/api/attachments/${attachmentId}`, { method: 'DELETE' });
+  },
+
+  /** Authenticated clients receive the storage URL for preview/download (checks session). */
+  async getAttachmentAccess(attachmentId: string): Promise<{
+    url: string;
+    fileName: string;
+    fileType: string;
+  }> {
+    return fetchWithAuth(`/api/attachments/${attachmentId}/access`);
+  },
+
+  async getAttachmentDeletions(objectiveId: string): Promise<AttachmentDeletionAudit[]> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/attachment-deletions`);
+  },
+
+  /** Create shareable link for an objective. Returns { token, url, expiresAt }. */
+  async createShareLink(objectiveId: string, options?: { expiresInDays?: number }): Promise<{ token: string; url: string; expiresAt?: string | null }> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/share-links`, {
+      method: 'POST',
+      body: JSON.stringify(options ?? {}),
+    });
+  },
+
+  /** List share links for an objective. */
+  async getShareLinks(objectiveId: string): Promise<Array<{ token: string; url: string; createdAt?: string; expiresAt?: string | null }>> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/share-links`);
+  },
+
+  /** Revoke a share link. */
+  async revokeShareLink(token: string): Promise<void> {
+    return fetchWithAuth(`/api/share-links/${token}`, { method: 'DELETE' });
+  },
+
+  /** Get current user outgoing webhook config (masked). */
+  async getOutgoingConfig(): Promise<{ webhookUrlMasked?: string | null; channelType?: string | null; channelDisplayName?: string | null; configured: boolean }> {
+    return fetchWithAuth('/api/integrations/outgoing');
+  },
+
+  /** Save Slack/Teams webhook. Body: { webhookUrl, channelType?, channelDisplayName? }. */
+  async saveOutgoingConfig(body: { webhookUrl: string; channelType?: 'slack' | 'teams'; channelDisplayName?: string }): Promise<{ message: string; configured: boolean }> {
+    return fetchWithAuth('/api/integrations/outgoing', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  /** Send test message to configured webhook. */
+  async testOutgoingWebhook(): Promise<{ message: string }> {
+    return fetchWithAuth('/api/integrations/outgoing/test', { method: 'POST' });
+  },
+
+  /** Get incoming webhook URL for the current user (for automation tools). */
+  async getIncomingWebhookUrl(): Promise<{ url: string }> {
+    return fetchWithAuth('/api/integrations/incoming-url');
+  },
+
+  /** Get Google OAuth URL to connect account for Slides export. */
+  async getGoogleAuthUrl(): Promise<{ url: string }> {
+    return fetchWithAuth('/api/integrations/google/auth-url');
+  },
+
+  /** Get Google OAuth URL to connect Gmail sending (per-user OAuth). */
+  async getGoogleEmailAuthUrl(): Promise<{ url: string }> {
+    return fetchWithAuth('/api/integrations/google-email/auth-url');
+  },
+
+  /** Create Google Slides presentation from OKR tree. Body: { treeRootId } or { objectiveIds: string[] }. */
+  async exportToGoogleSlides(body: { treeRootId?: string; objectiveIds?: string[] }): Promise<{ presentationId: string; link: string }> {
+    return fetchWithAuth('/api/integrations/google/export', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  /** Export selected objectives as PowerPoint (.pptx) and trigger download. Optional narrative is added as a script slide. */
+  async exportToPowerPoint(objectiveIds: string[], narrative?: string | null): Promise<void> {
+    const token = await getAccessToken();
+    if (!token) throw new Error('Unable to get access token.');
+    const response = await fetch(apiFetchUrl('/api/objectives/export-pptx'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({ objectiveIds, narrative: narrative ?? undefined }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || err.message || 'PowerPoint export failed');
+    }
+    const blob = await response.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'okr_presentation.pptx';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  },
+
+  /** Generate a professional OKR presentation narrative using AI (OpenRouter). */
+  async generatePresentationStory(objectiveIds: string[]): Promise<{ story: string }> {
+    return fetchWithAuth('/api/objectives/generate-presentation-story', {
+      method: 'POST',
+      body: JSON.stringify({ objectiveIds }),
+    });
+  },
+
+  /** Post current OKR summary to configured Slack/Teams channel. */
+  async postUpdateToChannel(objectiveId: string): Promise<{ message: string }> {
+    return fetchWithAuth(`/api/objectives/${objectiveId}/post-update`, { method: 'POST' });
+  },
+
+  /** Resolve share token (public, no auth). Returns { objective, keyResults }. */
+  async getShareByToken(token: string): Promise<{ objective: Objective; keyResults: KeyResult[] }> {
+    const res = await fetch(apiFetchUrl(`/api/shares/${encodeURIComponent(token)}`), { credentials: 'include' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Failed to load shared OKR: ${res.status}`);
+    }
+    return res.json();
+  },
+
+  /**
+   * Trigger download of OKR export (JSON, Excel, or PDF). Uses current filters. view_only users get 403.
+   */
+  async exportObjectivesDownload(params: {
+    format: 'json' | 'xlsx' | 'pdf';
+    tree?: boolean;
+    fiscalYear?: number;
+    level?: string;
+    division?: string;
+    status?: string;
+    ownerId?: string;
+    parentObjectiveId?: string | null;
+  }): Promise<void> {
+    const search = new URLSearchParams();
+    search.set('format', params.format);
+    if (params.tree) search.set('tree', '1');
+    if (params.fiscalYear != null) search.set('fiscalYear', String(params.fiscalYear));
+    if (params.level) search.set('level', params.level);
+    if (params.division) search.set('division', params.division);
+    if (params.status) search.set('status', params.status);
+    if (params.ownerId) search.set('ownerId', params.ownerId);
+    if (params.parentObjectiveId !== undefined) search.set('parentObjectiveId', params.parentObjectiveId ?? '');
+    const url = apiFetchUrl(`/api/objectives/export?${search.toString()}`);
+    const token = await getAccessToken();
+    if (!token) throw new Error('Unable to get access token.');
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
       credentials: 'include',
     });
-
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'An error occurred' }));
-      throw new Error(error.error || error.message || `HTTP error! status: ${response.status}`);
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || err.message || `Export failed: ${response.status}`);
     }
-
-    return response.blob();
-  },
-
-  async sendEmail(params: { to: string; subject: string; body: string; body_html?: string; reply_to?: string }): Promise<{ message: string }> {
-    return fetchPublic('/api/email/send', {
-      method: 'POST',
-      body: JSON.stringify({
-        to: params.to,
-        subject: params.subject,
-        body: params.body,
-        body_html: params.body_html,
-        reply_to: params.reply_to,
-      }),
-    });
-  },
-
-  async createTicket(params: {
-    title: string;
-    description: string;
-    user_email?: string;
-    conversation_summary?: string;
-    status?: string;
-  }): Promise<{ _id: string; title: string; description: string; status: string; createdAt: string }> {
-    return fetchPublic('/api/tickets', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
-  },
-
-  async listTickets(params?: { limit?: number }): Promise<{ tickets: Array<{ _id: string; title: string; description: string; status: string; user_email?: string; conversation_summary?: string; createdAt: string }> }> {
-    const q = params?.limit != null ? `?limit=${params.limit}` : '';
-    return fetchPublic(`/api/tickets${q}`);
+    const contentType = response.headers.get('content-type') || '';
+    const disposition = response.headers.get('content-disposition') || '';
+    const match = disposition.match(/filename="?([^";]+)"?/);
+    const defaultNames: Record<string, string> = {
+      json: 'okrs_export.json',
+      xlsx: 'okrs_export.xlsx',
+      pdf: 'okrs_export.pdf',
+    };
+    const filename = match ? match[1] : defaultNames[params.format];
+    if (params.format === 'json' || contentType.includes('application/json')) {
+      const data = await response.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } else {
+      const blob = await response.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
   },
 };
-
-// Roast AI types (aligned with backend JSON)
-export interface TruthResponse {
-  truth_caption: string;
-  truth_objects: string[];
-  scene_type: string;
-  truth_ocr: string;
-  confidence: string;
-}
-
-export interface RoastAnalyzeResponse {
-  truth: TruthResponse;
-  roast: string;
-  truth_source: 'local' | 'openrouter';
-  roast_source: string;
-  latency_ms_truth: number;
-  latency_ms_roast: number;
-}

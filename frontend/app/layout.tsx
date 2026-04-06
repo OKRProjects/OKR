@@ -1,22 +1,25 @@
 import type { Metadata } from "next";
-import { Syne, Outfit } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Toaster } from "sonner";
+import Chatbot from "@/components/Chatbot";
+import { ThemePreference } from "@/components/ThemePreference";
+import { ViewRoleProvider } from "@/lib/ViewRoleContext";
+import { ViewPreferencesProvider } from "@/lib/useViewPreferences";
 
-const syne = Syne({
+const geistSans = Geist({
+  variable: "--font-geist-sans",
   subsets: ["latin"],
-  variable: "--font-syne",
-  display: "swap",
 });
 
-const outfit = Outfit({
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
   subsets: ["latin"],
-  variable: "--font-outfit",
-  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Claude Home™",
-  description: "When automation goes just a little too far.",
+  title: "OKR Tracker",
+  description: "Track organizational objectives and key results. Align strategic goals from leadership to execution.",
 };
 
 export default function RootLayout({
@@ -25,9 +28,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${syne.variable} ${outfit.variable} font-sans antialiased bg-[#08050c] text-white`}>
-        {children}
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
+        <ThemePreference />
+        <ViewRoleProvider>
+          <ViewPreferencesProvider>
+            {children}
+            <Toaster richColors position="top-right" />
+            <Chatbot />
+          </ViewPreferencesProvider>
+        </ViewRoleProvider>
       </body>
     </html>
   );

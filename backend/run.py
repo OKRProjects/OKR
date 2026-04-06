@@ -1,14 +1,15 @@
 from app import create_app
 import os
-from pathlib import Path
+import sys
 from dotenv import load_dotenv
 
-# Load .env from the backend directory so it works regardless of cwd
-load_dotenv(Path(__file__).resolve().parent / '.env')
+load_dotenv()
 
 app = create_app()
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5001))
     debug = os.getenv('FLASK_ENV') == 'development'
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    # On Windows, the reloader can cause WinError 10038 (socket closed during restart)
+    use_reloader = debug and sys.platform != 'win32'
+    app.run(host='0.0.0.0', port=port, debug=debug, use_reloader=use_reloader)

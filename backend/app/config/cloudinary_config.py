@@ -60,3 +60,21 @@ def delete_image(public_id):
         return result.get('result') == 'ok'
     except Exception as e:
         raise Exception(f"Failed to delete image: {str(e)}")
+
+
+def upload_file(file, folder='okr_attachments', resource_type='auto'):
+    """Upload a file (PDF, image, etc.) to Cloudinary. Returns dict with secure_url, bytes, format."""
+    try:
+        result = cloudinary.uploader.upload(
+            file,
+            folder=folder,
+            resource_type=resource_type,
+        )
+        return {
+            'secure_url': result.get('secure_url'),
+            'bytes': result.get('bytes'),
+            'format': result.get('format'),
+            'public_id': result.get('public_id'),
+        }
+    except Exception as e:
+        raise Exception(f"Failed to upload file: {str(e)}")

@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
+import { getServerBackendUrl } from '@/lib/serverBackendUrl';
 
-// Proxy to backend auth logout endpoint
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+const appOrigin = () =>
+  process.env.AUTH0_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
 export async function GET() {
   try {
-    const response = await fetch(`${API_URL}/api/auth/logout`, {
+    const backend = getServerBackendUrl();
+    const response = await fetch(`${backend}/api/auth/logout`, {
       method: 'GET',
       credentials: 'include',
     });
@@ -16,16 +18,13 @@ export async function GET() {
     }
 
     const data = await response.json();
-    
-    // If there's a logout URL, redirect to it
+
     if (data.logout_url) {
       return NextResponse.redirect(data.logout_url);
     }
-    
-    // Otherwise redirect to home
-    return NextResponse.redirect(new URL('/', process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'));
-  } catch (error) {
-    // On error, still redirect to home
-    return NextResponse.redirect(new URL('/', process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'));
+
+    return NextResponse.redirect(new URL('/', appOrigin()));
+  } catch {
+    return NextResponse.redirect(new URL('/', appOrigin()));
   }
 }

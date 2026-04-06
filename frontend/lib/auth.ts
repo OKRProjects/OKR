@@ -8,6 +8,11 @@ export interface User {
   email: string;
   picture?: string;
   nickname?: string;
+  /** From backend users collection: admin, leadership (manager+), standard (IC), view_only, developer, etc. */
+  role?: string;
+  departmentId?: string;
+  /** When true, user cannot create objectives (admin-set in User management). */
+  okrCreateDisabled?: boolean;
 }
 
 let currentUser: User | null = null;
@@ -111,5 +116,11 @@ export async function getCurrentUser(): Promise<User | null> {
 
 export function clearUserCache(): void {
   currentUser = null;
+  userPromise = null;
+}
+
+/** Sync in-memory cache with a fresh `/api/auth/me` response (used by ViewRoleProvider). */
+export function setCurrentUserCache(user: User | null): void {
+  currentUser = user;
   userPromise = null;
 }
