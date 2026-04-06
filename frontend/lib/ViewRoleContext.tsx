@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useEffect, useLayoutEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { clearUserCache, setCurrentUserCache, type User } from '@/lib/auth';
 import { api } from '@/lib/api';
@@ -78,11 +78,6 @@ export function ViewRoleProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setOverrideState(getStoredViewRole());
     setRolePreviewState(getStoredRolePreview());
-  }, []);
-
-  // Drop stale /auth/me cache before children run effects that call getCurrentUser (avoids missing `role` after role change).
-  useLayoutEffect(() => {
-    clearUserCache();
   }, []);
 
   const refetchUser = useCallback(async () => {

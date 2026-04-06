@@ -20,6 +20,12 @@ export interface User {
 let currentUser: User | null = null;
 let userPromise: Promise<User | null> | null = null;
 
+/** Same shell routes as backend insecure-dev login redirect (avoid reloading the page you are already on). */
+function isAuthShellPath(pathname: string): boolean {
+  const p = (pathname.replace(/\/$/, '') || '/').split('?')[0] ?? '/';
+  return p === '/my-okrs' || p === '/dashboard';
+}
+
 export async function login(): Promise<void> {
   try {
     const response = await api.login();
@@ -27,7 +33,9 @@ export async function login(): Promise<void> {
       if (response.auth_url) {
         window.location.href = response.auth_url;
       } else if (response.auth_disabled) {
-        window.location.href = '/my-okrs';
+        if (!isAuthShellPath(window.location.pathname)) {
+          window.location.assign('/my-okrs');
+        }
       }
     }
   } catch (error) {
@@ -117,6 +125,22 @@ export async function getCurrentUser(): Promise<User | null> {
   })();
 
   return userPromise;
+}
+
+/**
+ * Call `/api/auth/me` with backoff for flaky networks and races right after {@link clearUserCache}
+ * (e.g. ViewRoleProvider clearing cache on mount).
+ */
+export async function getCurrentUserReliable(maxAttempts = 3): Promise<User | null> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) {
+      clearUserCache();
+      await new Promise((r) => setTimeout(r, 180 * attempt));
+    }
+    const u = await getCurrentUser();
+    if (u) return u;
+  }
+  return null;
 }
 
 export function clearUserCache(): void {

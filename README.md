@@ -81,6 +81,10 @@ cd HackathonTemplate
    - Identifier: `https://YOUR_AUTH0_DOMAIN.auth0.com/api/v2/`
    - Note the Identifier (this is your Audience)
 
+6. **Backend env (required in production):** Set `AUTH0_ISSUER_BASE_URL` (or `AUTH0_DOMAIN`), `AUTH0_CLIENT_ID`, and `AUTH0_CLIENT_SECRET` in `backend/.env`. In Auth0, set **Allowed Callback URLs** to include your Flask origin, e.g. `http://localhost:5001/api/auth/callback`, plus your production API URL when deployed.
+
+7. **Local dev without Auth0 (optional):** Set `ALLOW_INSECURE_AUTH0_DEV=1` in `backend/.env` and keep `FLASK_ENV=development`. The API uses a synthetic user; this flag is **ignored** when `FLASK_ENV=production`. Email/password signup still requires real Auth0.
+
 ### 3. Postgres Configuration (Local + AWS)
 
 Local development uses Docker Compose (`postgres` service). For AWS, see `[infra/](infra/)`.

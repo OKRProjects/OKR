@@ -47,8 +47,24 @@ if not AUTH0_AUDIENCE and AUTH0_DOMAIN:
 
 
 def is_auth0_configured() -> bool:
-    """OAuth + JWT flows need issuer, client id, and client secret. If any is missing, run in demo mode."""
+    """True when domain (or issuer URL), client id, and secret are set. Required for all authenticated API use."""
     return bool(AUTH0_DOMAIN and AUTH0_CLIENT_ID and AUTH0_CLIENT_SECRET)
+
+
+def _flask_env_is_production() -> bool:
+    return os.getenv('FLASK_ENV', '').strip().lower() == 'production'
+
+
+def allow_insecure_auth0_dev() -> bool:
+    """When True (and not production), API may start without Auth0 and use a synthetic user for /auth/me.
+
+    Set ``ALLOW_INSECURE_AUTH0_DEV=1`` only on trusted developer machines. **Never** set in production:
+    this flag is ignored when ``FLASK_ENV=production``.
+    """
+    if _flask_env_is_production():
+        return False
+    v = (os.getenv('ALLOW_INSECURE_AUTH0_DEV') or '').strip().lower()
+    return v in ('1', 'true', 'yes')
 
 
 def _fallback_user_id() -> str:
@@ -56,7 +72,7 @@ def _fallback_user_id() -> str:
 
 
 def _fallback_user_info() -> dict:
-    """Synthetic user when Auth0 is not configured (aligns with seed_data demo admin by default)."""
+    """Synthetic profile when Auth0 is off and ``allow_insecure_auth0_dev()`` is True."""
     uid = _fallback_user_id()
     name = (os.getenv('AUTH_DISABLED_USER_NAME') or 'Sarah Chen').strip()
     email = (os.getenv('AUTH_DISABLED_USER_EMAIL') or 'sarah@company.com').strip()
@@ -212,13 +228,11 @@ def get_user_from_session():
 
 def get_user_id_from_request() -> str:
     """Extract user ID from session or Authorization header"""
-    if not is_auth0_configured():
-        return _fallback_user_id()
     # First try session
     user = get_user_from_session()
     if user and user.get('sub'):
         return user['sub']
-    
+
     # Fall back to Authorization header
     auth_header = request.headers.get('Authorization')
     if auth_header:
@@ -228,13 +242,14 @@ def get_user_id_from_request() -> str:
             return decoded.get('sub')
         except Exception:
             pass
-    
+
+    if allow_insecure_auth0_dev() and not is_auth0_configured():
+        return _fallback_user_id()
+
     raise ValueError("No authenticated user found")
 
 def get_user_info_from_request() -> dict:
     """Get user info from session or token"""
-    if not is_auth0_configured():
-        return _fallback_user_info()
     # First try session
     user = get_user_from_session()
     if user:
@@ -261,7 +276,10 @@ def get_user_info_from_request() -> dict:
             }
         except Exception as e:
             raise ValueError(f"Failed to get user info: {str(e)}")
-    
+
+    if allow_insecure_auth0_dev() and not is_auth0_configured():
+        return _fallback_user_info()
+
     raise ValueError("No authenticated user found")
 
 def require_auth(f):
@@ -308,15 +326,22 @@ def _ensure_pg_user_row(user_info: dict) -> None:
 
 @bp.route('/auth/login', methods=['GET'])
 def login():
-    """Redirect to Auth0 login (OAuth flow)"""
+    """Return Auth0 authorize URL for the browser (JSON { auth_url })."""
     if not is_auth0_configured():
+        if allow_insecure_auth0_dev():
+            return jsonify(
+                {
+                    'auth_url': None,
+                    'auth_disabled': True,
+                    'message': 'ALLOW_INSECURE_AUTH0_DEV: no Auth0; client should treat as signed-in demo user. Never use in production.',
+                }
+            ), 200
         return jsonify(
             {
-                'auth_url': None,
-                'auth_disabled': True,
-                'message': 'Auth0 is not configured; the API uses a single demo user. See AUTH_DISABLED_USER_* env vars.',
+                'error': 'auth0_not_configured',
+                'message': 'Auth0 is required. Set AUTH0_ISSUER_BASE_URL (or AUTH0_DOMAIN), AUTH0_CLIENT_ID, and AUTH0_CLIENT_SECRET — or set ALLOW_INSECURE_AUTH0_DEV=1 for local dev only (not with FLASK_ENV=production).',
             }
-        ), 200
+        ), 503
 
     # Use backend callback URL since backend handles the OAuth flow
     redirect_uri = f'{BACKEND_URL}/api/auth/callback'
@@ -337,7 +362,7 @@ def login_email_password():
     if not is_auth0_configured():
         return jsonify(
             {
-                'error': 'Email/password login requires Auth0. Set AUTH0_ISSUER_BASE_URL, AUTH0_CLIENT_ID, and AUTH0_CLIENT_SECRET.',
+                'error': 'Email/password login requires Auth0. Set AUTH0_ISSUER_BASE_URL, AUTH0_CLIENT_ID, and AUTH0_CLIENT_SECRET. (ALLOW_INSECURE_AUTH0_DEV does not enable password grant.)',
             }
         ), 400
     
@@ -411,7 +436,7 @@ def register():
     if not is_auth0_configured():
         return jsonify(
             {
-                'error': 'Registration requires Auth0. Set AUTH0_ISSUER_BASE_URL, AUTH0_CLIENT_ID, and AUTH0_CLIENT_SECRET.',
+                'error': 'Registration requires Auth0. Set AUTH0_ISSUER_BASE_URL, AUTH0_CLIENT_ID, and AUTH0_CLIENT_SECRET. (ALLOW_INSECURE_AUTH0_DEV does not enable signup.)',
             }
         ), 400
     
@@ -586,7 +611,7 @@ def logout():
     session.clear()
     
     # Redirect to Auth0 logout
-    if AUTH0_DOMAIN and is_auth0_configured():
+    if is_auth0_configured():
         logout_url = (
             f'https://{AUTH0_DOMAIN}/v2/logout?'
             f'client_id={AUTH0_CLIENT_ID}&'
@@ -599,8 +624,7 @@ def logout():
 @bp.route('/auth/me', methods=['GET'])
 @require_auth
 def get_current_user(user_id):
-    """Get current authenticated user. Includes role and departmentId from users collection if present.
-    Demo mode: if user is not in users collection, return role=admin so they can see all seed data."""
+    """Get current authenticated user. Includes role and departmentId from users collection if present."""
     try:
         user_info = get_user_info_from_request()
         _ensure_pg_user_row(user_info)

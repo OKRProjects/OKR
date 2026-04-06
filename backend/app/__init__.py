@@ -75,6 +75,12 @@ def create_app():
         speech,
         transcription,
     )
+    if not auth_backend.is_auth0_configured() and not auth_backend.allow_insecure_auth0_dev():
+        raise RuntimeError(
+            "Auth0 is required. Set AUTH0_ISSUER_BASE_URL (or AUTH0_DOMAIN), AUTH0_CLIENT_ID, and AUTH0_CLIENT_SECRET — "
+            "or for trusted local development only, set ALLOW_INSECURE_AUTH0_DEV=1 (ignored when FLASK_ENV=production)."
+        )
+
     app.register_blueprint(items.bp, url_prefix='/api')
     app.register_blueprint(profiles.bp, url_prefix='/api')
     app.register_blueprint(chat.bp, url_prefix='/api')

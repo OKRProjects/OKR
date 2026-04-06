@@ -306,7 +306,7 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
   }
 
-  // When Auth0 is not configured, the backend accepts cookie-only requests as a demo user.
+  // Bearer token from /api/auth/token when the user has an API session cookie (OAuth or password grant).
   const response = await fetch(apiFetchUrl(url), {
     ...options,
     headers,
@@ -366,6 +366,7 @@ export const api = {
   // Auth API
   async login(): Promise<{
     auth_url?: string | null;
+    /** Set when API runs with ALLOW_INSECURE_AUTH0_DEV (local only). */
     auth_disabled?: boolean;
     message?: string;
     error?: string;
