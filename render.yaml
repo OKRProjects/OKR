@@ -72,3 +72,9 @@ services:
           name: okr-backend
           type: web
           envVarKey: RENDER_EXTERNAL_URL
+      # Browser API base (Flask session cookie). Same as BACKEND_URL; layout injects at runtime (build may lack NEXT_PUBLIC_*).
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          name: okr-backend
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL

@@ -22,16 +22,30 @@ export const metadata: Metadata = {
   description: "Track organizational objectives and key results. Align strategic goals from leadership to execution.",
 };
 
+/** Ensure layout reads env at request time (Docker/Render set NEXT_PUBLIC_API_URL at runtime, not build). */
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const backendOrigin = (
+    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.BACKEND_PUBLIC_URL ||
+    ""
+  ).replace(/\/$/, "");
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__OKR_BACKEND_ORIGIN__=${JSON.stringify(backendOrigin)};`,
+          }}
+        />
         <ThemePreference />
         <ViewRoleProvider>
           <ViewPreferencesProvider>

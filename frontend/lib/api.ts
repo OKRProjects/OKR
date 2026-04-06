@@ -1,13 +1,31 @@
 /**
  * Build absolute URL for API calls.
- * Prefer NEXT_PUBLIC_API_URL (e.g. http://localhost:5001) so the browser talks to Flask directly;
- * CORS + session cookies are configured on the backend.
- * If empty in the browser, use window.location.origin + path (never a bare "/api/..." — Turbopack/some
- * browsers surface that as TypeError: Failed to fetch).
+ * The browser must call Flask directly (cross-origin + credentials) so the session cookie set on the
+ * API host after OAuth is sent. See RootLayout script: `window.__OKR_BACKEND_ORIGIN__`.
+ *
+ * Important: `NEXT_PUBLIC_*` is inlined at `next build`. Docker builds often run without that env, so
+ * the client bundle would fall back to `window.location.origin` and break cookies. Runtime injection
+ * fixes Render/production without requiring build-time secrets.
  */
+declare global {
+  interface Window {
+    __OKR_BACKEND_ORIGIN__?: string;
+  }
+}
+
+function clientBackendOrigin(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const o = window.__OKR_BACKEND_ORIGIN__;
+  if (typeof o === 'string' && o.trim() !== '') {
+    return o.replace(/\/$/, '');
+  }
+  return undefined;
+}
+
 function apiFetchUrl(path: string): string {
   const p = path.startsWith('/') ? path : `/${path}`;
-  const raw = process.env.NEXT_PUBLIC_API_URL;
+  const injected = clientBackendOrigin();
+  const raw = injected ?? process.env.NEXT_PUBLIC_API_URL;
   if (raw === '' || raw === undefined) {
     if (typeof window !== 'undefined') {
       return `${window.location.origin}${p}`;
