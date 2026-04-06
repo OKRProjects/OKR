@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, FormEvent } from 'react';
-import { api, Objective, ObjectiveLevel, ObjectiveTimeline } from '@/lib/api';
+import { api, Objective, ObjectiveLevel, ObjectiveTimeline, resolveOrgIdForDepartment } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Building2, Layers, Link2, Target } from 'lucide-react';
@@ -90,14 +90,14 @@ export default function ObjectiveForm({
     setError(null);
     setCreatingDepartment(true);
     try {
-      let orgId: string | undefined;
-      try {
-        const orgs = await api.getOrgs();
-        orgId = orgs[0]?.id;
-      } catch {
-        orgId = undefined;
+      const orgId = await resolveOrgIdForDepartment(parentOptions);
+      if (!orgId) {
+        setError(
+          'Could not determine your organization. Create an objective first (or ensure you belong to an org), then add a department.'
+        );
+        return;
       }
-      const created = await api.createDepartment(orgId ? { name, orgId } : { name });
+      const created = await api.createDepartment({ name, orgId });
       setDepartments((prev) =>
         [...prev, { _id: created._id, name: created.name }].sort((a, b) =>
           a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
@@ -133,13 +133,7 @@ export default function ObjectiveForm({
         onSuccess?.();
         router.push(`/okrs/${objective._id}`);
       } else {
-        let orgId: string | undefined;
-        try {
-          const orgs = await api.getOrgs();
-          orgId = orgs[0]?.id;
-        } catch {
-          // Backend can resolve org from membership / first org in DB.
-        }
+        const orgId = await resolveOrgIdForDepartment(parentOptions);
         const created = await api.createObjective({
           ...payload,
           ...(orgId ? { orgId } : {}),

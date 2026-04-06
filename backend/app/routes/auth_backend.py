@@ -718,6 +718,26 @@ def require_admin(f):
     return decorated_function
 
 
+def require_user_management(f):
+    """Authenticated users with role ``admin`` or ``org_owner`` may list/update app user records."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        try:
+            user_id = get_user_id_from_request()
+            from app.db.mongodb import get_db
+            from app.services.permissions import get_user_role, can_manage_app_users
+            db = get_db()
+            if not can_manage_app_users(get_user_role(db, user_id)):
+                return jsonify({'error': 'Admin or org owner access required'}), 403
+            kwargs['user_id'] = user_id
+            return f(*args, **kwargs)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 401
+        except Exception as e:
+            return jsonify({'error': 'Authentication failed'}), 401
+    return decorated_function
+
+
 @bp.route('/auth/users/names', methods=['GET'])
 @require_auth
 def list_user_names(user_id):
@@ -754,7 +774,7 @@ def _user_row_from_mongo_doc(doc: dict) -> dict:
 
 
 @bp.route('/auth/users', methods=['GET'])
-@require_admin
+@require_user_management
 def list_users(user_id):
     """List all users (admin only). Merges Auth0 directory with Mongo ``users`` so nothing is dropped:
     Auth0-only, Mongo-only, and merged rows all appear. Role / permissions live in Mongo."""
@@ -817,16 +837,19 @@ def list_users(user_id):
 
 
 @bp.route('/auth/users/<uid>', methods=['PATCH'])
-@require_admin
+@require_user_management
 def update_user(user_id, uid):
-    """Update a user's role and/or departmentId (admin only)."""
+    """Update a user's role and/or departmentId (admin or org owner). Only admins may assign the admin role."""
     try:
         from app.db.mongodb import get_db
         db = get_db()
         data = request.get_json() or {}
         update = {}
-        from app.services.permissions import USER_APP_ROLES
+        from app.services.permissions import USER_APP_ROLES, get_user_role, ROLE_ADMIN
+        caller_role = get_user_role(db, user_id)
         if 'role' in data and data['role'] in USER_APP_ROLES:
+            if data['role'] == ROLE_ADMIN and caller_role != ROLE_ADMIN:
+                return jsonify({'error': 'Only administrators can assign the admin role'}), 403
             update['role'] = data['role']
             if data['role'] == 'admin':
                 update['okrCreateDisabled'] = False

@@ -247,6 +247,11 @@ USER_APP_ROLES = frozenset({
 })
 
 
+def can_manage_app_users(role: str) -> bool:
+    """List/update Mongo user roles: full admins and org owners."""
+    return role in (ROLE_ADMIN, ROLE_ORG_OWNER)
+
+
 def can_create_share_link(db, user_id: str, objective: dict) -> bool:
     """True if user can create a share link for this objective. Not view_only; admin, owner, or dept leader in same dept."""
     role = get_user_role(db, user_id)

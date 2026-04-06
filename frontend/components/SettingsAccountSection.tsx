@@ -29,7 +29,8 @@ export function SettingsAccountSection() {
       <div>
         <h2 className="text-lg font-semibold mb-1">Account &amp; access</h2>
         <p className="text-sm text-muted-foreground mb-4">
-          Preview roles for testing UI, open documentation and integrations, and manage users (admins).
+          Preview roles for testing UI, open documentation and integrations, and manage users (admins and org owners on
+          the server).
         </p>
       </div>
 
@@ -54,10 +55,10 @@ export function SettingsAccountSection() {
         <div className="rounded-lg border border-border bg-muted/30 p-4">
           <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
             <Users className="h-4 w-4" />
-            Admin
+            User management
           </h3>
           <p className="text-sm text-muted-foreground mb-3">
-            Manage user roles and access across the organization.
+            Assign roles and permissions (admin and org owner accounts). Org owners cannot grant the admin role.
           </p>
           <Button asChild className="w-full sm:w-auto">
             <Link
@@ -76,7 +77,8 @@ export function SettingsAccountSection() {
           Test role (preview)
         </p>
         <p className="text-xs text-muted-foreground mb-3">
-          Switch how the UI behaves for demos; APIs still use your real account role unless noted.
+          Switch how much of the UI behaves for demos. User management and other protected APIs always use your real
+          server role (admin or org owner can open User management).
         </p>
         <Select
           value={rolePreview ?? 'actual'}

@@ -5,15 +5,45 @@ import re
 from uuid import uuid4
 
 from flask import Blueprint, jsonify, request
-from sqlalchemy import select, text
+from sqlalchemy import and_, func, select, text
 
 from app.routes.auth_backend import require_auth
 from app.db.postgres import pg_session
-from app.models_sql import Department, Membership, Organization, Team, User
+from app.models_sql import Department, Membership, Objective, Organization, Team, User
 from app.repositories.okr_repo_postgres import PostgresOKRRepository
 
 
 bp = Blueprint("orgs", __name__)
+
+
+def _user_can_create_department_in_org(s, user_id: str, org_id: str) -> bool:
+    """
+    Active membership, or objective owner in this org (membership row sometimes missing),
+    or Mongo role admin / org owner (user management).
+    """
+    mem = s.get(Membership, {"user_id": user_id, "org_id": org_id})
+    if mem and mem.active:
+        return True
+    owns = (
+        s.execute(
+            select(func.count())
+            .select_from(Objective)
+            .where(and_(Objective.org_id == org_id, Objective.owner_user_id == user_id))
+        ).scalar()
+        or 0
+    )
+    if int(owns) > 0:
+        return True
+    try:
+        from app.db.mongodb import get_db
+        from app.services.permissions import can_manage_app_users, get_user_role
+
+        db = get_db()
+        if can_manage_app_users(get_user_role(db, user_id)):
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def _canonical_from_display_name(name: str) -> str:
@@ -62,8 +92,7 @@ def create_org_department(org_id: str, user_id: str):
         return jsonify({"error": "name is required"}), 400
 
     with pg_session() as s:
-        mem = s.get(Membership, {"user_id": user_id, "org_id": org_id})
-        if not mem or not mem.active:
+        if not _user_can_create_department_in_org(s, user_id, org_id):
             return jsonify({"error": "No access to this organization"}), 403
 
         org = s.get(Organization, org_id)

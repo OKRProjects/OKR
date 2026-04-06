@@ -9,10 +9,14 @@ import type { Objective } from '@/lib/api';
 
 function getStatusPillClass(status: string): string {
   switch (status) {
-    case 'approved': return 'bg-green-100 text-green-800 border-green-200';
-    case 'in_review': return 'bg-blue-100 text-blue-800 border-blue-200';
-    case 'rejected': return 'bg-red-100 text-red-800 border-red-200';
-    default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    case 'approved':
+      return 'border-green-200 bg-green-100 text-green-800 dark:border-green-800 dark:bg-green-950/50 dark:text-green-200';
+    case 'in_review':
+      return 'border-blue-200 bg-blue-100 text-blue-800 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-200';
+    case 'rejected':
+      return 'border-red-200 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950/50 dark:text-red-200';
+    default:
+      return 'border-border bg-muted text-foreground';
   }
 }
 
@@ -65,7 +69,7 @@ export function OKRCard({
     const deptName = departmentName || objective.division || '—';
     const refContent = (
       <div
-        className="bg-white rounded-lg border border-gray-200 p-5 cursor-pointer transition-all hover:shadow-md"
+        className="cursor-pointer rounded-lg border border-border bg-card p-5 transition-all hover:shadow-md"
         onClick={handleClick}
       >
         <div className="flex gap-4">
@@ -73,34 +77,36 @@ export function OKRCard({
             <ScoreRing score={score} size={56} strokeWidth={4} showLabel />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">{objective.title}</h3>
-            <div className="flex items-center gap-3 text-sm text-gray-600 mb-3">
+            <h3 className="mb-2 line-clamp-2 font-semibold text-foreground">{objective.title}</h3>
+            <div className="mb-3 flex items-center gap-3 text-sm text-muted-foreground">
               <div className="flex items-center gap-1.5">
-                <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs font-medium text-gray-700">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-xs font-medium text-foreground">
                   {initials(displayName)}
                 </div>
                 <span>{displayName}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <div
-                  className="w-2 h-2 rounded-full shrink-0"
+                  className="h-2 w-2 shrink-0 rounded-full"
                   style={{ backgroundColor: departmentColor || '#9ca3af' }}
                 />
                 <span>{deptName}</span>
               </div>
             </div>
-            <div className="flex items-center gap-3 mb-2">
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusPillClass(status)}`}>
+            <div className="mb-2 flex items-center gap-3">
+              <span
+                className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${getStatusPillClass(status)}`}
+              >
                 {(objective.status ?? 'draft').replace('_', ' ')}
               </span>
-              <span className="text-xs text-gray-500">{krCount} KRs</span>
+              <span className="text-xs text-muted-foreground">{krCount} KRs</span>
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-600">Progress</span>
-                <span className="font-medium">{statusLabel}</span>
+                <span className="text-muted-foreground">Progress</span>
+                <span className="font-medium text-foreground">{statusLabel}</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-1.5">
+              <div className="h-1.5 w-full rounded-full bg-muted">
                 <div
                   className="h-1.5 rounded-full transition-all duration-500"
                   style={{

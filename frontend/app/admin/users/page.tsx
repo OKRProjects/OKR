@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { clearUserCache, login, User } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
 import { useViewRole } from '@/lib/ViewRoleContext';
@@ -18,7 +18,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { ASSIGNABLE_APP_ROLES } from '@/lib/roles';
+import { ASSIGNABLE_APP_ROLES, canManageUsersAccount } from '@/lib/roles';
 import { cn } from '@/components/ui/utils';
 
 type UserRecord = {
@@ -37,6 +37,8 @@ function rolePermissionSummary(role: string): string {
   switch (role) {
     case 'admin':
       return 'Acceso total: usuarios, datos, configuración.';
+    case 'org_owner':
+      return 'Gestión de organización: usuarios y permisos (no puede asignar administradores).';
     case 'view_only':
       return 'Solo lectura: no edita OKRs ni integraciones.';
     case 'standard':
@@ -52,6 +54,7 @@ function UserRow({
   saving,
   onUpdate,
   roles,
+  roleEditLocked,
 }: {
   user: UserRecord;
   saving: boolean;
@@ -61,6 +64,8 @@ function UserRow({
     okrCreateDisabled?: boolean;
   }) => void;
   roles: readonly string[];
+  /** Org owners cannot reassign admin accounts */
+  roleEditLocked?: boolean;
 }) {
   const [role, setRole] = useState(u.role);
   const [departmentId, setDepartmentId] = useState(u.departmentId ?? '');
@@ -122,18 +127,22 @@ function UserRow({
 
       <div className="space-y-2">
         <Label className="text-xs text-muted-foreground">Rol (nivel de acceso)</Label>
-        <Select value={role} onValueChange={setRole} disabled={saving}>
-          <SelectTrigger className="h-9">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {roles.map((r) => (
-              <SelectItem key={r} value={r}>
-                {r}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {roleEditLocked ? (
+          <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm font-medium">{role}</div>
+        ) : (
+          <Select value={role} onValueChange={setRole} disabled={saving}>
+            <SelectTrigger className="h-9">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {roles.map((r) => (
+                <SelectItem key={r} value={r}>
+                  {r}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <p className="text-[11px] leading-snug text-muted-foreground">{rolePermissionSummary(role)}</p>
       </div>
 
@@ -189,7 +198,7 @@ export default function AdminUsersPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
-  const canAccessAsAdmin = user?.role === 'admin';
+  const canAccessUserManagement = canManageUsersAccount(user);
 
   useEffect(() => {
     loadUser();
@@ -207,7 +216,7 @@ export default function AdminUsersPage() {
       }
       setUser(me);
       await refetchUser();
-      if (me.role === 'admin') {
+      if (canManageUsersAccount(me)) {
         await loadUsers();
       }
     } catch {
@@ -271,15 +280,22 @@ export default function AdminUsersPage() {
     return null;
   }
 
-  if (!canAccessAsAdmin) {
+  const assignableRoles = useMemo(() => {
+    if (user.role === 'org_owner') {
+      return ROLES.filter((r) => r !== 'admin');
+    }
+    return ROLES;
+  }, [user.role]);
+
+  if (!canAccessUserManagement) {
     return (
-      <AppLayout title="Acceso restringido" description="Se requiere rol administrador en el servidor">
+      <AppLayout title="Acceso restringido" description="Se requiere administrador u organizador en el servidor">
         <Card className="max-w-lg">
           <CardHeader>
-            <CardTitle>No hay permiso de administrador</CardTitle>
+            <CardTitle>Sin permiso de gestión de usuarios</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Tu sesión es válida, pero el rol que devuelve el backend no es <code className="text-xs">admin</code>. Por
-              eso antes te redirigía al dashboard; aquí ves el motivo.
+              Tu sesión es válida, pero el rol en el servidor no es <code className="text-xs">admin</code> ni{' '}
+              <code className="text-xs">org_owner</code>.
             </p>
           </CardHeader>
           <CardContent className="space-y-4 text-sm text-muted-foreground">
@@ -291,9 +307,8 @@ export default function AdminUsersPage() {
               <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
                 <p className="font-medium text-amber-950 dark:text-amber-50">Vista previa de rol activa</p>
                 <p className="mt-1">
-                  En el menú de usuario tenías <strong>Switch role (preview)</strong> en otro rol (p. ej. Admin). Eso solo
-                  cambia la interfaz; <strong>no</strong> cambia permisos en el servidor. Por eso aquí ves{' '}
-                  <code className="text-xs">{user.role}</code> y no admin.
+                  La vista previa solo cambia partes de la interfaz; los permisos reales siguen siendo los de{' '}
+                  <code className="text-xs">{user.role}</code> en el servidor.
                 </p>
                 <Button
                   type="button"
@@ -310,10 +325,10 @@ export default function AdminUsersPage() {
               </div>
             )}
             <p>
-              Si de verdad debes ser administrador, pide en MongoDB{' '}
-              <code className="text-xs">users.role: &quot;admin&quot;</code> para tu <code className="text-xs">_id</code>{' '}
-              (Auth0 <code className="text-xs">sub</code>) o configura <code className="text-xs">APP_ADMIN_USER_IDS</code>{' '}
-              en el backend y reinicia.
+              Para acceder aquí hace falta <code className="text-xs">role: &quot;admin&quot;</code> o{' '}
+              <code className="text-xs">role: &quot;org_owner&quot;</code> en MongoDB para tu usuario (Auth0{' '}
+              <code className="text-xs">sub</code>), o usar <code className="text-xs">APP_ADMIN_USER_IDS</code> /{' '}
+              <code className="text-xs">APP_ADMIN_EMAILS</code> para administradores.
             </p>
             <div className="flex flex-wrap gap-2 pt-2">
               <Button type="button" onClick={() => router.push('/dashboard')}>
@@ -330,13 +345,14 @@ export default function AdminUsersPage() {
   }
 
   return (
-    <AppLayout title="Gestión de usuarios" description="Roles, departamento y permisos (solo administradores)">
+    <AppLayout title="Gestión de usuarios" description="Roles, departamento y permisos (admin u org owner)">
       <div className="space-y-6 max-w-6xl">
         {rolePreview && sessionUser && rolePreview !== sessionUser.role && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-            <strong>Vista previa de rol activa.</strong> La barra lateral simula <strong>{rolePreview}</strong>, pero el
-            servidor usa tu rol real (<strong>{sessionUser.role}</strong>). Esta pantalla solo funciona con cuenta{' '}
-            <strong className="text-foreground">admin</strong>.
+            <strong>Vista previa de rol activa.</strong> La UI simula <strong>{rolePreview}</strong>; las API siguen
+            usando tu rol real (<strong>{sessionUser.role}</strong>). Listado y cambios requieren{' '}
+            <strong className="text-foreground">admin</strong> u <strong className="text-foreground">org_owner</strong> en
+            el servidor.
           </div>
         )}
         {error && (
@@ -402,7 +418,8 @@ export default function AdminUsersPage() {
                     user={u}
                     saving={savingId === u._id}
                     onUpdate={(updates) => handleUpdate(u._id, updates)}
-                    roles={ROLES}
+                    roles={assignableRoles}
+                    roleEditLocked={user.role === 'org_owner' && u.role === 'admin'}
                   />
                 ))}
               </div>

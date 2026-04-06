@@ -60,7 +60,7 @@ export function FilterBar({ filters, onFiltersChange, divisions, departments, vi
 
   const isReference = variant === 'reference';
   const wrapperClass = isReference
-    ? 'bg-white rounded-lg border border-gray-200 p-4 mb-6'
+    ? 'mb-6 rounded-lg border border-border bg-card p-4'
     : 'flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card/50 px-4 py-3';
   const departmentOptions = departments?.length ? departments : divisions.map((d) => ({ _id: d, name: d }));
 
@@ -68,18 +68,24 @@ export function FilterBar({ filters, onFiltersChange, divisions, departments, vi
     <div className={wrapperClass}>
       <div className={isReference ? 'flex flex-wrap items-center gap-4' : 'flex flex-wrap items-center gap-3'}>
         {isReference && (
-          <div className="flex items-center gap-2 text-gray-700">
-            <Filter className="w-4 h-4" />
+          <div className="flex items-center gap-2 text-foreground">
+            <Filter className="h-4 w-4" />
             <span className="text-sm font-medium">Filter by:</span>
           </div>
         )}
         <div className={`relative flex-1 min-w-[180px] ${isReference ? 'max-w-xs' : 'max-w-xs'}`}>
-          <Search className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${isReference ? 'text-gray-400' : 'text-muted-foreground'}`} />
+          <Search
+            className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${isReference ? 'text-muted-foreground' : 'text-muted-foreground'}`}
+          />
           <Input
             placeholder="Search objectives..."
             value={filters.search}
             onChange={(e) => set('search', e.target.value)}
-            className={isReference ? 'w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500' : 'h-9 border-0 bg-muted/50 pl-9 focus-visible:ring-2'}
+            className={
+              isReference
+                ? 'w-full rounded-md border border-input bg-background py-2 pl-9 pr-4 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                : 'h-9 border-0 bg-muted/50 pl-9 focus-visible:ring-2'
+            }
           />
         </div>
       {!minimal && (
@@ -89,11 +95,21 @@ export function FilterBar({ filters, onFiltersChange, divisions, departments, vi
             placeholder="Owner..."
             value={filters.owner}
             onChange={(e) => set('owner', e.target.value)}
-            className="h-9 w-[140px] border-0 bg-muted/50 pl-2 pr-3"
+            className={
+              isReference
+                ? 'h-9 w-[140px] border border-input bg-background pl-2 pr-3'
+                : 'h-9 w-[140px] border-0 bg-muted/50 pl-2 pr-3'
+            }
             aria-label="Filter by owner"
           />
           <Select value={filters.tier} onValueChange={(v) => set('tier', v)}>
-            <SelectTrigger className="h-9 w-[120px] border-0 bg-transparent shadow-none focus:ring-0">
+            <SelectTrigger
+              className={
+                isReference
+                  ? 'h-9 w-[120px] border border-input bg-background'
+                  : 'h-9 w-[120px] border-0 bg-transparent shadow-none focus:ring-0'
+              }
+            >
               <SelectValue placeholder="Tier" />
             </SelectTrigger>
             <SelectContent>
@@ -104,7 +120,13 @@ export function FilterBar({ filters, onFiltersChange, divisions, departments, vi
             </SelectContent>
           </Select>
           <Select value={filters.division} onValueChange={(v) => set('division', v)}>
-            <SelectTrigger className={isReference ? 'w-[140px] border border-gray-300 rounded-lg' : 'h-9 w-[130px] border-0 bg-transparent shadow-none focus:ring-0'}>
+            <SelectTrigger
+              className={
+                isReference
+                  ? 'h-9 w-[140px] border border-input bg-background'
+                  : 'h-9 w-[130px] border-0 bg-transparent shadow-none focus:ring-0'
+              }
+            >
               <SelectValue placeholder="Department" />
             </SelectTrigger>
             <SelectContent>
@@ -117,7 +139,13 @@ export function FilterBar({ filters, onFiltersChange, divisions, departments, vi
             </SelectContent>
           </Select>
           <Select value={filters.status} onValueChange={(v) => set('status', v)}>
-            <SelectTrigger className="h-9 w-[110px] border-0 bg-transparent shadow-none focus:ring-0">
+            <SelectTrigger
+              className={
+                isReference
+                  ? 'h-9 w-[110px] border border-input bg-background'
+                  : 'h-9 w-[110px] border-0 bg-transparent shadow-none focus:ring-0'
+              }
+            >
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -129,7 +157,13 @@ export function FilterBar({ filters, onFiltersChange, divisions, departments, vi
             </SelectContent>
           </Select>
           <Select value={filters.scoreRange} onValueChange={(v) => set('scoreRange', v)}>
-            <SelectTrigger className="h-9 w-[120px] border-0 bg-transparent shadow-none focus:ring-0">
+            <SelectTrigger
+              className={
+                isReference
+                  ? 'h-9 w-[120px] border border-input bg-background'
+                  : 'h-9 w-[120px] border-0 bg-transparent shadow-none focus:ring-0'
+              }
+            >
               <SelectValue placeholder="Score" />
             </SelectTrigger>
             <SelectContent>
@@ -149,7 +183,13 @@ export function FilterBar({ filters, onFiltersChange, divisions, departments, vi
                   viewPreferences.onSortChange(sort, dir);
                 }}
               >
-                <SelectTrigger className="h-9 w-[130px] border-0 bg-transparent shadow-none focus:ring-0">
+                <SelectTrigger
+                  className={
+                    isReference
+                      ? 'h-9 w-[130px] border border-input bg-background'
+                      : 'h-9 w-[130px] border-0 bg-transparent shadow-none focus:ring-0'
+                  }
+                >
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
                 <SelectContent>
@@ -165,7 +205,13 @@ export function FilterBar({ filters, onFiltersChange, divisions, departments, vi
                 value={viewPreferences.filterUpdateType}
                 onValueChange={viewPreferences.onFilterUpdateTypeChange}
               >
-                <SelectTrigger className="h-9 w-[140px] border-0 bg-transparent shadow-none focus:ring-0">
+                <SelectTrigger
+                  className={
+                    isReference
+                      ? 'h-9 w-[140px] border border-input bg-background'
+                      : 'h-9 w-[140px] border-0 bg-transparent shadow-none focus:ring-0'
+                  }
+                >
                   <SelectValue placeholder="Update type" />
                 </SelectTrigger>
                 <SelectContent>

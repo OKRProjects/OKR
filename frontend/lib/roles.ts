@@ -43,17 +43,30 @@ export function isAdminAccount(u: { role?: string } | null | undefined): boolean
   return normalizeAppRole(u?.role) === 'admin';
 }
 
+/** True when the signed-in account is **org_owner** from `/auth/me`. */
+export function isOrgOwnerAccount(u: { role?: string } | null | undefined): boolean {
+  return normalizeAppRole(u?.role) === 'org_owner';
+}
+
 /**
- * User management / admin-only nav: real admin from API, and not previewing a non-admin role.
- * (Admins who use “Test role → View only” should not see User management until they pick Actual.)
+ * True when `/auth/me` allows User management APIs (admin or org owner on the server).
+ */
+export function canManageUsersAccount(u: { role?: string } | null | undefined): boolean {
+  return isAdminAccount(u) || isOrgOwnerAccount(u);
+}
+
+/**
+ * User management nav: real account must be admin or org owner. When previewing another role,
+ * only show the link if the preview is admin or org owner (so IC/viewer demos hide it).
  */
 export function shouldShowUserManagementNav(
   user: { role?: string } | null | undefined,
   rolePreview: string | null | undefined
 ): boolean {
-  if (!isAdminAccount(user)) return false;
+  if (!canManageUsersAccount(user)) return false;
   if (rolePreview == null) return true;
-  return normalizeAppRole(rolePreview) === 'admin';
+  const p = normalizeAppRole(rolePreview);
+  return p === 'admin' || p === 'org_owner';
 }
 
 /** True if this account may create objectives (all roles; only blocked when ``okrCreateDisabled``). Admins ignore the flag. */

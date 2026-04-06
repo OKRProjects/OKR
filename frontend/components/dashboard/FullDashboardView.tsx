@@ -72,7 +72,7 @@ export function FullDashboardView(props: DashboardViewProps) {
     dashboardSubtitle ?? `${quarterLabel} • ${currentUserName ?? 'User'}`;
 
   return (
-    <div className="min-h-full bg-gray-50">
+    <div className="min-h-full bg-muted/30">
       {presentationChoiceOpen && onSelectInfoOnly && onStartWithNarrative && generatePresentationStory && (
         <PresentationChoiceDialog
           open={presentationChoiceOpen}
@@ -109,18 +109,18 @@ export function FullDashboardView(props: DashboardViewProps) {
       )}
 
       {/* Reference-style header */}
-      <header className="bg-white border-b border-gray-200">
+      <header className="border-b border-border bg-card">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">{headerTitle}</h1>
-              <p className="text-sm text-gray-600 mt-1">{headerSub}</p>
+              <h1 className="text-2xl font-bold text-foreground">{headerTitle}</h1>
+              <p className="text-sm text-muted-foreground mt-1">{headerSub}</p>
             </div>
             <div className="flex items-center gap-2">
               {showAdminUserManagementLink && (
                 <Link
                   href="/admin/users"
-                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <Users className="h-4 w-4" />
                   User management
@@ -131,7 +131,7 @@ export function FullDashboardView(props: DashboardViewProps) {
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowTutorial?.(true) ?? onShowTutorial()}
-                  className="h-9 text-gray-600 hover:text-gray-900"
+                  className="h-9 text-muted-foreground hover:text-foreground"
                 >
                   <HelpCircle className="mr-1.5 h-4 w-4" />
                   Tour
@@ -142,7 +142,7 @@ export function FullDashboardView(props: DashboardViewProps) {
                   type="button"
                   variant="default"
                   size="sm"
-                  className="h-9 gap-1.5 bg-gray-900 text-white hover:bg-gray-800"
+                  className="h-9 gap-1.5"
                   onClick={onPresentationMode}
                   disabled={filteredAndSorted.length === 0}
                   aria-label="Open presentation or slide view"
@@ -201,8 +201,8 @@ export function FullDashboardView(props: DashboardViewProps) {
             </div>
           )}
           {myWorkObjectives.length > 0 && (
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h2 className="text-sm font-semibold text-gray-900 mb-3">My work</h2>
+            <div className="rounded-lg border border-border bg-card p-4">
+              <h2 className="text-sm font-semibold text-foreground mb-3">My work</h2>
               <TierSection
                 title="Objectives you own"
                 objectives={myWorkObjectives}
