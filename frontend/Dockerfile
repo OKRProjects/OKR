@@ -13,6 +13,13 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# next.config + client read env at build time; middleware also uses runtime env in prod.
+# Without these, NEXT_PUBLIC_* is empty in the standalone bundle (layout injection, etc.).
+# Render: set BACKEND_URL / NEXT_PUBLIC_API_URL in the service env (available at build + runtime).
+ARG BACKEND_URL
+ARG NEXT_PUBLIC_API_URL
+ENV BACKEND_URL=${BACKEND_URL}
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 RUN npm run build
 
 # Production image, copy all the files and run next

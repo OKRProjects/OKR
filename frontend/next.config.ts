@@ -1,18 +1,12 @@
 import type { NextConfig } from "next";
 
-/** Proxy /api to Flask so the browser calls same-origin /api (session cookie works). Docker: BACKEND_URL=http://backend:5001 */
-const backend = process.env.BACKEND_URL || "http://127.0.0.1:5001";
-
+/**
+ * Do not use `rewrites()` here for /api → Flask: `next build` bakes the destination into the output.
+ * Docker builds often run without BACKEND_URL, which froze rewrites to http://127.0.0.1:5001 and caused
+ * ECONNREFUSED in prod. Same-origin /api proxying is handled in `middleware.ts` at request time.
+ */
 const nextConfig: NextConfig = {
   output: "standalone",
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${backend.replace(/\/$/, "")}/api/:path*`,
-      },
-    ];
-  },
   images: {
     remotePatterns: [
       {
