@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -85,7 +86,6 @@ function convertToObjectiveTree(apiObj: ObjectiveTree, allObjectives: ApiObjecti
 
 
 interface ObjectivesViewProps {
-  onUpdateProgress?: (objective: Objective) => void;
   prefetchedApiObjectives?: ApiObjective[];
   hideFilters?: boolean;
 }
@@ -107,7 +107,7 @@ function ObjectivesTreeSkeleton() {
   );
 }
 
-export function ObjectivesView({ onUpdateProgress, prefetchedApiObjectives, hideFilters }: ObjectivesViewProps) {
+export function ObjectivesView({ prefetchedApiObjectives, hideFilters }: ObjectivesViewProps) {
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
@@ -277,21 +277,37 @@ export function ObjectivesView({ onUpdateProgress, prefetchedApiObjectives, hide
                 </div>
               </div>
               <div className="flex gap-1">
-                {onUpdateProgress && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="min-h-[44px] min-w-[44px] touch-manipulation"
-                    onClick={() => onUpdateProgress(objective)}
-                    title="Update Progress"
-                    aria-label="Update progress"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                  </Button>
+                {objective.id ? (
+                  <>
+                    <Button variant="ghost" size="sm" className="min-h-[44px] min-w-[44px] touch-manipulation" asChild>
+                      <Link
+                        href={`/okrs/${objective.id}?tab=progress`}
+                        title="Update progress"
+                        aria-label="Update progress"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                    <Button variant="ghost" size="sm" className="min-h-[44px] min-w-[44px] touch-manipulation" asChild>
+                      <Link
+                        href={`/okrs/${objective.id}`}
+                        title="Open objective details"
+                        aria-label="Open objective details"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant="ghost" size="sm" className="min-h-[44px] min-w-[44px] touch-manipulation" disabled title="Objective id missing" aria-label="Update progress unavailable">
+                      <RefreshCw className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" className="min-h-[44px] min-w-[44px] touch-manipulation" disabled title="Objective id missing" aria-label="View objective unavailable">
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                  </>
                 )}
-                <Button variant="ghost" size="sm" className="min-h-[44px] min-w-[44px] touch-manipulation" title="Edit Objective" aria-label="Edit objective">
-                  <Edit className="h-4 w-4" />
-                </Button>
               </div>
             </div>
           </CardHeader>
